@@ -138,8 +138,9 @@ async function loadScores() {
 
 // Save score: Supabase if configured, always update local cache too
 async function saveScore(name, score) {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
   const tok = getLocalToken(name);
-  if (!tok) return; // shouldn't happen
+  if (!tok) return;
   // Update local cache score
   const d = _loadLocal();
   if (!d[name] || score > (d[name].score || 0)) {
