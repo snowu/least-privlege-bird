@@ -1,5 +1,5 @@
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const DEV_MODE = location.hostname === 'localhost'; // set to true to skip Clave flow
+const C = {
   W: 910, H: 730,           // canvas dimensions
   HUD: 48,                  // bottom bar height
   GRAVITY: 0.5,
@@ -375,6 +375,7 @@ function endGame() {
     showScreen('gameover');
     return;
   }
+
   Clave.startScoreSubmit(currentPlayer, score, async () => {
     await saveScore(currentPlayer, score);
     document.getElementById('gameover-msg').textContent =
@@ -422,7 +423,7 @@ userSelect.addEventListener('change', () => {
 });
 
 document.getElementById('btn-play').addEventListener('click', async () => {
-  const name = nameInput.value.trim() || 'dev';
+  const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
   if (DEV_MODE) { startGame(name); return; }
   await ensurePlayerToken(name);

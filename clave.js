@@ -290,8 +290,10 @@ const Clave = (() => {
     show('clave-screen');
 
     // Step 1 — CAPTCHA pre-login
-    showClaveStep('clave-step-captcha-pre');
-    await new Promise(resolve => buildCaptcha('clave-step-captcha-pre', _picks[0], resolve));
+    if (!window.DEV_MODE) {
+      showClaveStep('clave-step-captcha-pre');
+      await new Promise(resolve => buildCaptcha('clave-step-captcha-pre', _picks[0], resolve));
+    }
 
     // Step 2 — Connecting spinner
     showClaveStep('clave-step-connecting');
@@ -332,9 +334,11 @@ const Clave = (() => {
   // ── POST-GAME SCORE SUBMIT FLOW ─────────────────────────────────────────────
   async function startScoreSubmit(playerName, score, onSuccess) {
     // CAPTCHA #2
-    show('captcha-post-screen');
-    await new Promise(resolve => buildCaptcha('captcha-post-screen', _picks[1], resolve));
-    hide('captcha-post-screen');
+    if (!window.DEV_MODE) {
+      show('captcha-post-screen');
+      await new Promise(resolve => buildCaptcha('captcha-post-screen', _picks[1], resolve));
+      hide('captcha-post-screen');
+    }
 
     // Score submit log
     show('score-submit-screen');
