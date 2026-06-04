@@ -145,17 +145,7 @@ const THEMES = {
 
 let currentTheme = THEMES.ghost;
 
-// ─── HIGH SCORES (localStorage) ───────────────────────────────────────────────
-function loadScores() {
-  try { return JSON.parse(localStorage.getItem('flappyKiroScores')) || {}; }
-  catch { return {}; }
-}
-function saveScore(name, score) {
-  const scores = loadScores();
-  if (!scores[name] || score > scores[name]) scores[name] = score;
-  localStorage.setItem('flappyKiroScores', JSON.stringify(scores));
-}
-function bestForPlayer(name) { return loadScores()[name] || 0; }
+// ─── HIGH SCORES — provided by scores.js ──────────────────────────────────────
 
 // ─── SCREENS ──────────────────────────────────────────────────────────────────
 const screens = {
@@ -380,8 +370,8 @@ function endGame() {
   const isNew = score > prev;
 
   // Must complete CAPTCHA + fake audit log before seeing score
-  Clave.startScoreSubmit(currentPlayer, score, () => {
-    saveScore(currentPlayer, score);
+  Clave.startScoreSubmit(currentPlayer, score, async () => {
+    await saveScore(currentPlayer, score);
     document.getElementById('gameover-msg').textContent =
       isNew
         ? `New high score: ${score}! 🎉`
@@ -409,9 +399,9 @@ canvas.addEventListener('pointerdown', () => {
 const nameInput  = document.getElementById('name-input');
 const userSelect = document.getElementById('user-select');
 
-function populateUserSelect() {
-  const names = Object.keys(loadScores()).sort();
-  // remove all options except the placeholder
+async function populateUserSelect() {
+  const data = _loadLocal(); // sync local read for the dropdown
+  const names = Object.keys(data).sort();
   while (userSelect.options.length > 1) userSelect.remove(1);
   names.forEach(n => {
     const opt = document.createElement('option');
@@ -426,11 +416,12 @@ userSelect.addEventListener('change', () => {
   if (userSelect.value) nameInput.value = userSelect.value;
 });
 
-document.getElementById('btn-play').addEventListener('click', () => {
+document.getElementById('btn-play').addEventListener('click', async () => {
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
-  showScreen(null);                          // hide menu screens
-  overlay.classList.remove('hidden');        // keep overlay visible for Clave
+  await ensurePlayerToken(name);
+  showScreen(null);
+  overlay.classList.remove('hidden');
   Clave.startLogin(name, () => startGame(name));
 });
 
@@ -438,8 +429,8 @@ nameInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('btn-play').click();
 });
 
-document.getElementById('btn-scores').addEventListener('click', () => {
-  const scores = loadScores();
+document.getElementById('btn-scores').addEventListener('click', async () => {
+  const scores = await loadScores();
   const list = document.getElementById('scores-list');
   list.innerHTML = '';
   const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);

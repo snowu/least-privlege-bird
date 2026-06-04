@@ -261,6 +261,61 @@
 
   </div>
 
+  <!-- ══ TOKEN MODAL (outside overlay, full-screen) ══ -->
+  <div id="token-modal" class="hidden" style="
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);
+    display:flex;align-items:center;justify-content:center;
+    z-index:999;font-family:'Segoe UI',sans-serif;color:#fff;">
+    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;padding:32px 36px;max-width:460px;display:flex;flex-direction:column;gap:14px;align-items:center;">
+      <p style="font-size:2rem">🔑</p>
+      <h2 style="color:#c8d6f8;text-align:center;">Save your access token</h2>
+      <p style="font-size:0.85rem;color:#6b7a99;text-align:center;line-height:1.6;">
+        This token identifies you as <strong id="token-modal-name" style="color:#fff;"></strong>.<br/>
+        Store it somewhere safe — like a GitHub PAT.<br/>
+        You'll need it to recover your session on a new device.
+      </p>
+      <div style="display:flex;gap:8px;width:100%;">
+        <input id="token-display" readonly style="
+          flex:1;background:#0d1117;border:1px solid #2e3a55;border-radius:8px;
+          padding:10px 12px;font-family:monospace;font-size:0.8rem;color:#51cf66;
+          cursor:text;" />
+        <button id="btn-copy-token" style="
+          padding:10px 16px;border-radius:8px;border:none;
+          background:#1976d2;color:#fff;cursor:pointer;font-size:0.85rem;white-space:nowrap;">
+          Copy
+        </button>
+      </div>
+      <p style="font-size:0.75rem;color:#ff6b6b;text-align:center;">
+        ⚠️ This will not be shown again. Copy it now.
+      </p>
+      <button id="btn-token-done" style="
+        padding:10px 28px;border-radius:10px;border:none;
+        background:#4caf50;color:#fff;font-size:1rem;cursor:pointer;">
+        I've saved it, let's play
+      </button>
+      <p style="font-size:0.75rem;color:#6b7a99;text-align:center;">
+        Already have a token? <a id="btn-show-recover" href="#" style="color:#7ca4f4;">Recover session</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ══ TOKEN RECOVERY MODAL ══ -->
+  <div id="recover-modal" class="hidden" style="
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);
+    display:flex;align-items:center;justify-content:center;
+    z-index:999;font-family:'Segoe UI',sans-serif;color:#fff;">
+    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;padding:32px 36px;max-width:400px;display:flex;flex-direction:column;gap:14px;align-items:center;">
+      <h2 style="color:#c8d6f8;">Recover Session</h2>
+      <p style="font-size:0.85rem;color:#6b7a99;text-align:center;">Paste your saved token to restore access.</p>
+      <input id="recover-token-input" type="text" placeholder="Paste token here"
+        style="width:100%;background:#0d1117;border:1px solid #2e3a55;border-radius:8px;padding:10px 12px;font-family:monospace;font-size:0.8rem;color:#fff;" />
+      <p id="recover-error" style="color:#ff6b6b;font-size:0.82rem;min-height:1em;"></p>
+      <button id="btn-recover-confirm" style="padding:10px 28px;border-radius:10px;border:none;background:#4caf50;color:#fff;font-size:1rem;cursor:pointer;">Restore</button>
+      <button id="btn-recover-cancel" style="background:none;border:none;color:#6b7a99;cursor:pointer;font-size:0.85rem;">Cancel</button>
+    </div>
+  </div>
+
+  <script src="scores.js"></script>
   <script src="clave.js"></script>
   <script src="game.js"></script>
 </body>
