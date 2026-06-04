@@ -371,7 +371,11 @@ function endGame() {
   const isNew = score > prev;
 
   if (DEV_MODE) {
-    document.getElementById('gameover-msg').textContent = `Score: ${score}`;
+    saveScore(currentPlayer, score);
+    document.getElementById('gameover-msg').textContent =
+      isNew
+        ? `New high score: ${score}! 🎉`
+        : `Score: ${score} — Best: ${Math.max(score, prev)}`;
     overlay.classList.remove('hidden');
     showScreen('gameover');
     return;
