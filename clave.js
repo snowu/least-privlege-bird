@@ -124,7 +124,13 @@ const Clave = (() => {
 
   // ── CAPTCHA (QUIZ) BUILDER ──────────────────────────────────────────────────
   function buildCaptcha(containerId, questionIdx, onSuccess) {
-    const q = QUESTIONS[questionIdx];
+    const qOrig = QUESTIONS[questionIdx];
+    const shuffled = [...qOrig.options].map((o, i) => ({...o, _origIdx: i}));
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const q = { ...qOrig, options: shuffled };
     const container = document.getElementById(containerId);
     let failCount = 0;
 
