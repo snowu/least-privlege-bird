@@ -182,11 +182,46 @@ const Clave = (() => {
           </div>`;
         }).join('');
 
+        // Show help button after 2 failures
+        if (failCount >= 2 && !document.getElementById(`${containerId}-help-btn`)) {
+          const helpBtn = document.createElement('button');
+          helpBtn.id = `${containerId}-help-btn`;
+          helpBtn.textContent = '🆘 Need help? (Solve to unlock hints)';
+          helpBtn.style.cssText = 'margin-top:8px;font-size:0.8rem;background:#2a3a5c;border:1px solid #4a6a9a;color:#c8d6f8;padding:6px 12px;cursor:pointer;border-radius:4px;';
+          fb.after(helpBtn);
+          helpBtn.addEventListener('click', () => {
+            const a = Math.floor(Math.random() * 12) + 2;
+            const b = Math.floor(Math.random() * 12) + 2;
+            const answer = a * b;
+            helpBtn.style.display = 'none';
+            const mathDiv = document.createElement('div');
+            mathDiv.style.cssText = 'margin-top:8px;display:flex;align-items:center;gap:8px;';
+            mathDiv.innerHTML = `
+              <span style="color:#c8d6f8;font-size:0.85rem;">Solve: ${a} × ${b} =</span>
+              <input id="${containerId}-math-input" type="number" style="width:60px;padding:4px;background:#1a2a4c;border:1px solid #4a6a9a;color:#fff;border-radius:3px;">
+              <button id="${containerId}-math-btn" style="font-size:0.8rem;padding:4px 10px;background:#3a5a8c;border:none;color:#fff;border-radius:3px;cursor:pointer;">Submit</button>
+              <span id="${containerId}-math-err" style="color:#ff6b6b;font-size:0.75rem;"></span>
+            `;
+            helpBtn.after(mathDiv);
+            document.getElementById(`${containerId}-math-btn`).addEventListener('click', () => {
+              const val = +document.getElementById(`${containerId}-math-input`).value;
+              if (val === answer) {
+                mathDiv.remove();
+                fb.style.display = 'flex';
+                fb.dataset.locked = 'true';
+              } else {
+                document.getElementById(`${containerId}-math-err`).textContent = '❌ Incorrect';
+              }
+            });
+          });
+        }
+
         // Lockout countdown
         const errEl = document.getElementById(`${containerId}-err`);
         const btn   = document.getElementById(`${containerId}-btn`);
         btn.disabled = true;
         grid.querySelectorAll('.captcha-tile').forEach(t => t.classList.remove('selected'));
+        grid.style.pointerEvents = 'none';
 
         let remaining = lockMs / 1000;
         errEl.textContent = `⛔ Incorrect. Account suspended. Retry in ${remaining}s`;
@@ -196,7 +231,8 @@ const Clave = (() => {
             clearInterval(tick);
             errEl.textContent = '';
             btn.disabled = false;
-            fb.style.display = 'none';
+            grid.style.pointerEvents = '';
+            if (fb.dataset.locked !== 'true') fb.style.display = 'none';
           } else {
             errEl.textContent = `⛔ Incorrect. Account suspended. Retry in ${remaining}s`;
           }
@@ -206,41 +242,6 @@ const Clave = (() => {
 
     render();
   }
-    'Querying Active Directory... done',
-    'Validating Midway token... done',
-    'Checking Isengard federation... done',
-    'Resolving group memberships (847 groups)...',
-    'Applying ABAC policies...',
-    'Cross-referencing Phonetool... done',
-    'Evaluating SCPs... done',
-    'Verifying MFA posture...',
-  ];
-
-  const ENTITLEMENT_LINES = [
-    'GET iam:ListPolicies → 200 OK (312ms)',
-    'Evaluating policy: AmazonFlappyKiroReadOnly... DENY',
-    'Evaluating policy: AmazonFlappyKiroPlayer... ALLOW',
-    'Evaluating policy: AmazonFlappyKiroHighScoreWrite... ALLOW',
-    'Evaluating policy: AmazonFlappyKiroAuditLog... ALLOW',
-    'SCP: ou-prod-games → no explicit deny',
-    'Permission boundary: FlappyKiroPlayer-Prod → within bounds',
-    'Session policy: inline → 3 statements evaluated',
-    'Effective permissions: game:flap:write ✓',
-    'Effective permissions: score:submit:put ✓',
-    'Generating STS session token... done',
-    'Token ARN: arn:aws:sts::139478927430:assumed-role/FlappyKiroPlayer-Prod/session',
-  ];
-
-  const SUBMIT_LINES = [
-    'Assuming role FlappyKiroPlayer-Prod... done',
-    'PUT s3://flappy-kiro-audit-logs-prod/scores/{user}.json',
-    'Requesting KMS data key (mrk-flappy)... 200 OK',
-    'Encrypting payload with AES-256-GCM...',
-    'Uploading 847 bytes to S3... done',
-    'Writing to DynamoDB audit table... done',
-    'Publishing SNS notification to compliance team...',
-    'Score verified and immutably recorded. ✓',
-  ];
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
   const VERIFY_STEPS = [
