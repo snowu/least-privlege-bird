@@ -9,7 +9,7 @@ const C = {
   PIPE_GAP_MAX: 260,        // widest vertical gap (at start)
   PIPE_GAP_STEP: 20,        // gap shrinks by this per speed level
   PIPE_SPEED: 2,            // initial pipe scroll speed (px/frame)
-  PIPE_INTERVAL_MAX: 2800,  // ms between pipes at start (sparse)
+  PIPE_INTERVAL_MAX: 1250,  // ms between pipes at start (sparse)
   PIPE_INTERVAL_MIN: 900,   // ms between pipes at max difficulty (dense)
   PIPE_INTERVAL_STEP: 200,  // interval shrinks by this per speed level
   SPEED_UP_INTERVAL: 5000,  // ms between each speed increase
