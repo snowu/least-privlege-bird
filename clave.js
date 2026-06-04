@@ -226,13 +226,12 @@ const Clave = (() => {
     input.value  = '';
     errEl.textContent = '';
     hint.classList.add('hidden');
-
-    // Reset button position
-    btn.style.left = '0px'; btn.style.top = '0px';
+    btn.disabled = false;
+    btn.textContent = 'Verify Identity';
+    btn.style.left = '0px'; btn.style.top = '0px'; btn.style.transition = '';
 
     // Dodge logic: button runs away 4 times then stops
-    let dodges = 0;
-    const MAX_DODGES = 4;
+    let dodges = 0;    const MAX_DODGES = 4;
     function dodge() {
       if (dodges >= MAX_DODGES) return;
       dodges++;
