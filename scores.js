@@ -11,7 +11,7 @@ function _loadLocal() {
 }
 function _saveLocal(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 
-function getLocalToken(name)      { return _loadLocal()[name] || null; }
+function getLocalToken(name)      { const v = _loadLocal()[name]; return v?.token || v || null; }
 function setLocalToken(name, tok) { const d = _loadLocal(); d[name] = tok; _saveLocal(d); }
 
 // ── TOKEN GENERATION ──────────────────────────────────────────────────────────
