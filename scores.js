@@ -26,7 +26,7 @@ async function sha256hex(str) {
 }
 
 // ── SUPABASE CALLS ────────────────────────────────────────────────────────────
-const _sb = SUPABASE_URL && SUPABASE_KEY;
+const _sb = SUPABASE_URL && SUPABASE_KEY && location.hostname !== 'localhost';
 
 async function _sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
