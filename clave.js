@@ -4,90 +4,208 @@
 
 const Clave = (() => {
 
-  // ── CAPTCHA DATA ────────────────────────────────────────────────────────────
-  const CAPTCHA_CHALLENGES = [
+  // ── QUIZ QUESTIONS ──────────────────────────────────────────────────────────
+  // type: 'single' = one correct answer, 'multi' = multiple correct answers
+  // UI is identical — player doesn't know which type until they try
+  const QUESTIONS = [
     {
-      prompt: 'Select all images containing a <strong>load balancer</strong>',
-      sub: 'If there are none, click <em>Skip</em>',
-      tiles: [
-        { emoji: '⚖️',  label: 'ALB',              correct: true  },
-        { emoji: '🪣',  label: 'S3 Bucket',         correct: false },
-        { emoji: '⚖️',  label: 'NLB',              correct: true  },
-        { emoji: '🔑',  label: 'KMS Key',           correct: false },
-        { emoji: '🖥️',  label: 'EC2 Instance',      correct: false },
-        { emoji: '⚖️',  label: 'GLB',              correct: true  },
-        { emoji: '🌐',  label: 'Route 53',          correct: false },
-        { emoji: '📦',  label: 'Lambda Fn',         correct: false },
-        { emoji: '🔒',  label: 'Security Group',    correct: false },
-        { emoji: '⚖️',  label: 'CLB (legacy)',      correct: true  },
-        { emoji: '🗄️',  label: 'RDS Instance',      correct: false },
-        { emoji: '📋',  label: 'IAM Policy',        correct: false },
+      prompt: 'An explicit <strong>Deny</strong> in IAM always overrides an Allow.',
+      type: 'single',
+      options: [
+        { text: 'True',                               correct: true,  explain: 'Correct. Explicit Deny always wins, regardless of any Allow.' },
+        { text: 'False — Allow wins if more specific', correct: false, explain: 'Wrong. Specificity does not matter. Deny always overrides.' },
+        { text: 'False — depends on policy type',      correct: false, explain: 'Wrong. Policy type (identity vs resource) does not change this rule.' },
+        { text: 'Only for root account',               correct: false, explain: 'Wrong. Explicit Deny applies to all principals.' },
       ],
     },
     {
-      prompt: 'Select all <strong>deprecated</strong> AWS services',
-      sub: 'These services have been sunset or are in maintenance-only mode',
-      tiles: [
-        { emoji: '🪦',  label: 'SimpleDB',          correct: true  },
-        { emoji: '🟢',  label: 'DynamoDB',          correct: false },
-        { emoji: '🪦',  label: 'EC2-Classic',       correct: true  },
-        { emoji: '🟢',  label: 'Lambda',            correct: false },
-        { emoji: '🪦',  label: 'CodeCommit',        correct: true  },
-        { emoji: '🟢',  label: 'S3',               correct: false },
-        { emoji: '🪦',  label: 'SWF',              correct: true  },
-        { emoji: '🟢',  label: 'SQS',              correct: false },
-        { emoji: '🪦',  label: 'Elastic Beanstalk', correct: true  },
-        { emoji: '🟢',  label: 'CloudFront',        correct: false },
-        { emoji: '🪦',  label: 'OpsWorks',          correct: true  },
-        { emoji: '🟢',  label: 'ECS',              correct: false },
+      prompt: 'Which of these are valid reasons to use an <strong>NLB</strong> over an ALB?',
+      type: 'multi',
+      options: [
+        { text: 'You need a static IP address',            correct: true,  explain: 'NLBs support static/Elastic IPs. ALBs do not.' },
+        { text: 'You need WebSocket support',              correct: false, explain: 'Both ALB and NLB support WebSockets.' },
+        { text: 'You need ultra-low latency (TCP)',        correct: true,  explain: 'NLB operates at Layer 4 with lower latency than ALB.' },
+        { text: 'You need host-based routing',             correct: false, explain: 'Host-based routing is an ALB feature only.' },
+        { text: 'Your client requires TLS passthrough',   correct: true,  explain: 'NLB supports TLS passthrough. ALB terminates TLS.' },
       ],
     },
     {
-      prompt: 'Select all images showing a <strong>Single Point of Failure</strong>',
-      sub: 'Choose every architecture that would take down the whole system',
-      tiles: [
-        { emoji: '💀',  label: 'Single AZ RDS',     correct: true  },
-        { emoji: '✅',  label: 'Multi-AZ RDS',      correct: false },
-        { emoji: '💀',  label: 'One EC2, no ASG',   correct: true  },
-        { emoji: '✅',  label: 'ASG min:2',         correct: false },
-        { emoji: '💀',  label: 'Single NAT GW',     correct: true  },
-        { emoji: '✅',  label: 'NAT GW per AZ',     correct: false },
-        { emoji: '💀',  label: 'No read replicas',  correct: true  },
-        { emoji: '✅',  label: 'Aurora Global',     correct: false },
-        { emoji: '💀',  label: 'One Availability Zone', correct: true  },
-        { emoji: '✅',  label: '3-AZ deployment',   correct: false },
-        { emoji: '💀',  label: 'Hardcoded AZ: us-east-1a', correct: true },
-        { emoji: '✅',  label: 'Route 53 failover', correct: false },
+      prompt: 'What is the maximum size of a single <strong>SQS</strong> message?',
+      type: 'single',
+      options: [
+        { text: '64 KB',   correct: false, explain: 'Too small. That was an older limit.' },
+        { text: '256 KB',  correct: true,  explain: 'Correct. 256 KB is the SQS message size limit.' },
+        { text: '1 MB',    correct: false, explain: 'Wrong. Use S3 + SQS Extended Client for larger payloads.' },
+        { text: 'Unlimited', correct: false, explain: 'Wrong. SQS has a hard 256 KB limit per message.' },
       ],
     },
     {
-      prompt: 'Select all <strong>correctly tagged</strong> AWS resources',
-      sub: 'Required tags: Environment, Owner, CostCenter',
-      tiles: [
-        { emoji: '✅',  label: 'i-0abc Env:prod Owner:tom CC:eng', correct: true  },
-        { emoji: '🚫',  label: 'i-0def (no tags)',                 correct: false },
-        { emoji: '✅',  label: 'rds-01 Env:prod Owner:ana CC:data',correct: true  },
-        { emoji: '🚫',  label: 'bucket-xyz Owner:unknown',         correct: false },
-        { emoji: '✅',  label: 'fn-api Env:dev Owner:dev CC:eng',  correct: true  },
-        { emoji: '🚫',  label: 'sg-9999 Env:prod (missing Owner)', correct: false },
-        { emoji: '✅',  label: 'alb-web Env:stg Owner:ops CC:inf', correct: true  },
-        { emoji: '🚫',  label: 'vpc-0f1 (no tags at all)',         correct: false },
-        { emoji: '✅',  label: 'eks-cl Env:prod Owner:plat CC:inf',correct: true  },
-        { emoji: '🚫',  label: 'snap-44 CostCenter:??? Owner:???', correct: false },
-        { emoji: '✅',  label: 'cf-dist Env:prod Owner:fe CC:web', correct: true  },
-        { emoji: '🚫',  label: 'igw-03 (inherited, not explicit)', correct: false },
+      prompt: 'A <strong>Security Group</strong> is stateful. What does that mean?',
+      type: 'single',
+      options: [
+        { text: 'Return traffic is automatically allowed',         correct: true,  explain: 'Correct. Stateful means the return path is tracked and allowed automatically.' },
+        { text: 'Rules persist across reboots',                   correct: false, explain: 'Wrong. "Stateful" refers to connection tracking, not persistence.' },
+        { text: 'Rules are evaluated in order',                   correct: false, explain: 'Wrong. SG rules have no order. NACLs are evaluated in order.' },
+        { text: 'You must explicitly allow both inbound and outbound', correct: false, explain: 'Wrong. That describes a NACL, which is stateless.' },
+      ],
+    },
+    {
+      prompt: 'Which of these <strong>S3 features</strong> help prevent accidental public data exposure?',
+      type: 'multi',
+      options: [
+        { text: 'Block Public Access settings',      correct: true,  explain: 'Yes. Block Public Access is the primary guardrail for S3 public exposure.' },
+        { text: 'Versioning',                        correct: false, explain: 'Versioning helps with accidental deletion, not public exposure.' },
+        { text: 'Bucket policies with explicit Deny', correct: true, explain: 'Yes. An explicit Deny on s3:GetObject prevents public reads.' },
+        { text: 'Server-side encryption',            correct: false, explain: 'Encryption protects data at rest, not access control.' },
+        { text: 'Access Analyzer for S3',            correct: true,  explain: 'Yes. Access Analyzer alerts you when buckets are publicly accessible.' },
+      ],
+    },
+    {
+      prompt: 'What does <code>sts:AssumeRole</code> allow a principal to do?',
+      type: 'single',
+      options: [
+        { text: 'Temporarily adopt another IAM role\'s permissions', correct: true,  explain: 'Correct. AssumeRole returns temporary credentials for the target role.' },
+        { text: 'Create a new IAM role',                            correct: false, explain: 'Wrong. That would be iam:CreateRole.' },
+        { text: 'List all roles in the account',                    correct: false, explain: 'Wrong. That would be iam:ListRoles.' },
+        { text: 'Permanently switch your user\'s permissions',      correct: false, explain: 'Wrong. The credentials are temporary (STS = Security Token Service).' },
+      ],
+    },
+    {
+      prompt: 'Which of these AWS services are <strong>fully serverless</strong>?',
+      type: 'multi',
+      options: [
+        { text: 'Lambda',        correct: true,  explain: 'Yes. No servers to manage, scales automatically.' },
+        { text: 'ECS on EC2',    correct: false, explain: 'No. ECS on EC2 requires you to manage the underlying instances.' },
+        { text: 'DynamoDB',      correct: true,  explain: 'Yes. DynamoDB is fully managed with no server provisioning.' },
+        { text: 'RDS',           correct: false, explain: 'No. RDS runs on managed instances — you still pick the instance size.' },
+        { text: 'Aurora Serverless v2', correct: true, explain: 'Yes. Aurora Serverless v2 scales automatically without provisioned instances.' },
+        { text: 'ElastiCache',   correct: false, explain: 'No. ElastiCache requires you to provision node types and clusters.' },
+      ],
+    },
+    {
+      prompt: 'What happens when a <strong>bucket policy DENY</strong> and an <strong>IAM ALLOW</strong> both apply to the same S3 action?',
+      type: 'single',
+      options: [
+        { text: 'Access is denied',                          correct: true,  explain: 'Correct. Explicit Deny always wins. The bucket policy Deny overrides the IAM Allow.' },
+        { text: 'Access is allowed — IAM takes precedence', correct: false, explain: 'Wrong. Resource-based Deny is still an explicit Deny and wins.' },
+        { text: 'The more specific policy wins',            correct: false, explain: 'Wrong. There is no "more specific" rule — Deny always wins.' },
+        { text: 'It depends on evaluation order',           correct: false, explain: 'Wrong. AWS policy evaluation always applies Deny first, regardless of order.' },
+      ],
+    },
+    {
+      prompt: 'Which of these IAM policies best follow <strong>least privilege</strong> for a Lambda that only reads from one S3 bucket?',
+      type: 'single',
+      options: [
+        { text: 'Action: s3:* — Resource: *',                              correct: false, explain: 'Wrong. s3:* on * is the opposite of least privilege.' },
+        { text: 'Action: s3:GetObject — Resource: arn:aws:s3:::my-bucket/*', correct: true, explain: 'Correct. Scoped to the exact action and resource needed.' },
+        { text: 'Action: s3:GetObject — Resource: *',                      correct: false, explain: 'Better, but still grants read access to all S3 buckets.' },
+        { text: 'Action: * — Resource: arn:aws:s3:::my-bucket/*',          correct: false, explain: 'Wrong. Wildcard action grants all operations including delete.' },
+      ],
+    },
+    {
+      prompt: 'Which architectures eliminate a <strong>Single Point of Failure</strong>?',
+      type: 'multi',
+      options: [
+        { text: 'Multi-AZ RDS with automatic failover',  correct: true,  explain: 'Yes. Automatic failover to standby removes the SPOF.' },
+        { text: 'Single EC2 instance with EBS',          correct: false, explain: 'No. One instance = one SPOF. If it dies, the service dies.' },
+        { text: 'ALB with ASG across 3 AZs',             correct: true,  explain: 'Yes. Traffic is distributed, any single instance failure is absorbed.' },
+        { text: 'NAT Gateway in one AZ only',            correct: false, explain: 'No. If that AZ has issues, all outbound traffic from other AZs fails.' },
+        { text: 'Route 53 with health checks + failover',correct: true,  explain: 'Yes. DNS-level failover routes traffic away from unhealthy endpoints.' },
       ],
     },
   ];
 
-  // Pick two distinct random challenges (used for pre-login and post-game)
+  // Pick two distinct random questions per session
   const _picks = (() => {
-    const idx = Array.from({length: CAPTCHA_CHALLENGES.length}, (_, i) => i);
+    const idx = Array.from({length: QUESTIONS.length}, (_, i) => i);
     idx.sort(() => Math.random() - 0.5);
     return [idx[0], idx[1]];
   })();
 
-  const VERIFY_STEPS = [
+  // ── CAPTCHA (QUIZ) BUILDER ──────────────────────────────────────────────────
+  function buildCaptcha(containerId, questionIdx, onSuccess) {
+    const q = QUESTIONS[questionIdx];
+    const container = document.getElementById(containerId);
+    let failCount = 0;
+
+    function render() {
+      container.innerHTML = '';
+      const panel = document.createElement('div');
+      panel.className = 'captcha-panel';
+      panel.innerHTML = `
+        <h2>🤖 Identity Verification — AWS Knowledge Check</h2>
+        <p class="sub" style="font-size:0.9rem;color:#c8d6f8;">${q.prompt}</p>
+        <div class="captcha-grid" id="${containerId}-grid"></div>
+        <div id="${containerId}-feedback" style="width:100%;display:none;flex-direction:column;gap:6px;"></div>
+        <p class="captcha-error" id="${containerId}-err"></p>
+        <button id="${containerId}-btn">Verify</button>
+      `;
+      container.appendChild(panel);
+      show(containerId);
+
+      const grid = document.getElementById(`${containerId}-grid`);
+      q.options.forEach((opt, i) => {
+        const tile = document.createElement('div');
+        tile.className = 'captcha-tile';
+        tile.dataset.idx = i;
+        tile.innerHTML = `<span class="tile-label" style="font-size:0.88rem;">${opt.text}</span>`;
+        tile.addEventListener('click', () => {
+          if (q.type === 'single') {
+            // deselect others
+            grid.querySelectorAll('.captcha-tile').forEach(t => t.classList.remove('selected'));
+          }
+          tile.classList.toggle('selected');
+        });
+        grid.appendChild(tile);
+      });
+
+      document.getElementById(`${containerId}-btn`).addEventListener('click', async () => {
+        const selected = [...grid.querySelectorAll('.captcha-tile.selected')].map(t => +t.dataset.idx);
+        const correct  = q.options.map((o,i) => o.correct ? i : -1).filter(i => i >= 0);
+        const isCorrect = selected.length === correct.length &&
+                          selected.every(i => correct.includes(i));
+
+        if (isCorrect) { onSuccess(); return; }
+
+        failCount++;
+        const lockMs = Math.pow(2, failCount - 1) * 1000;
+
+        // Show per-option explanations
+        const fb = document.getElementById(`${containerId}-feedback`);
+        fb.style.display = 'flex';
+        fb.innerHTML = q.options.map((o, i) => {
+          const wasSelected = selected.includes(i);
+          const icon = o.correct ? '✅' : (wasSelected ? '❌' : '◻️');
+          return `<div style="font-size:0.78rem;color:#a0b0cc;line-height:1.4;">
+            <span>${icon}</span> <strong style="color:${o.correct ? '#51cf66' : '#ff6b6b'}">${o.text}</strong>
+            — ${o.explain}
+          </div>`;
+        }).join('');
+
+        // Lockout countdown
+        const errEl = document.getElementById(`${containerId}-err`);
+        const btn   = document.getElementById(`${containerId}-btn`);
+        btn.disabled = true;
+        grid.querySelectorAll('.captcha-tile').forEach(t => t.classList.remove('selected'));
+
+        let remaining = lockMs / 1000;
+        errEl.textContent = `⛔ Incorrect. Account suspended. Retry in ${remaining}s`;
+        const tick = setInterval(() => {
+          remaining--;
+          if (remaining <= 0) {
+            clearInterval(tick);
+            errEl.textContent = '';
+            btn.disabled = false;
+            fb.style.display = 'none';
+          } else {
+            errEl.textContent = `⛔ Incorrect. Account suspended. Retry in ${remaining}s`;
+          }
+        }, 1000);
+      });
+    }
+
+    render();
+  }
     'Querying Active Directory... done',
     'Validating Midway token... done',
     'Checking Isengard federation... done',
@@ -125,6 +243,43 @@ const Clave = (() => {
   ];
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
+  const VERIFY_STEPS = [
+    'Querying Active Directory... done',
+    'Validating Midway token... done',
+    'Checking Isengard federation... done',
+    'Resolving group memberships (847 groups)...',
+    'Applying ABAC policies...',
+    'Cross-referencing Phonetool... done',
+    'Evaluating SCPs... done',
+    'Verifying MFA posture...',
+  ];
+
+  const ENTITLEMENT_LINES = [
+    'GET iam:ListPolicies → 200 OK (312ms)',
+    'Evaluating policy: AmazonFlappyKiroReadOnly... DENY',
+    'Evaluating policy: AmazonFlappyKiroPlayer... ALLOW',
+    'Evaluating policy: AmazonFlappyKiroHighScoreWrite... ALLOW',
+    'Evaluating policy: AmazonFlappyKiroAuditLog... ALLOW',
+    'SCP: ou-prod-games → no explicit deny',
+    'Permission boundary: FlappyKiroPlayer-Prod → within bounds',
+    'Session policy: inline → 3 statements evaluated',
+    'Effective permissions: game:flap:write ✓',
+    'Effective permissions: score:submit:put ✓',
+    'Generating STS session token... done',
+    'Token ARN: arn:aws:sts::139478927430:assumed-role/FlappyKiroPlayer-Prod/session',
+  ];
+
+  const SUBMIT_LINES = [
+    'Assuming role FlappyKiroPlayer-Prod... done',
+    'PUT s3://flappy-kiro-audit-logs-prod/scores/{user}.json',
+    'Requesting KMS data key (mrk-flappy)... 200 OK',
+    'Encrypting payload with AES-256-GCM...',
+    'Uploading 847 bytes to S3... done',
+    'Writing to DynamoDB audit table... done',
+    'Publishing SNS notification to compliance team...',
+    'Score verified and immutably recorded. ✓',
+  ];
+
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
   function show(id)  { document.getElementById(id).classList.remove('hidden'); }
@@ -136,59 +291,6 @@ const Clave = (() => {
   }
 
   function showClaveStep(id) { hideAll(); show(id); }
-
-  // ── CAPTCHA BUILDER ─────────────────────────────────────────────────────────
-  function buildCaptcha(containerId, challengeIdx, onSuccess) {
-    const ch = CAPTCHA_CHALLENGES[challengeIdx];
-    const container = document.getElementById(containerId);
-    let attempts = 0;
-
-    function render() {
-      container.innerHTML = '';
-      const panel = document.createElement('div');
-      panel.className = 'captcha-panel';
-
-      panel.innerHTML = `
-        <h2>🤖 Security Verification</h2>
-        <p class="sub">${ch.prompt}</p>
-        <p class="sub">${ch.sub}</p>
-        <div class="captcha-grid" id="${containerId}-grid"></div>
-        <p class="captcha-error" id="${containerId}-err"></p>
-        <button id="${containerId}-btn">Verify</button>
-      `;
-      container.appendChild(panel);
-      show(containerId);
-
-      const grid = document.getElementById(`${containerId}-grid`);
-      ch.tiles.forEach((t, i) => {
-        const tile = document.createElement('div');
-        tile.className = 'captcha-tile';
-        tile.dataset.idx = i;
-        tile.innerHTML = `<span class="tile-emoji">${t.emoji}</span><span class="tile-label">${t.label}</span>`;
-        tile.addEventListener('click', () => tile.classList.toggle('selected'));
-        grid.appendChild(tile);
-      });
-
-      document.getElementById(`${containerId}-btn`).addEventListener('click', () => {
-        const selected = [...grid.querySelectorAll('.captcha-tile.selected')].map(t => +t.dataset.idx);
-        const correct  = ch.tiles.map((t,i) => t.correct ? i : -1).filter(i => i >= 0);
-        const isCorrect = selected.length === correct.length &&
-                          selected.every(i => correct.includes(i));
-        attempts++;
-        if (isCorrect) {
-          onSuccess();
-        } else {
-          document.getElementById(`${containerId}-err`).textContent =
-            attempts === 1
-              ? '❌ Incorrect selection. Please try again.'
-              : `❌ ${attempts} failed attempts recorded. Your compliance score has been updated.`;
-          grid.querySelectorAll('.captcha-tile').forEach(t => t.classList.remove('selected'));
-        }
-      });
-    }
-
-    render();
-  }
 
   // ── VERIFY BAR ANIMATION ────────────────────────────────────────────────────
   async function animateVerifyBar() {
