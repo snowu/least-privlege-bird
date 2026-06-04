@@ -1,5 +1,5 @@
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const C = {
+const DEV_MODE = location.hostname === 'localhost'; // set to true to skip Clave flow
   W: 910, H: 730,           // canvas dimensions
   HUD: 48,                  // bottom bar height
   GRAVITY: 0.5,
@@ -369,7 +369,12 @@ function endGame() {
   const prev  = bestForPlayer(currentPlayer);
   const isNew = score > prev;
 
-  // Must complete CAPTCHA + fake audit log before seeing score
+  if (DEV_MODE) {
+    document.getElementById('gameover-msg').textContent = `Score: ${score}`;
+    overlay.classList.remove('hidden');
+    showScreen('gameover');
+    return;
+  }
   Clave.startScoreSubmit(currentPlayer, score, async () => {
     await saveScore(currentPlayer, score);
     document.getElementById('gameover-msg').textContent =
@@ -417,8 +422,9 @@ userSelect.addEventListener('change', () => {
 });
 
 document.getElementById('btn-play').addEventListener('click', async () => {
-  const name = nameInput.value.trim();
+  const name = nameInput.value.trim() || 'dev';
   if (!name) { nameInput.focus(); return; }
+  if (DEV_MODE) { startGame(name); return; }
   await ensurePlayerToken(name);
   showScreen(null);
   overlay.classList.remove('hidden');
