@@ -9,9 +9,9 @@ const C = {
   PIPE_GAP_MAX: 260,        // widest vertical gap (at start)
   PIPE_GAP_STEP: 20,        // gap shrinks by this per speed level
   PIPE_SPEED: 2,            // initial pipe scroll speed (px/frame)
-  PIPE_INTERVAL_MAX: 1250,  // ms between pipes at start (sparse)
-  PIPE_INTERVAL_MIN: 900,   // ms between pipes at max difficulty (dense)
-  PIPE_INTERVAL_STEP: 200,  // interval shrinks by this per speed level
+  PIPE_INTERVAL_MAX: 2200,  // ms between pipes at start
+  PIPE_INTERVAL_MIN: 800,   // ms between pipes at max difficulty
+  PIPE_INTERVAL_STEP: 300,  // interval shrinks by this per speed level
   SPEED_UP_INTERVAL: 5000,  // ms between each speed increase
   SPEED_UP_AMOUNT: 0.5,     // px/frame added each interval
   COUNTDOWN_SEC: 3,         // seconds to count down before play starts
@@ -307,6 +307,7 @@ function collides() {
 
 // ─── GAME LOOP ────────────────────────────────────────────────────────────────
 function loop(now) {
+  ctx.clearRect(0, 0, C.W, C.H);
   drawBackground();
   for (const p of pipes) drawPipe(p.x, p.topH, p.gap);
   drawPlayer();
@@ -329,7 +330,7 @@ function loop(now) {
 
   // ── Active play ──
   // Initialize speed timer on first active frame
-  if (lastSpeedUp === null) { lastSpeedUp = now; lastPipeTime = now; }
+  if (lastSpeedUp === null) { lastSpeedUp = now; lastPipeTime = now; spawnPipe(now); }
 
   // Speed ramp
   if (now - lastSpeedUp > C.SPEED_UP_INTERVAL) {
