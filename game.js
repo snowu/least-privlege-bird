@@ -9,7 +9,7 @@ const C = {
   PIPE_GAP_MAX: 200,        // largest vertical gap between pipes
   PIPE_GAP_STEP: 20,        // gap is chosen in multiples of this value
   PIPE_SPEED: 3,            // initial pipe scroll speed (px/frame)
-  PIPE_INTERVAL: 1000,      // ms between new pipe pairs
+  PIPE_INTERVAL: 1500,      // ms between new pipe pairs
   SPEED_UP_INTERVAL: 5000, // ms between each speed increase
   SPEED_UP_AMOUNT: 0.5,     // px/frame added each interval
   COUNTDOWN_SEC: 3,         // seconds to count down before play starts
@@ -31,10 +31,117 @@ const overlay = document.getElementById('overlay');
 overlay.style.width  = C.W + 'px';
 overlay.style.height = C.H + 'px';
 
-// ─── ASSETS ───────────────────────────────────────────────────────────────────
-const ghostImg = new Image(); ghostImg.src = 'assets/ghosty.png';
+// ─── ASSETS & THEMES ──────────────────────────────────────────────────────────
 const sndJump     = new Audio('assets/jump.wav');
 const sndGameOver = new Audio('assets/game_over.wav');
+
+function makeImg(src) { const i = new Image(); i.src = src; return i; }
+
+const THEMES = {
+  ghost: {
+    label: 'Ghost', img: makeImg('assets/ghosty.png'),
+    sky: '#7ec8e3', ground: '#2b2b3b',
+    cloudFill: 'rgba(255,255,255,0.82)',
+    drawPipe(x, topH, gap) {
+      const capH = 24, capW = C.PIPE_W + 12, capX = x - 6;
+      ctx.fillStyle = '#3a7d1e';
+      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
+      ctx.fillRect(capX, topH - capH, capW, capH);
+      const botY = topH + gap;
+      ctx.fillRect(capX, botY, capW, capH);
+      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(x + 6, 0, 10, topH - capH);
+      ctx.fillRect(x + 6, botY + capH, 10, C.GROUND - botY - capH);
+    },
+  },
+  rocket: {
+    label: 'Rocket', img: makeImg('assets/rocket.png'),
+    sky: '#05071a', ground: '#1a1a2e',
+    cloudFill: null, // stars instead
+    drawPipe(x, topH, gap) {
+      // Metal station columns
+      const capH = 20, capW = C.PIPE_W + 10, capX = x - 5;
+      ctx.fillStyle = '#546e7a';
+      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
+      ctx.fillRect(capX, topH - capH, capW, capH);
+      const botY = topH + gap;
+      ctx.fillRect(capX, botY, capW, capH);
+      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+      // Rivet highlight
+      ctx.fillStyle = '#00e5ff';
+      for (let y = 10; y < topH - capH; y += 20) ctx.fillRect(x + 4, y, 4, 4);
+      for (let y = botY + capH + 10; y < C.GROUND; y += 20) ctx.fillRect(x + 4, y, 4, 4);
+    },
+  },
+  bee: {
+    label: 'Bee', img: makeImg('assets/bee.png'),
+    sky: '#fffde7', ground: '#388e3c',
+    cloudFill: 'rgba(255,255,255,0.9)',
+    drawPipe(x, topH, gap) {
+      // Brown flower stalks with leaf caps
+      const capH = 22, capW = C.PIPE_W + 14, capX = x - 7;
+      ctx.fillStyle = '#6d4c41';
+      ctx.fillRect(x + 8, 0, C.PIPE_W - 16, topH - capH);
+      ctx.fillStyle = '#558b2f';
+      ctx.fillRect(capX, topH - capH, capW, capH);
+      const botY = topH + gap;
+      ctx.fillStyle = '#558b2f';
+      ctx.fillRect(capX, botY, capW, capH);
+      ctx.fillStyle = '#6d4c41';
+      ctx.fillRect(x + 8, botY + capH, C.PIPE_W - 16, C.GROUND - botY - capH);
+    },
+  },
+  wizard: {
+    label: 'Wizard', img: makeImg('assets/wizard.png'),
+    sky: '#1a0533', ground: '#4a4453',
+    cloudFill: 'rgba(180,100,255,0.25)',
+    drawPipe(x, topH, gap) {
+      // Stone brick towers
+      const capH = 24, capW = C.PIPE_W + 10, capX = x - 5;
+      ctx.fillStyle = '#6d6875';
+      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
+      ctx.fillRect(capX, topH - capH, capW, capH);
+      const botY = topH + gap;
+      ctx.fillRect(capX, botY, capW, capH);
+      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+      // Brick lines
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+      for (let y = 8; y < topH - capH; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
+      for (let y = botY + capH + 8; y < C.GROUND; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
+      // Moss cap tint
+      ctx.fillStyle = 'rgba(100,200,80,0.25)';
+      ctx.fillRect(capX, topH - capH, capW, capH);
+      ctx.fillRect(capX, botY, capW, capH);
+    },
+  },
+  robot: {
+    label: 'Robot', img: makeImg('assets/robot.png'),
+    sky: '#0d1f2d', ground: '#1c2a3a',
+    cloudFill: null, // square data-packet clouds
+    drawPipe(x, topH, gap) {
+      // Steel girders
+      const capH = 20, capW = C.PIPE_W + 8, capX = x - 4;
+      ctx.fillStyle = '#37474f';
+      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
+      ctx.fillRect(capX, topH - capH, capW, capH);
+      const botY = topH + gap;
+      ctx.fillRect(capX, botY, capW, capH);
+      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+      // Yellow warning stripes on caps
+      ctx.fillStyle = '#fdd835';
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(capX + i * (capW / 4), topH - capH, capW / 8, capH);
+        ctx.fillRect(capX + i * (capW / 4), botY, capW / 8, capH);
+      }
+      ctx.fillStyle = 'rgba(55,71,79,0.6)';
+      ctx.fillRect(capX, topH - capH, capW, capH);
+      ctx.fillRect(capX, botY, capW, capH);
+    },
+  },
+};
+
+let currentTheme = THEMES.ghost;
 
 // ─── HIGH SCORES (localStorage) ───────────────────────────────────────────────
 function loadScores() {
@@ -102,27 +209,42 @@ function spawnPipe(now) {
 
 // ─── DRAWING ──────────────────────────────────────────────────────────────────
 function drawBackground() {
+  const t = currentTheme;
   // Sky
-  ctx.fillStyle = '#7ec8e3';
+  ctx.fillStyle = t.sky;
   ctx.fillRect(0, 0, C.W, C.GROUND);
 
-  // Sketch scribbles (static-ish lines for texture)
-  ctx.strokeStyle = 'rgba(80,130,160,0.18)';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < 30; i++) {
-    const x = (i * 83) % C.W;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - 20, C.GROUND); ctx.stroke();
-  }
-
-  // Clouds
-  ctx.fillStyle = 'rgba(255,255,255,0.82)';
-  for (const cl of clouds) {
-    roundRect(ctx, cl.x, cl.y, cl.w, cl.h, 20);
-    ctx.fill();
+  if (t.cloudFill === null && t.sky === THEMES.rocket.sky) {
+    // Stars for space
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    for (let i = 0; i < 60; i++) {
+      const sx = (i * 137 + 11) % C.W, sy = (i * 97 + 7) % C.GROUND;
+      ctx.fillRect(sx, sy, i % 3 === 0 ? 2 : 1, i % 3 === 0 ? 2 : 1);
+    }
+  } else if (t.cloudFill === null) {
+    // Robot: square data-packet clouds
+    ctx.fillStyle = 'rgba(0,229,255,0.12)';
+    for (const cl of clouds) {
+      ctx.fillRect(cl.x, cl.y, cl.w, cl.h * 0.7);
+    }
+  } else {
+    // Sketch lines (day themes)
+    if (t === THEMES.ghost) {
+      ctx.strokeStyle = 'rgba(80,130,160,0.18)'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 30; i++) {
+        const x = (i * 83) % C.W;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - 20, C.GROUND); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = t.cloudFill;
+    for (const cl of clouds) {
+      roundRect(ctx, cl.x, cl.y, cl.w, cl.h, 20);
+      ctx.fill();
+    }
   }
 
   // Ground / HUD bar
-  ctx.fillStyle = '#2b2b3b';
+  ctx.fillStyle = t.ground;
   ctx.fillRect(0, C.GROUND, C.W, C.HUD);
 }
 
@@ -140,21 +262,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function drawPipe(x, topH, gap) {
-  const capH = 24, capW = C.PIPE_W + 12, capX = x - 6;
-
-  ctx.fillStyle = '#3a7d1e';
-  ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
-  ctx.fillRect(capX, topH - capH, capW, capH);
-
-  const botY = topH + gap;
-  ctx.fillRect(capX, botY, capW, capH);
-  ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
-
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  ctx.fillRect(x + 6, 0, 10, topH - capH);
-  ctx.fillRect(x + 6, botY + capH, 10, C.GROUND - botY - capH);
-}
+function drawPipe(x, topH, gap) { currentTheme.drawPipe(x, topH, gap); }
 
 function drawCountdown(n) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -169,13 +277,10 @@ function drawCountdown(n) {
 
 function drawPlayer() {
   const s = C.PLAYER_SIZE;
-  const px = C.PLAYER_X - s / 2;
-  const py = player.y - s / 2;
-  // Tilt sprite based on velocity
   ctx.save();
   ctx.translate(C.PLAYER_X, player.y);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, player.vy * 0.05)));
-  ctx.drawImage(ghostImg, -s / 2, -s / 2, s, s);
+  ctx.drawImage(currentTheme.img, -s / 2, -s / 2, s, s);
   ctx.restore();
 }
 
@@ -265,16 +370,20 @@ function endGame() {
   sndGameOver.currentTime = 0;
   sndGameOver.play().catch(() => {});
 
-  const prev = bestForPlayer(currentPlayer);
-  saveScore(currentPlayer, score);
+  const prev  = bestForPlayer(currentPlayer);
   const isNew = score > prev;
 
-  document.getElementById('gameover-msg').textContent =
-    isNew
-      ? `New high score: ${score}! 🎉`
-      : `Score: ${score} — Best: ${Math.max(score, prev)}`;
-
-  showScreen('gameover');
+  // Must complete CAPTCHA + fake audit log before seeing score
+  Clave.startScoreSubmit(currentPlayer, score, () => {
+    saveScore(currentPlayer, score);
+    document.getElementById('gameover-msg').textContent =
+      isNew
+        ? `New high score: ${score}! 🎉`
+        : `Score: ${score} — Best: ${Math.max(score, prev)}`;
+    overlay.classList.remove('hidden');
+    showScreen('gameover');
+  });
+  overlay.classList.remove('hidden'); // keep visible for CAPTCHA + submit screens
 }
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
@@ -314,7 +423,9 @@ userSelect.addEventListener('change', () => {
 document.getElementById('btn-play').addEventListener('click', () => {
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
-  startGame(name);
+  showScreen(null);                          // hide menu screens
+  overlay.classList.remove('hidden');        // keep overlay visible for Clave
+  Clave.startLogin(name, () => startGame(name));
 });
 
 nameInput.addEventListener('keydown', e => {
@@ -345,6 +456,22 @@ document.getElementById('btn-retry').addEventListener('click', () => startGame(c
 document.getElementById('btn-menu').addEventListener('click', () => { populateUserSelect(); showScreen('menu'); });
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+// Build avatar picker
+const avatarPicker = document.getElementById('avatar-picker');
+Object.entries(THEMES).forEach(([key, theme]) => {
+  const div = document.createElement('div');
+  div.className = 'avatar-opt' + (key === 'ghost' ? ' selected' : '');
+  div.dataset.key = key;
+  div.innerHTML = `<img src="${theme.img.src}" alt="${theme.label}"><span>${theme.label}</span>`;
+  div.addEventListener('click', () => {
+    document.querySelectorAll('.avatar-opt').forEach(d => d.classList.remove('selected'));
+    div.classList.add('selected');
+    currentTheme = THEMES[key];
+    drawBackground(); // preview on menu
+  });
+  avatarPicker.appendChild(div);
+});
+
 // Draw a static background while on menu
 drawBackground();
 populateUserSelect();
