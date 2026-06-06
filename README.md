@@ -6,7 +6,7 @@ checks), and STS token generation. The friction *is* the feature.
 
 Built for an AWS workshop, now a (cursed) internal fun tool. Vanilla JS, no build step.
 
-![UI](img/example-ui.png)
+![UI](img/ui.png)
 
 ## Stack
 
