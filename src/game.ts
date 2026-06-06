@@ -59,7 +59,7 @@ const AudioFX = (() => {
     squid:  () => { beep(180, 70, 0.18, 'sine', 0.16); beep(90, 50, 0.12, 'sine', 0.1, 0.05); },         // water-jet blub
     rocket: () => beep(220, 90,  0.16, 'sawtooth', 0.16),              // whoosh down
     bee:    () => { beep(420, 380, 0.12, 'square', 0.12); beep(440, 400, 0.12, 'square', 0.1, 0.01); }, // buzzy
-    wizard: () => { beep(700, 1300, 0.09, 'triangle', 0.14); beep(1300, 2000, 0.08, 'triangle', 0.1, 0.06); }, // sparkle
+    dragon: () => { beep(160, 90, 0.16, 'sawtooth', 0.18); beep(420, 120, 0.1, 'square', 0.1, 0.04); }, // roar/whoosh
     robot:  () => beep(140, 140, 0.09, 'square', 0.16),                // flat blip
   };
 
@@ -169,7 +169,7 @@ function bandedPipe(x, topH, gap, { body, light, dark, edge, capH = 28 }) {
 
 // Plain body + 2 caps skeleton; `decorate({x, topH, botY, capX, capW, capH})` paints
 // theme detail (rivets / brick lines / warning stripes) over it. Shared by
-// rocket/wizard/robot.
+// rocket/dragon/robot.
 function framedPipe(x, topH, gap, { bodyColor, capColor, capH, capW, decorate }) {
   const capX = x - (capW - C.PIPE_W) / 2;
   const botY = topH + gap;
@@ -247,11 +247,12 @@ const THEMES: { [key: string]: any } = {
       ctx.fillRect(x + 8, botY + capH, C.PIPE_W - 16, C.GROUND - botY - capH);
     },
   },
-  wizard: {
-    label: 'Wizard',
+  dragon: {
+    label: 'Dragon',
     sky: '#1a0533', ground: '#4a4453',
     cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
-    // Stone brick towers with mortar lines and moss-tinted caps.
+    anim: true,            // 2-frame: wings beat down on flap
+    // Stone brick towers with mortar lines and moss-tinted caps (a dragon's ruined keep).
     drawPipe(x, topH, gap) {
       framedPipe(x, topH, gap, {
         bodyColor: '#6d6875', capColor: '#6d6875', capH: 24, capW: C.PIPE_W + 10,
@@ -388,7 +389,7 @@ function pixelDisc(cx, cy, r, c) {
 // A jagged mountain peak anchored to the ground: a triangular massif with a
 // secondary shoulder and (in pixel mode) a stepped/serrated silhouette rather than
 // a smooth mound. Round mode draws clean straight ridgelines. `snow` (optional)
-// caps the summit. Reads as a mountain, not a hill — used by the wizard theme.
+// caps the summit. Reads as a mountain, not a hill — used by the dragon theme.
 function pixelPeak(x, w, h, c, snow) {
   const baseY = G(), apexX = x + w * 0.42, apexY = baseY - h;
   const shoulderX = x + w * 0.72, shoulderY = baseY - h * 0.55;
@@ -609,10 +610,10 @@ THEMES.bee.bgLayers = [
   } },
 ];
 
-// Lightning strength for the wizard theme: a sharp flash that decays, firing every
+// Lightning strength for the dragon theme: a sharp flash that decays, firing every
 // ~3.5s with a double-blink. Returns 0 (dark) … 1 (full flash). Render-only. Short
 // period so a strike is always near — no long wait to see one after switching.
-function wizardFlash() {
+function dragonFlash() {
   const t = nowSec();
   const period = 3.5;
   const into = t % period;                  // seconds since last strike began
@@ -623,12 +624,12 @@ function wizardFlash() {
   return Math.max(a, b);
 }
 
-THEMES.wizard.bgLayers = [
+THEMES.dragon.bgLayers = [
   // Heavy storm clouds: dark, low, slow-drifting banks across the top of the sky.
   // They brighten briefly with each lightning flash (lit from within the storm).
   { speed: 0, draw() {
       const t = nowSec();
-      const f = wizardFlash();
+      const f = dragonFlash();
       const drift = (t * 12) % (C.W + 300);                    // slow leftward roll
       const base = `rgba(${44 + f * 90},${38 + f * 80},${64 + f * 90},`;
       for (let k = 0; k < 6; k++) {
@@ -656,7 +657,7 @@ THEMES.wizard.bgLayers = [
   } },
   // Lightning: a full-sky flash painted behind the mountains on a periodic strike.
   { speed: 0, draw() {
-      const f = wizardFlash();
+      const f = dragonFlash();
       if (f <= 0) return;
       ctx.fillStyle = `rgba(200,190,255,${0.55 * f})`;
       ctx.fillRect(0, 0, C.W, C.GROUND);
@@ -681,7 +682,7 @@ THEMES.wizard.bgLayers = [
   // A castle on the mid ridge — windows brighten with each lightning flash
   { speed: 0.35, draw(o) { tileMotif(o, 520, x => {
       const bx = x + 60, by = G(), c = '#5a5566', d = '#403c4a';
-      const f = wizardFlash();
+      const f = dragonFlash();
       const win = `rgba(255,213,79,${0.85 + 0.15 * f})`;          // base warm, flares on flash
       pxRect(bx, by - 70, 120, 70, c);                            // keep
       for (let t = 0; t < 4; t++) pxRect(bx - 10 + t * 40, by - 92, 20, 26, c); // battlement towers
@@ -937,26 +938,65 @@ THEMES.robot.bgLayers = [
       };
       far(x, 50, 150, '#00e5ff'); far(x + 80, 40, 110, '#76ff03'); far(x + 150, 60, 190, '#00e5ff');
   }); } },
-  // Flying traffic: neon vehicles streaking across with a fading light trail.
+  // Transit tubes: Futurama-style translucent transport tubes arc across the sky with
+  // little passenger pods whooshing through them. Drawn behind the dense traffic.
   { speed: 0, draw() {
-      wanderers(
-        [
-          { drift: 90,  baseY: 120, yAmp: 8,  wy: 0.2, sy: 0.5, bank: 0.1, flapHz: 9 },
-          { drift: -70, baseY: 180, yAmp: 12, wy: 0.25, sy: 0.6, bank: 0.1, flapHz: 7 },
-          { drift: 120, baseY: 90,  yAmp: 6,  wy: 0.15, sy: 0.4, bank: 0.1, flapHz: 11 },
-        ],
-        (i, t, flap) => {
-          const col = i % 2 ? '255,40,200' : '0,229,255';
-          const grad = ctx.createLinearGradient(0, 0, -26, 0);
-          grad.addColorStop(0, `rgba(${col},0.9)`);
-          grad.addColorStop(1, `rgba(${col},0)`);
-          ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-26, 0); ctx.stroke(); // trail
-          ctx.fillStyle = `rgba(${col},1)`;
-          pxRect(0, -1, 6, 3, `rgba(${col},1)`);                  // body
-          if (flap) pixelDisc(2, 0, 2, '#ffffff');               // headlight blink
-          ctx.lineWidth = 1;
-        });
+      const t = nowSec();
+      // a few fixed tubes at different heights/slopes; each carries pods at staggered phases.
+      const tubes = [
+        { y: 70,  slope: -0.05, len: C.W + 120 },
+        { y: 150, slope: 0.07,  len: C.W + 120 },
+        { y: 215, slope: -0.04, len: C.W + 120 },
+      ];
+      tubes.forEach((tb, ti) => {
+        const x0 = -60, yAt = (x) => tb.y + (x - x0) * tb.slope;
+        // glass tube: a soft double-walled band
+        ctx.strokeStyle = 'rgba(120,220,255,0.16)'; ctx.lineWidth = 14;
+        ctx.beginPath(); ctx.moveTo(x0, yAt(x0)); ctx.lineTo(x0 + tb.len, yAt(x0 + tb.len)); ctx.stroke();
+        ctx.strokeStyle = 'rgba(180,240,255,0.3)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, yAt(x0) - 7); ctx.lineTo(x0 + tb.len, yAt(x0 + tb.len) - 7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x0, yAt(x0) + 7); ctx.lineTo(x0 + tb.len, yAt(x0 + tb.len) + 7); ctx.stroke();
+        // pods sliding through the tube
+        const dir = ti % 2 ? -1 : 1, spd = 130 + ti * 30;
+        for (let p = 0; p < 3; p++) {
+          const span = tb.len + 80;
+          let px = ((t * spd + p * 240 + ti * 90) % span);
+          if (dir < 0) px = span - px;
+          const x = x0 + px - 40, y = yAt(x);
+          const col = p % 2 ? '255,213,79' : '0,229,255';
+          ctx.fillStyle = `rgba(${col},0.95)`;
+          roundRect(ctx, x - 7, y - 4, 14, 8, 3); ctx.fill();      // pod capsule
+          ctx.fillStyle = 'rgba(20,30,45,0.9)';                    // passenger silhouette
+          ctx.fillRect(x - 2, y - 3, 4, 3);
+        }
+      });
+  } },
+  // Flying traffic: dense streams of neon vehicles streaking across in lanes, each with
+  // a fading light trail. Two stacked streams per direction → a busy traffic corridor.
+  { speed: 0, draw() {
+      // Many cars across 6 lanes. wanderers phases each car by its array index, so we
+      // expand lanes × 3 cars into one flat list → distinct indices = spread-out traffic.
+      const lanes = [
+        { drift: 95,  baseY: 105, yAmp: 6,  wy: 0.2,  sy: 0.5,  bank: 0.08, flapHz: 9 },
+        { drift: 130, baseY: 130, yAmp: 5,  wy: 0.18, sy: 0.4,  bank: 0.08, flapHz: 11 },
+        { drift: -80, baseY: 165, yAmp: 8,  wy: 0.25, sy: 0.6,  bank: 0.08, flapHz: 7 },
+        { drift: -110, baseY: 195, yAmp: 6, wy: 0.22, sy: 0.5,  bank: 0.08, flapHz: 8 },
+        { drift: 70,  baseY: 80,  yAmp: 5,  wy: 0.15, sy: 0.4,  bank: 0.08, flapHz: 12 },
+        { drift: -60, baseY: 235, yAmp: 7,  wy: 0.2,  sy: 0.45, bank: 0.08, flapHz: 6 },
+      ];
+      const cars = [];
+      lanes.forEach(l => { for (let c = 0; c < 3; c++) cars.push({ ...l, baseY: l.baseY + c * 3 }); });
+      wanderers(cars, (i, t, flap) => {
+        const col = i % 5 === 0 ? '255,213,79' : (i % 2 ? '255,40,200' : '0,229,255');
+        const grad = ctx.createLinearGradient(0, 0, -24, 0);
+        grad.addColorStop(0, `rgba(${col},0.9)`);
+        grad.addColorStop(1, `rgba(${col},0)`);
+        ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-24, 0); ctx.stroke(); // trail
+        pxRect(0, -1, 6, 3, `rgba(${col},1)`);                    // body
+        if (flap) pixelDisc(2, 0, 2, '#ffffff');                  // headlight blink
+        ctx.lineWidth = 1;
+      });
   } },
   // Rising data packets: glowing bits float up between the towers (particleStream).
   { speed: 0, draw() {
@@ -984,23 +1024,25 @@ THEMES.robot.bgLayers = [
         ctx.fillRect(sx, topY, w, 2);
         // pulsing window grid — each cell pulses on its own phase (deterministic in
         // position via seed+row+col, animated via the render clock t).
-        const cols = Math.max(2, Math.floor((w - 10) / 14));
-        const stepX = (w - 10) / cols;
-        const rows = Math.max(1, Math.floor((h - 16) / 14));
+        // Dense window grid (tight 10px pitch → grittier, more-lit-up cyberpunk tower).
+        const cols = Math.max(3, Math.floor((w - 8) / 10));
+        const stepX = (w - 8) / cols;
         let cell = 0, row = 0;
-        for (let yy = topY + 8; yy < G() - 8; yy += 14, row++) {
+        for (let yy = topY + 7; yy < G() - 6; yy += 10, row++) {
           for (let ci = 0; ci < cols; ci++, cell++) {
             const phase = ((seed * 7 + cell * 13) % 31) / 31 * 6.283;
-            // brighter floor + full swing, plus a bright "data wave" sweeping up the
-            // building (row-based) so the whole tower visibly ripples.
-            const wave = 0.5 + 0.5 * Math.sin(t * 3 - row * 0.9 + seed);
-            const lit = Math.min(1, 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 2.6 + phase)) * (0.5 + wave));
-            const wx = sx + 6 + ci * stepX;
+            // High lit floor so most windows glow steadily (dense city); a slow data
+            // wave ripples up the building. Only a few cells dip dark, and slowly —
+            // no rapid strobe. ~1 in 9 cells is an unlit (dead) window for texture.
+            const dead = (seed * 3 + cell * 7) % 9 === 0;
+            const wave = 0.5 + 0.5 * Math.sin(t * 1.1 - row * 0.5 + seed);
+            const lit = dead ? 0.1 : Math.min(1, 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(t * 0.9 + phase)) * (0.5 + 0.5 * wave));
+            const wx = sx + 5 + ci * stepX;
             if (round) {
-              pixelDisc(Math.round(wx + 3), yy + 2, 4, withAlpha(edge, lit));
+              pixelDisc(Math.round(wx + 2), yy + 2, 3, withAlpha(edge, lit));
             } else {
               ctx.fillStyle = withAlpha(edge, lit);
-              ctx.fillRect(Math.round(wx), yy, 8, 6);
+              ctx.fillRect(Math.round(wx), yy, 6, 5);
             }
           }
         }
@@ -1015,24 +1057,30 @@ THEMES.robot.bgLayers = [
         const beacon = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 4 + seed));
         pixelDisc(mx, mastTop - 2, 5, `rgba(255,40,200,${beacon})`); // magenta scanner
       };
-      // Two wide towers per tile (fewer, bigger than before). The taller one carries a
-      // large billboard; alternate which side it sits on per tile so the skyline reads
-      // varied as it scrolls.
+      // Three overlapping towers per tile → a dense, packed cyberpunk skyline. Heights
+      // vary per tile (hash01) so the silhouette isn't repetitive. The tall tower carries
+      // the billboard; it alternates sides per tile.
       const tallLeft = tile % 2 === 0;
-      const tallX = tallLeft ? x : x + 160, tallW = 150, tallH = 250;
-      // Foreground tower overlaps the tall tower's near edge so it partly occludes the
-      // billboard — same depth-layering the airplane skyline gets from its packed slabs.
-      const shortX = tallLeft ? x + 120 : x + 50, shortW = 130, shortH = 180;
-      // Draw the billboard tower FIRST (it's behind), then the foreground tower over it.
+      const tallX = tallLeft ? x : x + 160, tallW = 150, tallH = 240 + Math.floor(hash01(tile * 3) * 40);
+      const shortX = tallLeft ? x + 120 : x + 50, shortW = 130, shortH = 170 + Math.floor(hash01(tile * 5) * 50);
+      // A back-row mid tower fills the gap behind the two (drawn first, deepest).
+      const midX = tallLeft ? x + 250 : x + 90, midW = 100, midH = 200 + Math.floor(hash01(tile * 7) * 60);
+      tower(midX, midW, midH, tile % 3 ? '#00e5ff' : '#ff40c8', 5);
+      // Mid-tower board (~half the tiles) — smaller, deeper, partly hidden by front towers.
+      if (hash01(tile * 11) > 0.5) {
+        const mbw = 80, mbh = 40;
+        adBillboard(midX + Math.round((midW - mbw) / 2), G() - midH + 22, mbw, mbh, '255,40,200', AD_ROBOT, tile * 2 + 1);
+      }
+      // Draw the billboard tower next (behind the foreground tower), then its board.
       tower(tallX, tallW, tallH, '#00e5ff', 3);
-      // One large neon ad board, centered on the tall tower face. Width clamped inside
-      // the tower so it never clips; seeded off the tile index so each tile cycles a
-      // different slogan, desynced from its neighbours.
       const bw = 120, bh = 56;
       const bsx = tallX + Math.round((tallW - bw) / 2);
-      adBillboard(bsx, G() - 215, bw, bh, '0,229,255', AD_ROBOT, tile);
+      adBillboard(bsx, G() - tallH + 25, bw, bh, '0,229,255', AD_ROBOT, tile);
       // Foreground tower last → overlaps and partly hides the board behind it.
       tower(shortX, shortW, shortH, '#76ff03', 2);
+      // Board on the foreground short tower (always on top, fully readable).
+      const sbw = 96, sbh = 46;
+      adBillboard(shortX + Math.round((shortW - sbw) / 2), G() - shortH + 22, sbw, sbh, '118,255,3', AD_ROBOT, tile * 2);
   }); } },
   // Neon perspective grid on the ground bar + a periodic scanline sweep over all.
   { speed: 0, draw() {
@@ -1277,11 +1325,12 @@ const COW_ART = {
     '           /##\\',
     '           ^  ^',
   ].join('\n'),
-  wizard: [
-    '        \\    n',
-    '         \\  /*\\',
-    '           (o.o)',
-    '            \\=/',
+  dragon: [
+    '        \\    ^^__',
+    '         \\  /  o \\___',
+    '          \\ \\____/    >~~ )',
+    '             /\\  /\\',
+    '            ~~  ~~',
   ].join('\n'),
   airplane: [
     '        \\',
@@ -1928,8 +1977,12 @@ function buildAvatarPickerInto(container) {
   const selectedKey = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   container.innerHTML = '';
   container.classList.toggle('round-gfx', gfxStyle === 'round');
-  // Penguin leads (it's the mascot); the rest follow in THEMES order.
-  const ordered = ['penguin', ...Object.keys(THEMES).filter(k => k !== 'penguin')];
+  // Display order: penguin (mascot) leads, then the strong themes in THEMES order,
+  // with bird + bee parked at the end (the least-improved, blander options for now).
+  const TAIL = ['bird', 'bee'];
+  const lead = 'penguin';
+  const mid = Object.keys(THEMES).filter(k => k !== lead && !TAIL.includes(k));
+  const ordered = [lead, ...mid, ...TAIL];
   ordered.forEach((key) => {
     const theme = THEMES[key];
     const div = document.createElement('div');

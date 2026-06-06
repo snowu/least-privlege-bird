@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- RED dragon frame 2: facing RIGHT. BIG bat-wings swept DOWN below the body (the
+       down-beat) — strongly different silhouette from frame 1's raised wings. -->
+  <!-- Left wing down: big notched membrane below body -->
+  <path d="M17 22 L14 38 L8 31 L9 29 L4 31 L6 26 L11 26 Z" fill="#b71c1c"/>
+  <!-- Right wing down -->
+  <path d="M22 22 L26 37 L31 30 L30 28 L35 29 L32 25 L27 25 Z" fill="#b71c1c"/>
+  <!-- wing-bone struts -->
+  <g stroke="#7f0000" stroke-width="1" fill="none" stroke-linecap="round">
+    <path d="M16 22 L14 37"/>
+    <path d="M16 22 L8 31"/>
+    <path d="M23 22 L26 36"/>
+    <path d="M23 22 L31 30"/>
+  </g>
+  <!-- bright upper attach edge -->
+  <path d="M14 22 L17 22" stroke="#ff7676" stroke-width="1" fill="none"/>
+  <path d="M22 22 L26 22" stroke="#ff7676" stroke-width="1" fill="none"/>
+  <!-- arrow tail -->
+  <path d="M13 24 Q5 24 2 28 L7 26 Q10 25 14 25 Z" fill="#d32f2f"/>
+  <polygon points="1,28 5,25 5,31" fill="#ffd54f"/>
+  <!-- chunky body -->
+  <path d="M9 26 Q20 28 29 21 Q33 18 35 21 Q31 27 21 27 Q14 28 9 26 Z" fill="#d32f2f"/>
+  <!-- belly highlight -->
+  <path d="M12 26 Q21 27 28 22 Q22 27 14 27 Z" fill="#ff7043"/>
+  <!-- head -->
+  <ellipse cx="31" cy="20" rx="5.5" ry="4" fill="#d32f2f"/>
+  <ellipse cx="36" cy="21" rx="2.8" ry="1.9" fill="#b71c1c"/>
+  <circle cx="38" cy="21" r="0.8" fill="#7f0000"/>
+  <!-- horns -->
+  <polygon points="29,17 28,13 31,16" fill="#ffd54f"/>
+  <polygon points="32,17 33,13 34,17" fill="#ffd54f"/>
+  <!-- dorsal spikes -->
+  <polygon points="24,20 23,17 26,20" fill="#ffd54f"/>
+  <polygon points="18,22 17,19 20,22" fill="#ffd54f"/>
+  <!-- eye -->
+  <circle cx="31" cy="19" r="1.7" fill="#fff"/>
+  <circle cx="31.7" cy="19.2" r="0.9" fill="#ffc400"/>
+</svg>
