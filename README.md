@@ -6,6 +6,8 @@ checks), and STS token generation. The friction *is* the feature.
 
 Built for an AWS workshop, now a (cursed) internal fun tool. Vanilla JS, no build step.
 
+**▶ Play: https://snowu.github.io/least-privlege-bird/**
+
 ![UI](img/ui.png)
 
 ## Stack
@@ -31,8 +33,16 @@ and stores only a score it independently reproduces. A forged number is rejected
 See [`supabase/ARCHITECTURE.md`](supabase/ARCHITECTURE.md) for the full flow + diagrams,
 and [`supabase/README.md`](supabase/README.md) to deploy.
 
-## Local dev
+## Your account token
 
-Static files — no build, no deps. Open `index.html` (or serve it however you like).
-Two flags in `index.html`: `DEV_MODE` skips the auth/captcha friction, `LIVE_DB` gates
-real Supabase calls; both auto-handle localhost vs prod.
+There are no passwords. When you first claim a name, the game generates a **secret token**
+and shows it to you once — that token *is* your account. It's saved in your browser's
+localStorage and proves you own the name when you submit a score.
+
+**Save it somewhere.** You'll need it if your localStorage gets wiped (clearing browser
+data, incognito) or you want to play under the same name on another machine.
+
+To restore: hit **"🔑 Recover account with token"** (or the **"Recover session"** link on
+the token screen) and paste it. Your browser is bound to that name again and your high
+scores carry over. Lose the token with no copy saved and the name is effectively locked —
+pick a new one.
