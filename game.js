@@ -426,11 +426,13 @@ async function endGame() {
 
   const prev  = currentBest;            // authoritative best, or null when offline
   const isNew = prev != null && score > prev;
+  // Replay payload for server-side validation — captured before initGame resets it.
+  const replay = { seed, flapTicks };
 
   if (DEV_MODE) {
     // Skip the friction theater. saveScore self-gates on LIVE_DB, so this still
     // exercises the real Supabase round-trip when the DB is enabled locally.
-    await saveScore(currentPlayer, score);
+    await saveScore(currentPlayer, score, replay);
     document.getElementById('gameover-msg').textContent = `Score: ${score}`;
     overlay.classList.remove('hidden');
     showScreen('gameover');
@@ -438,7 +440,7 @@ async function endGame() {
   }
 
   Clave.startScoreSubmit(currentPlayer, score, async () => {
-    await saveScore(currentPlayer, score);
+    await saveScore(currentPlayer, score, replay);
     document.getElementById('gameover-msg').textContent =
       isNew
         ? `New high score: ${score}! 🎉`

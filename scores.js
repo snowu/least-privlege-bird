@@ -76,13 +76,22 @@ async function fetchBest(name) {
   }
 }
 
-async function sbSubmitScore(name, token, score) {
+// Submit a run to the edge function, which replays { seed, flapTicks } through the
+// real physics and accepts the score only if it recomputes to the claimed value.
+// `replay` is { seed, flapTicks }; for registration (score 0) an empty run is used.
+async function sbSubmitScore(name, token, score, replay) {
   if (!_sb) return;
-  // calls the DB function which verifies the token hash server-side
-  await _sbFetch('/rpc/submit_score', {
+  const { seed, flapTicks } = replay || { seed: 0, flapTicks: [] };
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-score`, {
     method: 'POST',
-    body: JSON.stringify({ p_name: name, p_token: token, p_score: score }),
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name, token, seed, flapTicks, claimedScore: score }),
   });
+  if (!res.ok) throw new Error(await res.text());
 }
 
 // ── TOKEN MODAL ───────────────────────────────────────────────────────────────
@@ -171,10 +180,12 @@ async function loadScores() {
 
 // Save score: Supabase only. Scores are NOT cached locally — a client-side
 // number is trivially editable, so the leaderboard must stay server-authoritative.
-async function saveScore(name, score) {
+// `replay` is { seed, flapTicks } from the run — the edge function replays it to
+// verify the score is genuine before writing.
+async function saveScore(name, score, replay) {
   if (!_sb) return; // _sb already encodes LIVE_DB — no separate localhost check needed
   const tok = getLocalToken(name);
   if (!tok) return;
-  try { await sbSubmitScore(name, tok, score); }
+  try { await sbSubmitScore(name, tok, score, replay); }
   catch (e) { console.warn('Supabase submit failed', e); }
 }
