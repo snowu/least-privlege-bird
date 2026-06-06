@@ -67,6 +67,7 @@ const AudioFX = (() => {
   // Per-avatar flap voices.
   const FLAPS = {
     bird:   () => beep(900, 1500, 0.10, 'square', 0.15),               // chirp up
+    penguin:() => { beep(300, 240, 0.12, 'sawtooth', 0.16); beep(260, 200, 0.1, 'square', 0.1, 0.04); }, // honk-flail
     rocket: () => beep(220, 90,  0.16, 'sawtooth', 0.16),              // whoosh down
     bee:    () => { beep(420, 380, 0.12, 'square', 0.12); beep(440, 400, 0.12, 'square', 0.1, 0.01); }, // buzzy
     wizard: () => { beep(700, 1300, 0.09, 'triangle', 0.14); beep(1300, 2000, 0.08, 'triangle', 0.1, 0.06); }, // sparkle
@@ -109,7 +110,7 @@ const STYLE = {
     textShadow: '3px 3px 0 #000',
     letterSpacing: '0px',
     fontScale: 1,            // baseline — all rem sizes were tuned for this font
-    logo: 'assets/logo.svg', logoRendering: 'pixelated',
+    logo: 'assets/pixel/penguin.svg', logoRendering: 'pixelated',
   },
   round: {
     fontDisplay: "'Segoe UI', system-ui, sans-serif",
@@ -122,7 +123,7 @@ const STYLE = {
     // Segoe glyphs are ~1.4× narrower than Press Start 2P, so the same rem size
     // reads small. Bump the root font-size so round text fills the same width.
     fontScale: 1.4,
-    logo: 'assets/logo-round.svg', logoRendering: 'auto',
+    logo: 'assets/round/penguin.svg', logoRendering: 'auto',
   },
 };
 function activeStyle() { return STYLE[gfxStyle] || STYLE.pixel; }
@@ -171,6 +172,39 @@ const THEMES = {
         ctx.fillRect(capX, cy + capH - 3, capW, 3);      // bottom edge
         ctx.fillRect(capX, cy, 3, capH);                 // left edge
         ctx.fillRect(capX + capW - 3, cy, 3, capH);      // right edge
+      };
+      const botY = topH + gap;
+      shaft(x, 0, C.PIPE_W, topH - capH);
+      cap(topH - capH);
+      cap(botY);
+      shaft(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+    },
+  },
+  penguin: {
+    label: 'Penguin',
+    sky: '#bfe6f2', ground: '#dfeef5',
+    cloudFill: 'rgba(255,255,255,0.9)',
+    // Ice pillars: pale cyan body with a bright highlight band, a cool shadow band,
+    // and a frosted cap. Same hard-edged pixel construction as the classic pipe.
+    drawPipe(x, topH, gap) {
+      const capH = 28, capW = C.PIPE_W + 12, capX = x - 6;
+      const body = '#7fc6dd', light = '#bce7f2', dark = '#4f9ab5', edge = '#2e6e85';
+      const shaft = (sx, sy, sw, sh) => {
+        ctx.fillStyle = body;  ctx.fillRect(sx, sy, sw, sh);
+        ctx.fillStyle = light; ctx.fillRect(sx + 4, sy, 8, sh);          // highlight band
+        ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
+        ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);              // hard left edge
+        ctx.fillRect(sx + sw - 2, sy, 2, sh);                            // hard right edge
+      };
+      const cap = (cy) => {
+        ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
+        ctx.fillStyle = light; ctx.fillRect(capX + 4, cy + 4, 8, capH - 8);
+        ctx.fillStyle = dark;  ctx.fillRect(capX + capW - 12, cy + 4, 8, capH - 8);
+        ctx.fillStyle = edge;
+        ctx.fillRect(capX, cy, capW, 3);
+        ctx.fillRect(capX, cy + capH - 3, capW, 3);
+        ctx.fillRect(capX, cy, 3, capH);
+        ctx.fillRect(capX + capW - 3, cy, 3, capH);
       };
       const botY = topH + gap;
       shaft(x, 0, C.PIPE_W, topH - capH);
@@ -344,6 +378,17 @@ THEMES.bird.bgLayers = [
   { speed: 0.5, draw(o) { tileMotif(o, 200, x => { pixelTree(x + 40, 4, '#2e7d32', '#5d4037'); pixelTree(x + 130, 3, '#388e3c', '#5d4037'); }); } },
 ];
 
+THEMES.penguin.bgLayers = [
+  // Distant icebergs / ice shelf
+  { speed: 0.14, draw(o) { tileMotif(o, 380, x => { pixelHill(x, 300, 110, '#9cd2e6'); pixelHill(x + 190, 240, 80, '#b6e2f0'); }); } },
+  // Foreground snow mounds with a small ice floe crack
+  { speed: 0.5, draw(o) { tileMotif(o, 220, x => {
+      pixelHill(x + 20, 160, 46, '#ffffff');                     // snow mound
+      pixelHill(x + 140, 120, 34, '#eaf6fb');                    // smaller mound
+      pxRect(x + 90, G() - 6, 30, 2, '#9cd2e6');                 // floe crack
+  }); } },
+];
+
 THEMES.bee.bgLayers = [
   // Soft green hills
   { speed: 0.18, draw(o) { tileMotif(o, 300, x => { pixelHill(x, 280, 100, '#9ccc65'); pixelHill(x + 150, 220, 70, '#aed581'); }); } },
@@ -431,7 +476,7 @@ function loadSprites() {
 }
 loadSprites();
 
-let currentTheme = THEMES.bird;
+let currentTheme = THEMES.penguin;  // penguin is the mascot / default avatar
 
 // ─── HIGH SCORES — provided by scores.js ──────────────────────────────────────
 
@@ -459,7 +504,16 @@ function showScreen(name) {
 const COW_ART = {
   // Minimal cowsay-style line art: the classic `\  ^__^ \ (oo)` two-line tail
   // leading into a small, sparse figure. Sparse on purpose — reads cleanly at 11px.
+  // Bird (secondary) — upright, flippers out, gaping beak.
   bird: [
+    '        \\   .--.',
+    '         \\ (o..o)',
+    '           ( >< )',
+    '          _/(  )\\_',
+    '            `\'\'`',
+  ].join('\n'),
+  // Penguin — the mascot. Famously cannot fly. Deeply relatable.
+  penguin: [
     '        \\   v',
     '         \\ (o>',
     '           //\\',
@@ -527,8 +581,8 @@ function _cowBalloon(text) {
 
 // `cowsay -f <currentAvatar>` <<< "<fortune>"
 function _renderCow(text) {
-  const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'bird';
-  const art = COW_ART[key] || COW_ART.bird;
+  const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
+  const art = COW_ART[key] || COW_ART.penguin;
   return _cowBalloon(text) + '\n' + art;
 }
 
@@ -915,7 +969,7 @@ async function endGame() {
 function flap() {
   player.vy = C.FLAP;
   if (flapTicks) flapTicks.push(tick); // log input tick for server-side replay
-  const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'bird';
+  const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   AudioFX.flap(key);
 }
 document.addEventListener('keydown', e => {
@@ -1000,10 +1054,13 @@ document.getElementById('btn-menu').addEventListener('click', () => { populateUs
 // Build avatar picker (rebuildable so the art-style toggle can refresh thumbnails)
 const avatarPicker = document.getElementById('avatar-picker');
 function buildAvatarPicker() {
-  const selectedKey = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'bird';
+  const selectedKey = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   avatarPicker.innerHTML = '';
   avatarPicker.classList.toggle('round-gfx', gfxStyle === 'round');
-  Object.entries(THEMES).forEach(([key, theme]) => {
+  // Penguin leads (it's the mascot); the rest follow in THEMES order.
+  const ordered = ['penguin', ...Object.keys(THEMES).filter(k => k !== 'penguin')];
+  ordered.forEach((key) => {
+    const theme = THEMES[key];
     const div = document.createElement('div');
     div.className = 'avatar-opt' + (key === selectedKey ? ' selected' : '');
     div.dataset.key = key;

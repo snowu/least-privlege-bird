@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- Body (black, upright egg) -->
+  <ellipse cx="20" cy="22" rx="12" ry="15" fill="#23233a"/>
+  <!-- White belly -->
+  <ellipse cx="20" cy="24" rx="8" ry="12" fill="#f2f4f8"/>
+  <!-- Head crest tuft -->
+  <path d="M19 6 q2 -4 5 -2 q-1 2 -4 3 z" fill="#1a1a2e"/>
+  <!-- Flailing flipper (left) -->
+  <path d="M9 18 q-4 4 -2 9 q4 -1 5 -6 z" fill="#1a1a2e"/>
+  <!-- Flipper (right) -->
+  <path d="M31 18 q4 4 2 9 q-4 -1 -5 -6 z" fill="#1a1a2e"/>
+  <!-- Eye whites (cross-eyed panic) -->
+  <circle cx="16" cy="14" r="4" fill="#fff"/>
+  <circle cx="24" cy="14" r="4" fill="#fff"/>
+  <!-- Pupils pulled inward -->
+  <circle cx="18.5" cy="14.5" r="1.8" fill="#1a1a1a"/>
+  <circle cx="21.5" cy="14.5" r="1.8" fill="#1a1a1a"/>
+  <!-- Gaping orange beak -->
+  <polygon points="16,17 24,17 20,23" fill="#f5a623"/>
+  <polygon points="17,18.5 23,18.5 20,22" fill="#e8890c"/>
+  <!-- Orange feet -->
+  <ellipse cx="15" cy="37" rx="4" ry="2" fill="#f5a623"/>
+  <ellipse cx="25" cy="37" rx="4" ry="2" fill="#f5a623"/>
+</svg>
