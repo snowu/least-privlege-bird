@@ -1,24 +1,24 @@
 name: Deploy to GitHub Pages
 
-# Builds the esbuild bundle and publishes the site. Pages "Source" must be set to
-# "GitHub Actions" (Settings → Pages) for this to take over from branch-serving.
+# Publishes the production site to the ROOT of the gh-pages branch on every push to
+# main. Per-PR previews live under gh-pages/pr-preview/ (see preview.yml) — this job
+# keeps that folder intact (keep_files) so a prod deploy never wipes open previews.
+#
+# Pages "Source" must be set to "Deploy from a branch" → gh-pages → / (root).
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write   # peaceiris pushes the built site to the gh-pages branch
 
-# Let a running deploy finish; queue the latest, don't cancel mid-publish.
 concurrency:
-  group: pages
+  group: pages-deploy
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,16 +30,14 @@ jobs:
 
       - run: npm ci
 
-      # Guard the anti-cheat determinism invariant before shipping: the golden
-      # replays must still reproduce known { seed, flapTicks } → score runs.
+      # Guard the anti-cheat determinism invariant before shipping.
       - name: Replay goldens
         run: npm test
 
       - name: Build bundle
         run: npm run build
 
-      # Stage only the static site (HTML + built bundle + assets) so the Pages
-      # artifact stays small — no node_modules/src/supabase/.git.
+      # Stage only the static site (HTML + built bundle + assets).
       - name: Assemble site
         run: |
           mkdir -p _site/dist
@@ -48,18 +46,9 @@ jobs:
           cp -r assets _site/assets
           touch _site/.nojekyll
 
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
+      - name: Publish to gh-pages root
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: _site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          keep_files: true   # don't delete pr-preview/ when deploying prod
