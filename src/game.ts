@@ -409,10 +409,14 @@ function pixelDisc(cx, cy, r, c) {
     ctx.fill();
     return;
   }
-  const u = Math.max(3, Math.round(r / 5));
-  for (let dy = -r; dy <= r; dy += u) {
-    const dw = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
-    ctx.fillRect(Math.round(cx - dw), Math.round(cy + dy), dw * 2, u);
+  // Finer step → rounder poles. Sample the circle at each row's vertical midpoint so
+  // the top/bottom rows narrow instead of capping flat.
+  const u = Math.max(2, Math.round(r / 9));
+  for (let dy = -r; dy < r; dy += u) {
+    const mid = dy + u / 2;                                  // midpoint of this row
+    const dw = Math.sqrt(Math.max(0, r * r - mid * mid));
+    if (dw <= 0) continue;
+    ctx.fillRect(Math.round(cx - dw), Math.round(cy + dy), Math.round(dw * 2), u);
   }
 }
 // A jagged mountain peak anchored to the ground: a triangular massif with a
@@ -489,29 +493,12 @@ function pixelTree(x, scale, leaf, trunk) {
 }
 
 THEMES.bird.bgLayers = [
-  // A sun in the corner with slowly pulsing rays.
+  // A sun in the corner with slowly rotating, breathing rays + an inner glow cap.
   { speed: 0, draw() {
-      const t = nowSec();
-      const cx = C.W - 120, cy = 110, r = 38;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate((t * 0.15) % (Math.PI * 2));                    // slow rotation
-      // Rays spawn at the sun's center and all share one length; the disc is painted
-      // on top afterwards, hiding the inner segment so they read as clean spokes.
-      ctx.strokeStyle = 'rgba(255,213,79,0.55)';
-      ctx.lineWidth = 4; ctx.lineCap = 'round';
-      const len = r + 18 + Math.sin(t * 2) * 6;                  // all rays breathe together
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);                                        // center of the sun
-        ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
-        ctx.stroke();
-      }
-      ctx.restore();
-      ctx.lineWidth = 1;
-      pixelDisc(cx, cy, r, '#ffd54f');                           // disc covers ray roots
-      pixelDisc(cx, cy, r - 6, '#ffe57f');
+      celestialBody(C.W - 120, 110, 38, '#ffd54f', {
+        rays: { color: '255,213,79', count: 12, speed: 0.12 },
+        caps: [{ dx: 0, dy: 0, r: 32, color: '#ffe57f' }],       // inner brighter core
+      });
   } },
   // Distant rolling hills
   { speed: 0.15, draw(o) { tileMotif(o, 360, x => { pixelHill(x, 320, 120, '#6aa84f'); pixelHill(x + 180, 260, 90, '#7cb85f'); }); } },
@@ -781,25 +768,6 @@ THEMES.robot.bgLayers = [
   }); } },
 ];
 
-// A planet with a tilted ring (Saturn-like). Round mode draws a real ellipse ring
-// behind+front of the body; pixel mode uses a flat banded ring. `c`=body, `rc`=ring.
-function ringedPlanet(cx, cy, r, c, rc) {
-  if (isRound()) {
-    const rw = r * 2.1, rh = r * 0.5;
-    // back half of the ring
-    ctx.strokeStyle = rc; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, -0.35, Math.PI, Math.PI * 2); ctx.stroke();
-    pixelDisc(cx, cy, r, c);                                     // body
-    pixelDisc(cx - r * 0.3, cy - r * 0.3, r * 0.55, withAlphaFromHex(c, 0.25, 40)); // shading hint
-    // front half of the ring
-    ctx.strokeStyle = rc; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, -0.35, 0, Math.PI); ctx.stroke();
-    ctx.lineWidth = 1;
-    return;
-  }
-  pixelDisc(cx, cy, r, c);
-  pxRect(cx - r * 2, cy - 3, r * 4, 6, rc);                      // flat band
-}
 // Lighten a #rrggbb by `add` and return at alpha `a` — soft highlight helper.
 function withAlphaFromHex(hex, a, add) {
   const n = parseInt(hex.slice(1), 16);
@@ -809,51 +777,141 @@ function withAlphaFromHex(hex, a, add) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// ── Unified celestial body ──────────────────────────────────────────────────────
+// One function draws every sky disc — the bird's sun and all of rocket's planets/
+// moon. Pass only the features a given body needs; everything is optional:
+//   cx, cy, r, color           — position, radius, body fill (#rrggbb)
+//   shade                      — true → soft offset highlight on the body
+//   rays  {color, count, speed, wobble}            — sun spokes from the center
+//   ring  {color, scale=2.1, ry=0.5, tilt=-0.35}   — tilted ellipse ring (Saturn)
+//   bands [{dy, h, color}]     — latitude bands clipped to the body (gas giant)
+//   spot  {dx, dy, r, color}   — a feature spot clipped to the body (red spot)
+//   caps  [{dx, dy, r, color}] — polar caps / craters (plain discs on top)
+//   moon  {dist, r, color, speed, craters?}        — a satellite orbiting the body
+// Render-only + deterministic (animation via the shared render clock). Style-aware
+// through pixelDisc / native ellipse, so it matches pixel vs round automatically.
+function celestialBody(cx, cy, r, color, opt = {}) {
+  const t = nowSec();
+  const round = isRound();
+  // Rays — fixed-length triangular spokes radiating from the center, rotating at a
+  // steady rate. The whole crown pulses via opacity (not length), so it glows in and
+  // out smoothly instead of the spokes jittering individually. Disc covers the roots.
+  if (opt.rays) {
+    const { color: rcol = '255,213,79', count = 12, speed = 0.15 } = opt.rays;
+    const pulse = 0.45 + 0.25 * (0.5 + 0.5 * Math.sin(t * 1.5)); // 0.45 … 0.70, gentle
+    const len = r * 1.7, halfBase = (Math.PI / count) * 0.6;     // spoke length + width
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((t * speed) % (Math.PI * 2));
+    ctx.fillStyle = `rgba(${rcol},${pulse})`;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - halfBase) * r, Math.sin(a - halfBase) * r);   // base, one side
+      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);                     // tip
+      ctx.lineTo(Math.cos(a + halfBase) * r, Math.sin(a + halfBase) * r);   // base, other side
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  // Ring back half (drawn behind the body).
+  if (opt.ring) {
+    const { color: rc, scale = 2.1, ry = 0.5, tilt = -0.35 } = opt.ring;
+    if (round) {
+      ctx.strokeStyle = rc; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.ellipse(cx, cy, r * scale, r * ry, tilt, Math.PI, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+  }
+  // Body.
+  pixelDisc(cx, cy, r, color);
+  if (opt.shade) pixelDisc(cx - r * 0.3, cy - r * 0.3, r * 0.55, withAlphaFromHex(color, 0.25, 40));
+  // Latitude bands + feature spot, clipped to the body.
+  if (opt.bands || opt.spot) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+    for (const b of (opt.bands || [])) pxRect(cx - r * 1.2, cy + b.dy, r * 2.4, b.h, b.color);
+    if (opt.spot) pixelDisc(cx + opt.spot.dx, cy + opt.spot.dy, opt.spot.r, opt.spot.color);
+    ctx.restore();
+  }
+  // Ring front half (over the body).
+  if (opt.ring && round) {
+    const { color: rc, scale = 2.1, ry = 0.5, tilt = -0.35 } = opt.ring;
+    ctx.strokeStyle = rc; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(cx, cy, r * scale, r * ry, tilt, 0, Math.PI); ctx.stroke();
+    ctx.lineWidth = 1;
+  } else if (opt.ring && !round) {
+    pxRect(cx - r * 2, cy - 3, r * 4, 6, opt.ring.color);        // pixel mode: flat band
+  }
+  // Polar caps / craters — plain discs on top.
+  for (const c of (opt.caps || [])) pixelDisc(cx + c.dx, cy + c.dy, c.r, c.color);
+  // Orbiting moon — angle advances with the render clock.
+  if (opt.moon) {
+    const m = opt.moon;
+    const a = (t * (m.speed ?? 0.6)) % (Math.PI * 2);
+    const mx = cx + Math.cos(a) * m.dist, my = cy + Math.sin(a) * m.dist * 0.5; // elliptical orbit
+    pixelDisc(mx, my, m.r, m.color);
+    for (const cr of (m.craters || [])) pixelDisc(mx + cr.dx, my + cr.dy, cr.r, cr.color);
+  }
+}
+
 THEMES.rocket.bgLayers = [
   // Distant planets of varied types + a cratered moon. Slow parallax drift.
   { speed: 0.08, draw(o) { tileMotif(o, 760, x => {
-      // 1) Saturn-type ringed gas giant
-      ringedPlanet(x + 120, 130, 34, '#c97b5a', '#e0b88a');
-      // 2) Banded gas giant (Jupiter-like) — body + two darker latitude bands
-      pixelDisc(x + 330, 200, 28, '#d9a86b');
-      ctx.save();
-      ctx.beginPath(); ctx.arc(x + 330, 200, 28, 0, Math.PI * 2); ctx.clip();
-      pxRect(x + 300, 192, 60, 5, 'rgba(140,90,50,0.55)');
-      pxRect(x + 300, 205, 60, 4, 'rgba(160,110,70,0.5)');
-      pixelDisc(x + 338, 203, 6, 'rgba(200,80,60,0.6)');         // great-red-spot-ish
-      ctx.restore();
+      // 1) Saturn-type ringed gas giant, with a small moon orbiting it
+      celestialBody(x + 120, 130, 34, '#c97b5a', {
+        shade: true,
+        ring: { color: '#e0b88a' },
+        moon: { dist: 70, r: 5, color: '#cfd8dc', speed: 0.7 },
+      });
+      // 2) Banded gas giant (Jupiter-like) — two latitude bands + a great red spot
+      celestialBody(x + 330, 200, 28, '#d9a86b', {
+        shade: true,
+        bands: [{ dy: -8, h: 5, color: 'rgba(140,90,50,0.55)' }, { dy: 5, h: 4, color: 'rgba(160,110,70,0.5)' }],
+        spot: { dx: 8, dy: 3, r: 6, color: 'rgba(200,80,60,0.6)' },
+      });
       // 3) Small rocky ice planet (pale blue) with a polar cap
-      pixelDisc(x + 520, 95, 16, '#8fd3e0');
-      pixelDisc(x + 520, 85, 6, '#eaffff');                      // polar cap
+      celestialBody(x + 520, 95, 16, '#8fd3e0', {
+        caps: [{ dx: 0, dy: -10, r: 6, color: '#eaffff' }],
+      });
       // 4) Cratered moon
-      pixelDisc(x + 650, 160, 18, '#cfd8dc');
-      pixelDisc(x + 644, 156, 4, '#b0bec5');
-      pixelDisc(x + 656, 166, 3, '#b0bec5');
+      celestialBody(x + 650, 160, 18, '#cfd8dc', {
+        caps: [{ dx: -6, dy: -4, r: 4, color: '#b0bec5' }, { dx: 6, dy: 6, r: 3, color: '#b0bec5' }],
+      });
   }); } },
   // Shooting stars: streaks that periodically dart across the sky, each on its own
   // long cycle so they appear sporadically rather than in lockstep. Render-only.
   { speed: 0, draw() {
       const t = nowSec();
-      const streak = (period, offset, y0, len, spd, slope) => {
+      // The star travels along a straight path (totalDX, slope); the trail is drawn
+      // straight back along that SAME direction (unit velocity × len), so head and
+      // tail always line up — no skew.
+      const streak = (period, offset, y0, len, slope) => {
         const into = (t + offset) % period;
         if (into > 0.9) return;                                  // visible <1s per cycle
         const prog = into / 0.9;                                 // 0→1 across the screen
-        const hx = prog * (C.W + 200) - 100;                     // head x
-        const hy = y0 + prog * slope;                            // head y (slight diagonal)
+        const totalDX = C.W + 200;
+        const hx = prog * totalDX - 100;                         // head x
+        const hy = y0 + prog * slope;                            // head y
+        // unit vector of travel, trail points opposite it
+        const vlen = Math.hypot(totalDX, slope);
+        const ux = totalDX / vlen, uy = slope / vlen;
         const fade = Math.sin(prog * Math.PI);                   // fade in+out at the ends
-        const grad = ctx.createLinearGradient(hx, hy, hx - len, hy - len * (slope / C.W) - len * 0.2);
+        const tx = hx - ux * len, ty = hy - uy * len;
+        const grad = ctx.createLinearGradient(hx, hy, tx, ty);
         grad.addColorStop(0, `rgba(255,255,255,${0.9 * fade})`);
         grad.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(hx, hy);
-        ctx.lineTo(hx - len, hy - len * 0.25);
+        ctx.lineTo(tx, ty);
         ctx.stroke();
         ctx.lineWidth = 1;
       };
-      streak(6.0, 0,   90,  120, 1, 60);
-      streak(9.0, 3.5, 220, 90,  1, 40);
-      streak(13.0, 7,  150, 150, 1, 80);
+      streak(6.0, 0,   90,  120, 60);
+      streak(9.0, 3.5, 220, 90,  40);
+      streak(13.0, 7,  150, 150, 80);
   } },
 ];
 
