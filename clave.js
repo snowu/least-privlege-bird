@@ -182,7 +182,7 @@ const Clave = (() => {
         fb.innerHTML = q.options.map((o, i) => {
           const wasSelected = selected.includes(i);
           const icon = o.correct ? '✅' : (wasSelected ? '❌' : '◻️');
-          return `<div style="font-family:var(--pixel);font-size:0.52rem;color:#a0b0cc;line-height:1.9;">
+          return `<div style="font-family:var(--font-display);font-size:0.52rem;color:#a0b0cc;line-height:1.9;">
             <span>${icon}</span> <strong style="color:${o.correct ? '#51cf66' : '#ff6b6b'}">${o.text}</strong>
             — ${o.explain}
           </div>`;
@@ -193,7 +193,7 @@ const Clave = (() => {
           const helpBtn = document.createElement('button');
           helpBtn.id = `${containerId}-help-btn`;
           helpBtn.textContent = '🆘 Need help? (Solve to unlock hints)';
-          helpBtn.style.cssText = 'margin-top:8px;font-size:0.8rem;background:#2a3a5c;border:1px solid #4a6a9a;color:#c8d6f8;padding:6px 12px;cursor:pointer;border-radius:4px;';
+          helpBtn.style.cssText = 'font-family:var(--font-display);margin-top:8px;font-size:0.62rem;background:#2a3a5c;border:1px solid #4a6a9a;color:#c8d6f8;padding:6px 12px;cursor:pointer;border-radius:var(--radius);';
           fb.after(helpBtn);
           helpBtn.addEventListener('click', () => {
             const a = Math.floor(Math.random() * 12) + 2;
@@ -203,10 +203,10 @@ const Clave = (() => {
             const mathDiv = document.createElement('div');
             mathDiv.style.cssText = 'margin-top:8px;display:flex;align-items:center;gap:8px;';
             mathDiv.innerHTML = `
-              <span style="color:#c8d6f8;font-size:0.85rem;">Solve: ${a} × ${b} =</span>
-              <input id="${containerId}-math-input" type="number" style="width:60px;padding:4px;background:#1a2a4c;border:1px solid #4a6a9a;color:#fff;border-radius:3px;">
-              <button id="${containerId}-math-btn" style="font-size:0.8rem;padding:4px 10px;background:#3a5a8c;border:none;color:#fff;border-radius:3px;cursor:pointer;">Submit</button>
-              <span id="${containerId}-math-err" style="color:#ff6b6b;font-size:0.75rem;"></span>
+              <span style="font-family:var(--font-display);color:#c8d6f8;font-size:0.6rem;">Solve: ${a} × ${b} =</span>
+              <input id="${containerId}-math-input" type="number" style="font-family:var(--font-body);width:60px;padding:4px;background:#1a2a4c;border:1px solid #4a6a9a;color:#fff;border-radius:3px;">
+              <button id="${containerId}-math-btn" style="font-family:var(--font-display);font-size:0.6rem;padding:4px 10px;background:#3a5a8c;border:none;color:#fff;border-radius:var(--radius);cursor:pointer;">Submit</button>
+              <span id="${containerId}-math-err" style="font-family:var(--font-display);color:#ff6b6b;font-size:0.55rem;"></span>
             `;
             helpBtn.after(mathDiv);
             document.getElementById(`${containerId}-math-btn`).addEventListener('click', () => {
