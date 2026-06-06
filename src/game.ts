@@ -500,6 +500,20 @@ THEMES.bird.bgLayers = [
         caps: [{ dx: 0, dy: 0, r: 32, color: '#ffe57f' }],       // inner brighter core
       });
   } },
+  // High drifting clouds that pass IN FRONT of the sun. Layer order = z-order: this
+  // sits after the sun layer, so its clouds occlude it. Slow time-driven drift (not
+  // parallax) so they sail across independently. Deterministic via index hashes.
+  { speed: 0, draw() {
+      const tt = nowSec();
+      const span = C.W + 320;
+      for (let i = 0; i < 5; i++) {
+        const spd = 6 + hash01(i * 9.7) * 8;                     // each cloud its own pace
+        const cx = ((hash01(i * 3.1) * span - tt * spd) % span + span) % span - 160;
+        const cy = 60 + hash01(i * 5.3) * 110;
+        const w = 90 + hash01(i * 7.9) * 70, h = 34 + hash01(i * 2.7) * 16;
+        pixelCloud(cx, cy, w, h, 'rgba(255,255,255,0.85)');
+      }
+  } },
   // Distant rolling hills
   { speed: 0.15, draw(o) { tileMotif(o, 360, x => { pixelHill(x, 320, 120, '#6aa84f'); pixelHill(x + 180, 260, 90, '#7cb85f'); }); } },
   // Distant birds gliding across the sky (shared wanderers engine) — little "M"
@@ -712,41 +726,167 @@ THEMES.wizard.bgLayers = [
 ];
 
 THEMES.airplane.bgLayers = [
-  // Hazy data-center skyline (rows of windowed slabs)
-  { speed: 0.16, draw(o) { tileMotif(o, 340, x => {
-      const t = nowSec();
-      const slab = (sx, w, h, c, seed) => {
+  // FAR skyline: a dim, slow row of distant slabs for depth (behind everything).
+  { speed: 0.07, draw(o) { tileMotif(o, 300, (x, tile) => {
+      const far = (sx, w, h) => {
         const topY = G() - h;
+        pxRect(sx, topY, w, h, '#3c4659');                         // hazed-out silhouette
+        for (let yy = topY + 12; yy < G() - 20; yy += 20)
+          for (let xx = sx + 8; xx < sx + w - 8; xx += 18) {
+            if ((xx + yy) % 3 === 0) { ctx.fillStyle = 'rgba(255,224,150,0.18)'; ctx.fillRect(xx, yy, 5, 6); }
+          }
+      };
+      // procedural distant slabs keyed to a stable per-building id
+      let sx = x;
+      for (let i = 0; i < 3; i++) {
+        const id = tile * 3 + i;
+        const w = 50 + Math.floor(hash01(id * 2.3) * 50);
+        const h = 80 + Math.floor(hash01(id * 5.1) * 100);
+        far(sx, w, h);
+        sx += w + 14 + Math.floor(hash01(id * 7.7) * 24);
+      }
+  }); } },
+  // Crossing planes high in the sky — the theme mascot. Distant, slow, with blinking
+  // red (port) + green (starboard) nav lights and a steady white fuselage strobe.
+  { speed: 0, draw() {
+      wanderers(
+        [
+          { drift: 34, baseY: 90,  yAmp: 10, wy: 0.25, sy: 0.6, bank: 0.15, flapHz: 6 },
+          { drift: -24, baseY: 150, yAmp: 14, wy: 0.3, sy: 0.7, bank: 0.15, flapHz: 5 },
+        ],
+        (i, t, flap) => {
+          ctx.fillStyle = '#aeb9cc';
+          pxRect(-12, -1, 24, 3, '#aeb9cc');                       // fuselage
+          pxRect(-3, -5, 8, 11, '#aeb9cc');                        // wings
+          pxRect(-12, -3, 3, 5, '#8c98ad');                        // tail
+          const nav = Math.sin(t * 4 + i) > 0;
+          pixelDisc(12, 0, 1.6, nav ? 'rgba(120,255,120,0.95)' : 'rgba(120,255,120,0.2)'); // starboard green
+          pixelDisc(-3, 6, 1.6, nav ? 'rgba(255,60,60,0.2)' : 'rgba(255,60,60,0.95)');     // port red
+          if (flap) pixelDisc(0, -5, 1.4, 'rgba(255,255,255,0.9)'); // white strobe
+        });
+  } },
+  // Rooftop searchlights: rotating beam cones raking up into the haze.
+  { speed: 0.16, draw(o) { tileMotif(o, 460, x => {
+      const t = nowSec();
+      const light = (sx, baseY, phase) => {
+        const ang = -Math.PI / 2 + Math.sin(t * 0.5 + phase) * 0.7; // sweeps overhead
+        const len = 230, spread = 0.09;
+        const grad = ctx.createLinearGradient(sx, baseY, sx + Math.cos(ang) * len, baseY + Math.sin(ang) * len);
+        grad.addColorStop(0, 'rgba(200,225,255,0.22)');
+        grad.addColorStop(1, 'rgba(200,225,255,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(sx, baseY);
+        ctx.lineTo(sx + Math.cos(ang - spread) * len, baseY + Math.sin(ang - spread) * len);
+        ctx.lineTo(sx + Math.cos(ang + spread) * len, baseY + Math.sin(ang + spread) * len);
+        ctx.closePath(); ctx.fill();
+        pixelDisc(sx, baseY, 3, 'rgba(220,235,255,0.8)');          // the lamp
+      };
+      light(x + 60, G() - 150, 0);
+      light(x + 300, G() - 110, 2.1);
+  }); } },
+  // MAIN hazy data-center skyline (rows of windowed slabs)
+  { speed: 0.16, draw(o) { tileMotif(o, 340, (x, tile) => {
+      const t = nowSec();
+      const SLAB_COLS = ['#56607a', '#626c88', '#4c5570', '#5a6480', '#454e68'];
+      // procedurally vary each slab: width, height, color, window-pitch, whether it
+      // has a mast, whether it has an ad board. All hashed off a stable per-slab id
+      // so a given building keeps its look while it scrolls.
+      const slab = (sx, w, h, seed) => {
+        const topY = G() - h;
+        const c = SLAB_COLS[seed % SLAB_COLS.length];
         pxRect(sx, topY, w, h, c);
         const round = isRound();
-        // Lit office windows — brighter now, most steady-warm, a few flicker.
+        const pitchX = 12 + Math.floor(hash01(seed * 3) * 6);          // window column spacing
+        const pitchY = 14 + Math.floor(hash01(seed * 5) * 6);          // window row spacing
+        // Lit office windows — most steady-warm, a few flicker; density per building.
         let cell = 0;
-        for (let yy = topY + 10; yy < G() - 8; yy += 16)
-          for (let xx = sx + 8; xx < sx + w - 6; xx += 14, cell++) {
+        for (let yy = topY + 10; yy < G() - 8; yy += pitchY)
+          for (let xx = sx + 8; xx < sx + w - 6; xx += pitchX, cell++) {
             const flick = (seed * 5 + cell * 11) % 6 === 0;            // ~1 in 6 flickers
-            const a = flick ? 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 4 + cell)) : 0.92;
-            const col = `rgba(255,224,130,${a})`;                      // brighter warm light
+            const dark = hash01(seed * 13 + cell) < 0.18;              // some windows unlit
+            const a = dark ? 0.12 : flick ? 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 4 + cell)) : 0.92;
+            const col = `rgba(255,224,130,${a})`;
             if (round) { pixelDisc(xx + 3, yy + 4, 3.5, col); }
             else { ctx.fillStyle = col; ctx.fillRect(xx, yy, 7, 9); }
           }
-        // Rooftop antenna mast with a blinking red aviation-warning beacon.
-        const mx = sx + Math.round(w / 2);
-        ctx.fillStyle = '#2b333f';
-        ctx.fillRect(mx - 1, topY - 22, 2, 22);                        // mast
-        const blink = 0.35 + 0.65 * (Math.sin(t * 3.2 + seed) > 0 ? 1 : 0.2); // hard red blink
-        pixelDisc(mx, topY - 24, 3.5, `rgba(255,40,40,${blink})`);
+        // Rooftop antenna mast with a blinking red aviation-warning beacon (~70%).
+        if (hash01(seed * 7) > 0.3) {
+          const mx = sx + Math.round(w * (0.35 + hash01(seed * 11) * 0.3));
+          const mastH = 16 + Math.floor(hash01(seed * 17) * 16);
+          ctx.fillStyle = '#2b333f';
+          ctx.fillRect(mx - 1, topY - mastH, 2, mastH);
+          const blink = 0.35 + 0.65 * (Math.sin(t * 3.2 + seed) > 0 ? 1 : 0.2);
+          pixelDisc(mx, topY - mastH - 2, 3.5, `rgba(255,40,40,${blink})`);
+        }
+        // Occasional backlit ad board on the slab face (~40% of slabs).
+        if (h > 110 && hash01(seed * 19) > 0.6) {
+          const bw = Math.min(w - 16, 60 + Math.floor(hash01(seed * 23) * 30));
+          const bh = 30 + Math.floor(hash01(seed * 29) * 12);
+          const warm = hash01(seed * 31) > 0.5;
+          adBillboard(sx + Math.round((w - bw) / 2), topY + 18, bw, bh,
+            warm ? '255,196,90' : '120,200,255', AD_SLOGANS, seed);
+        }
       };
-      slab(x, 90, 180, '#56607a', 1);
-      slab(x + 120, 70, 130, '#626c88', 2);
-      slab(x + 220, 100, 220, '#4c5570', 3);
+      // three slabs per tile, each with procedural width/height keyed to its stable id.
+      let sx = x;
+      for (let i = 0; i < 3; i++) {
+        const id = tile * 3 + i;                                       // stable per-slab id
+        const w = 70 + Math.floor(hash01(id * 2) * 60);
+        const h = 110 + Math.floor(hash01(id * 41) * 130);
+        slab(sx, w, h, id);
+        sx += w + 20 + Math.floor(hash01(id * 37) * 26);              // varied gap
+      }
   }); } },
-  // Foreground cooling units / satellite dishes
+  // Drifting haze band: a soft mist gradient low over the skyline, slowly scrolling.
+  { speed: 0, draw() {
+      const t = nowSec();
+      const top = G() - 150;
+      const grad = ctx.createLinearGradient(0, top, 0, G());
+      grad.addColorStop(0, 'rgba(174,185,205,0)');
+      grad.addColorStop(1, 'rgba(174,185,205,0.28)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, top, C.W, 150);
+      // a couple of denser mist puffs drifting through
+      const drift = (t * 14) % (C.W + 400);
+      for (let k = 0; k < 4; k++) {
+        const cx = ((k * 360 - drift + C.W + 400) % (C.W + 400)) - 200;
+        pixelCloud(cx, G() - 70, 240, 50, 'rgba(190,200,218,0.12)');
+      }
+  } },
+  // Foreground cooling units / satellite dishes — dish slowly rotating + link LED.
   { speed: 0.5, draw(o) { tileMotif(o, 240, x => {
+      const t = nowSec();
       pxRect(x + 30, G() - 40, 60, 40, '#37474f');               // AC unit
       pxRect(x + 38, G() - 34, 44, 12, '#263238');              // vents
+      // blinking AC status LED
+      const led = Math.sin(t * 2.5 + x) > 0.3;
+      pixelDisc(x + 84, G() - 36, 2, led ? 'rgba(120,255,140,0.9)' : 'rgba(120,255,140,0.2)');
+      // satellite dish that slowly pans back and forth
+      const mastX = x + 153, mastY = G() - 30;
       pxRect(x + 150, G() - 30, 6, 30, '#455a64');               // dish mast
-      pxRect(x + 138, G() - 48, 30, 16, '#78909c');              // dish
+      ctx.save();
+      ctx.translate(mastX, mastY);
+      ctx.rotate(Math.sin(t * 0.4 + x * 0.01) * 0.5);            // pan
+      ctx.fillStyle = '#78909c';
+      ctx.beginPath(); ctx.ellipse(0, -12, 16, 9, 0, 0, Math.PI * 2); ctx.fill(); // dish face
+      ctx.fillStyle = '#9fb3c2';
+      ctx.beginPath(); ctx.ellipse(0, -12, 11, 6, 0, 0, Math.PI * 2); ctx.fill();
+      pxRect(-1, -12, 2, 8, '#37474f');                          // feed arm
+      ctx.restore();
   }); } },
+  // Light rain — faint diagonal streaks (fits the overcast sky). Foreground-most.
+  { speed: 0, draw() {
+      const t = nowSec();
+      ctx.strokeStyle = 'rgba(190,205,225,0.28)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 90; i++) {
+        const spd = 420 + (i % 5) * 60;
+        const x = (i * 173 + 20) % C.W - Math.sin(t) * 4;
+        const y = (t * spd + i * 67) % (C.GROUND + 40) - 20;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 12); ctx.stroke(); // slight slant
+      }
+  } },
 ];
 
 // Render-only wall clock (seconds) for cosmetic animation like pulsing lights.
@@ -810,7 +950,59 @@ function wanderers(specs, drawOne) {
 }
 
 THEMES.robot.bgLayers = [
-  // Neon circuit-city skyline — towers with antenna spires, setback crowns and a
+  // A big hazy neon moon/planet low on the horizon (drawn first, behind it all).
+  { speed: 0, draw() {
+      celestialBody(C.W - 220, 150, 64, '#1b2a4a', {
+        caps: [{ dx: -18, dy: -10, r: 12, color: '#22345a' }, { dx: 14, dy: 16, r: 9, color: '#22345a' }],
+      });
+      // neon rim glow
+      ctx.strokeStyle = 'rgba(0,229,255,0.25)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(C.W - 220, 150, 64, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1;
+  } },
+  // FAR neon skyline: dim, slow, narrow towers with cyan edge-glow for depth.
+  { speed: 0.07, draw(o) { tileMotif(o, 280, x => {
+      const far = (sx, w, h, edge) => {
+        const topY = G() - h;
+        pxRect(sx, topY, w, h, '#0a1722');
+        ctx.fillStyle = edge; ctx.fillRect(sx, topY, w, 1);       // lit top edge
+        ctx.fillStyle = withAlpha(edge, 0.25);
+        for (let yy = topY + 8; yy < G() - 10; yy += 12) ctx.fillRect(sx + 3, yy, w - 6, 1);
+      };
+      far(x, 50, 150, '#00e5ff'); far(x + 80, 40, 110, '#76ff03'); far(x + 150, 60, 190, '#00e5ff');
+  }); } },
+  // Flying traffic: neon vehicles streaking across with a fading light trail.
+  { speed: 0, draw() {
+      wanderers(
+        [
+          { drift: 90,  baseY: 120, yAmp: 8,  wy: 0.2, sy: 0.5, bank: 0.1, flapHz: 9 },
+          { drift: -70, baseY: 180, yAmp: 12, wy: 0.25, sy: 0.6, bank: 0.1, flapHz: 7 },
+          { drift: 120, baseY: 90,  yAmp: 6,  wy: 0.15, sy: 0.4, bank: 0.1, flapHz: 11 },
+        ],
+        (i, t, flap) => {
+          const col = i % 2 ? '255,40,200' : '0,229,255';
+          const grad = ctx.createLinearGradient(0, 0, -26, 0);
+          grad.addColorStop(0, `rgba(${col},0.9)`);
+          grad.addColorStop(1, `rgba(${col},0)`);
+          ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-26, 0); ctx.stroke(); // trail
+          ctx.fillStyle = `rgba(${col},1)`;
+          pxRect(0, -1, 6, 3, `rgba(${col},1)`);                  // body
+          if (flap) pixelDisc(2, 0, 2, '#ffffff');               // headlight blink
+          ctx.lineWidth = 1;
+        });
+  } },
+  // Rising data packets: glowing bits float up between the towers (particleStream).
+  { speed: 0, draw() {
+      particleStream(40, -1,
+        { minSpd: 30, spanSpd: 60, minSway: 3, spanSway: 8, minR: 1, spanR: 2.5, minA: 0.3, spanA: 0.5 },
+        (x, y, r, a) => {
+          const col = (Math.round(x + y) % 2) ? '0,229,255' : '118,255,3';
+          ctx.fillStyle = `rgba(${col},${a})`;
+          ctx.fillRect(Math.round(x), Math.round(y), Math.round(r + 1), Math.round(r + 1)); // square bits
+        });
+  } },
+  // MAIN neon circuit-city skyline — towers with antenna spires, setback crowns and a
   // grid of pulsing window lights. Pixel mode = square lights blinking; round mode
   // = soft glowing dots. Each window has its own phase so the grid shimmers.
   { speed: 0.16, draw(o) { tileMotif(o, 320, x => {
@@ -860,7 +1052,33 @@ THEMES.robot.bgLayers = [
       tower(x, 80, 200, '#00e5ff', 1);
       tower(x + 110, 60, 150, '#76ff03', 2);
       tower(x + 200, 90, 240, '#00e5ff', 3);
+      // Neon ad boards bolted to the tower faces — readable cloud-corp slogans.
+      adBillboard(x + 8, G() - 150, 84, 40, '255,40,200', AD_SLOGANS, 0);   // first tower
+      adBillboard(x + 206, G() - 205, 90, 44, '0,229,255', AD_SLOGANS, 2);  // tall tower
   }); } },
+  // Neon perspective grid on the ground bar + a periodic scanline sweep over all.
+  { speed: 0, draw() {
+      const t = nowSec();
+      // perspective grid: horizontal lines bunch toward the horizon, verticals fan out
+      const horizon = G(), depth = C.HUD;
+      ctx.strokeStyle = 'rgba(0,229,255,0.18)'; ctx.lineWidth = 1;
+      for (let i = 1; i <= 6; i++) {
+        const yy = horizon + (depth * i * i) / 36;                // quadratic spacing
+        ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(C.W, yy); ctx.stroke();
+      }
+      const scroll = (t * 20) % 80;
+      for (let vx = -C.W; vx < C.W * 2; vx += 80) {
+        const fx = C.W / 2 + (vx + scroll - C.W / 2) * 2.2;        // fan from center
+        ctx.beginPath(); ctx.moveTo(C.W / 2 + (vx - C.W / 2) * 0.3, horizon); ctx.lineTo(fx, horizon + depth); ctx.stroke();
+      }
+      // scanline: a faint bright bar rolling up the whole scene
+      const sy = C.GROUND - ((t * 90) % (C.GROUND + 40));
+      const grad = ctx.createLinearGradient(0, sy - 20, 0, sy + 20);
+      grad.addColorStop(0, 'rgba(0,229,255,0)');
+      grad.addColorStop(0.5, 'rgba(0,229,255,0.10)');
+      grad.addColorStop(1, 'rgba(0,229,255,0)');
+      ctx.fillStyle = grad; ctx.fillRect(0, sy - 20, C.W, 40);
+  } },
 ];
 
 // Lighten a #rrggbb by `add` and return at alpha `a` — soft highlight helper.
@@ -1301,10 +1519,81 @@ function pixelCloud(x, y, w, h, fill) {
 // motif's footprint; `offset` is the (positive) scroll distance. `drawOne(x)` paints
 // a single motif at the given left x. We over-draw one tile on each side so motifs
 // slide off-screen cleanly. Pure cosmetic — no game state touched.
+// `drawOne(x, tile)` gets the wrapped screen x AND a STABLE tile index (which real
+// tile this is in the infinite strip, independent of scroll) — hash off `tile` for
+// per-building procedural variation that scrolls WITH the building, not the screen.
 function tileMotif(offset, tileW, drawOne) {
   const start = -((offset % tileW) + tileW) % tileW; // wrapped into (-tileW, 0]
-  for (let x = start; x < C.W + tileW; x += tileW) drawOne(Math.round(x));
+  const baseTile = Math.floor(offset / tileW);       // index of the tile at `start`
+  for (let x = start, k = 0; x < C.W + tileW; x += tileW, k++) drawOne(Math.round(x), baseTile + k);
 }
+
+// Tiny deterministic hash → [0,1) from an integer. Used for procedural scenery
+// variation (building heights, window seeds) that's stable per tile, no Math.random.
+function hash01(n) {
+  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+// A neon ad billboard mounted on a building face: framed panel that cycles through
+// a list of cloud-corp satire slogans, one at a time, with a slow swap + occasional
+// power-flicker. `col` is "r,g,b". Deterministic-in-time (nowSec only) → no physics
+// touch. Text uses the game's pixel font (Press Start 2P) so it reads as a real ad.
+function adBillboard(sx, sy, w, h, col, slogans, seed) {
+  const t = nowSec();
+  const period = 9;                                     // seconds per slogan (slow)
+  // stride the start index by a coprime of the list length so neighbouring boards
+  // (seed 0,1,2,3) show well-separated slogans, not adjacent ones.
+  const idx = (Math.floor(t / period) + seed * 5) % slogans.length;
+  const phase = (t / period + seed * 0.37) % 1;         // 0..1, desynced per board
+  // fade in at the start, hold, fade out at the end (swap transition)
+  const fade = Math.min(1, phase * 8) * Math.min(1, (1 - phase) * 8);
+  // power-flicker: a brief, rare brownout, deterministic per seed
+  const flick = Math.sin(t * 5 + seed * 9) > 0.985 ? 0.45 : 1;
+  const lit = fade * flick;
+  // panel + neon frame
+  ctx.fillStyle = 'rgba(8,14,22,0.9)'; ctx.fillRect(sx, sy, w, h);
+  ctx.strokeStyle = `rgba(${col},${0.85 * lit})`; ctx.lineWidth = 2;
+  ctx.strokeRect(sx + 1, sy + 1, w - 2, h - 2);
+  // text — shrink font until the wrapped block fits inside the panel (w & h).
+  const text = slogans[idx];
+  const words = text.split(' ');
+  const padX = 8, padY = 6;
+  let fontPx = 12, lines = [];
+  for (; fontPx >= 5; fontPx--) {
+    ctx.font = `${fontPx}px "Press Start 2P", monospace`;
+    lines = []; let cur = '';
+    let fits = true;
+    for (const word of words) {
+      // a single word wider than the box at this size → too big, shrink more
+      if (ctx.measureText(word).width > w - padX * 2) { fits = false; break; }
+      const trial = cur ? cur + ' ' + word : word;
+      if (ctx.measureText(trial).width > w - padX * 2 && cur) { lines.push(cur); cur = word; }
+      else cur = trial;
+    }
+    if (cur) lines.push(cur);
+    const blockH = lines.length * (fontPx + 4);
+    if (fits && blockH <= h - padY * 2) break;          // fits in both axes
+  }
+  ctx.font = `${fontPx}px "Press Start 2P", monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lineH = fontPx + 4, blockH = lines.length * lineH;
+  let ly = sy + h / 2 - blockH / 2 + lineH / 2;
+  ctx.save();
+  ctx.shadowColor = `rgba(${col},${lit})`; ctx.shadowBlur = 6;
+  ctx.fillStyle = `rgba(${col},${lit})`;
+  for (const line of lines) { ctx.fillText(line, sx + w / 2, ly); ly += lineH; }
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.lineWidth = 1;
+}
+
+// Slogans for the building ad boards — same cloud-corp IAM satire as the rest of
+// the game. Kept short so they wrap cleanly on a small panel.
+const AD_SLOGANS = [
+  'ACCESS\nDENIED', '99.99%\nUPTIME*', 'SCALE\nINFINITELY', 'ROOT NOT\nINCLUDED',
+  'EGRESS\nFEES APPLY', 'ZERO\nTRUST', 'PER-MS\nBILLING', 'POLICY:\nDENY',
+  'SUDO AS A\nSERVICE', 'NOW WITH\nMORE MFA', 'TERMS\nAPPLY*', 'RECONFIRM\nIDENTITY',
+].map(s => s.replace(/\n/g, ' '));
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -1520,7 +1809,9 @@ function flap() {
   AudioFX.flap(key);
 }
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space' && !overlay.classList.contains('hidden') === false) flap();
+  // e.repeat is true for OS auto-repeat while the key is held — ignore it so one
+  // physical press = exactly one flap (must release + press again to flap again).
+  if (e.code === 'Space' && !e.repeat && !overlay.classList.contains('hidden') === false) flap();
 });
 canvas.addEventListener('pointerdown', () => {
   if (overlay.classList.contains('hidden')) flap();
