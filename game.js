@@ -109,6 +109,7 @@ const STYLE = {
     textShadow: '3px 3px 0 #000',
     letterSpacing: '0px',
     fontScale: 1,            // baseline — all rem sizes were tuned for this font
+    logo: 'assets/logo.svg', logoRendering: 'pixelated',
   },
   round: {
     fontDisplay: "'Segoe UI', system-ui, sans-serif",
@@ -121,6 +122,7 @@ const STYLE = {
     // Segoe glyphs are ~1.4× narrower than Press Start 2P, so the same rem size
     // reads small. Bump the root font-size so round text fills the same width.
     fontScale: 1.4,
+    logo: 'assets/logo-round.svg', logoRendering: 'auto',
   },
 };
 function activeStyle() { return STYLE[gfxStyle] || STYLE.pixel; }
@@ -137,6 +139,9 @@ function applyStyle() {
   root.setProperty('--letter-spacing', s.letterSpacing);
   // Scale every rem-based size at once by setting the root font-size (16px × scale).
   document.documentElement.style.fontSize = (16 * s.fontScale) + 'px';
+  // Swap the title logo to match the art style.
+  const logoEl = document.getElementById('title-logo');
+  if (logoEl) { logoEl.src = s.logo; logoEl.style.imageRendering = s.logoRendering; }
   ctx.imageSmoothingEnabled = s.smoothing;
 }
 
