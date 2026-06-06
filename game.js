@@ -525,10 +525,12 @@ document.getElementById('btn-back').addEventListener('click', () => { populateUs
 
 document.getElementById('btn-recover-home').addEventListener('click', (e) => {
   e.preventDefault();
-  const name = document.getElementById('name-input').value.trim()
-    || document.getElementById('user-select').value;
-  if (!name) { alert('Enter or select a name first.'); return; }
-  showRecoverModal(name).then(tok => { if (tok) setLocalToken(name, tok); });
+  // Token-only recovery — no name needed; the token resolves to its account.
+  showRecoverModal().then(name => {
+    if (!name) return;
+    populateUserSelect();   // surface the recovered name in the picker
+    nameInput.value = name; // and pre-fill it, ready to play
+  });
 });
 
 document.getElementById('btn-retry').addEventListener('click', () => startGame(currentPlayer));

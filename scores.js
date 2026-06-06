@@ -76,6 +76,23 @@ async function fetchBest(name) {
   }
 }
 
+// Token-only recovery: given a raw token, find which account it belongs to.
+// Hashes the token client-side and looks the row up by token_hash (anon SELECT).
+// The hash is a SHA-256 of a 192-bit random token, so querying it leaks nothing.
+// Returns the name, or null if the token matches no account / DB is off.
+async function resolveToken(token) {
+  if (!_sb) return null;
+  try {
+    const h = await sha256hex(token);
+    const res = await _sbFetch(`/scores?token_hash=eq.${h}&select=name`);
+    const rows = await res.json();
+    return rows.length ? rows[0].name : null;
+  } catch (e) {
+    console.warn('Supabase resolveToken failed', e);
+    return null;
+  }
+}
+
 // Submit a run to the edge function, which replays { seed, flapTicks } through the
 // real physics and accepts the score only if it recomputes to the claimed value.
 // `replay` is { seed, flapTicks }; for registration (score 0) an empty run is used.
@@ -114,28 +131,35 @@ function showTokenModal(name, token) {
   });
 }
 
-function showRecoverModal(name) {
+// Token-only recovery: the user pastes a token, we resolve it to its account
+// name server-side and rebind this browser to it. No name entry — the token IS
+// the identity. Resolves to the recovered name, or null if cancelled.
+function showRecoverModal() {
   return new Promise(resolve => {
     const modal = document.getElementById('recover-modal');
     const input = document.getElementById('recover-token-input');
     const errEl = document.getElementById('recover-error');
+    const confirmBtn = document.getElementById('btn-recover-confirm');
     input.value = '';
     errEl.textContent = '';
     modal.classList.remove('hidden');
 
-    document.getElementById('btn-recover-confirm').onclick = () => {
+    confirmBtn.onclick = async () => {
       const tok = input.value.trim();
       if (!tok) { errEl.textContent = 'Please paste your token.'; return; }
+      confirmBtn.disabled = true;
+      errEl.textContent = 'Checking…';
+      const name = await resolveToken(tok);
+      confirmBtn.disabled = false;
+      if (!name) { errEl.textContent = 'That token matches no account.'; return; }
       setLocalToken(name, tok);
       modal.classList.add('hidden');
-      resolve(tok);
+      resolve(name);
     };
 
     document.getElementById('btn-recover-cancel').onclick = () => {
       modal.classList.add('hidden');
-      // generate fresh token as fallback
-      const tok = generateToken();
-      showTokenModal(name, tok).then(resolve);
+      resolve(null);
     };
   });
 }
