@@ -1,0 +1,26 @@
+<!-- viewBox = squared content bbox so the body fills the same footprint as every
+     other model → the fixed circular hitbox stays visually fair. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 13 13" width="40" height="40" shape-rendering="crispEdges">
+  <!-- pointed hat -->
+  <g fill="#4a148c">
+    <rect x="7" y="1" width="2" height="1"/>
+    <rect x="6" y="2" width="3" height="1"/>
+    <rect x="6" y="3" width="4" height="1"/>
+    <rect x="5" y="4" width="5" height="1"/>
+  </g>
+  <!-- hat brim -->
+  <rect x="3" y="5" width="9" height="1" fill="#6a1b9a"/>
+  <!-- star on hat -->
+  <rect x="7" y="3" width="1" height="1" fill="#ffd600"/>
+  <!-- face -->
+  <g fill="#ffe0b2"><rect x="5" y="6" width="6" height="4"/></g>
+  <!-- eyes -->
+  <rect x="6" y="7" width="1" height="1" fill="#1a1a1a"/>
+  <rect x="9" y="7" width="1" height="1" fill="#1a1a1a"/>
+  <!-- white beard -->
+  <g fill="#e8e8e8">
+    <rect x="5" y="10" width="6" height="2"/>
+    <rect x="6" y="12" width="4" height="1"/>
+    <rect x="7" y="13" width="2" height="1"/>
+  </g>
+</svg>

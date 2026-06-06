@@ -1,0 +1,52 @@
+<!-- viewBox = squared content bbox so the body fills the same footprint as every
+     other model → the fixed circular hitbox stays visually fair. -->
+<!-- "Disheveled panic penguin": cross-eyed, gaping beak, one flipper flailing.
+     A bird that famously cannot fly, in a game about flapping. Deeply unqualified. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 0 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- ruffled head tuft (sticking up) -->
+  <g fill="#1a1a2e">
+    <rect x="8" y="0" width="1" height="2"/>
+    <rect x="9" y="1" width="1" height="1"/>
+  </g>
+  <!-- black back/head/body -->
+  <g fill="#23233a">
+    <rect x="6" y="2" width="4" height="1"/>
+    <rect x="5" y="3" width="6" height="1"/>
+    <rect x="4" y="4" width="8" height="1"/>
+    <rect x="4" y="5" width="8" height="1"/>
+    <rect x="4" y="6" width="8" height="1"/>
+    <rect x="4" y="7" width="8" height="1"/>
+    <rect x="4" y="8" width="8" height="1"/>
+    <rect x="4" y="9" width="8" height="1"/>
+    <rect x="5" y="10" width="6" height="1"/>
+    <rect x="5" y="11" width="6" height="1"/>
+  </g>
+  <!-- white belly -->
+  <g fill="#f2f4f8">
+    <rect x="6" y="5" width="4" height="1"/>
+    <rect x="6" y="6" width="5" height="1"/>
+    <rect x="6" y="7" width="5" height="1"/>
+    <rect x="6" y="8" width="5" height="1"/>
+    <rect x="6" y="9" width="4" height="1"/>
+    <rect x="6" y="10" width="4" height="1"/>
+  </g>
+  <!-- cross-eyes: two wide whites, pupils pulled inward (panic) -->
+  <rect x="5" y="3" width="2" height="2" fill="#fff"/>
+  <rect x="8" y="3" width="2" height="2" fill="#fff"/>
+  <rect x="6" y="4" width="1" height="1" fill="#1a1a1a"/>
+  <rect x="8" y="4" width="1" height="1" fill="#1a1a1a"/>
+  <!-- gaping orange beak (open, panicked) -->
+  <rect x="6" y="5" width="3" height="1" fill="#f5a623"/>
+  <rect x="6" y="6" width="2" height="1" fill="#e8890c"/>
+  <!-- flailing flipper (left, mid-flap) -->
+  <g fill="#1a1a2e">
+    <rect x="3" y="6" width="1" height="1"/>
+    <rect x="2" y="7" width="2" height="1"/>
+    <rect x="3" y="8" width="1" height="1"/>
+  </g>
+  <!-- orange feet -->
+  <g fill="#f5a623">
+    <rect x="5" y="12" width="2" height="1"/>
+    <rect x="9" y="12" width="2" height="1"/>
+  </g>
+</svg>

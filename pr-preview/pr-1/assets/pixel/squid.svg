@@ -1,0 +1,43 @@
+<!-- viewBox = squared content bbox so the body fills the same footprint as every
+     other model → the fixed circular hitbox stays visually fair. -->
+<!-- "Panic squid" frame 1: mantle up, tentacles relaxed and dangling. A creature
+     with no business being airborne. Frame 2 (squid-2) tightens the tentacles. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 0 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- mantle (head/body, pointing up) -->
+  <g fill="#c2476e">
+    <rect x="6" y="0" width="4" height="1"/>
+    <rect x="5" y="1" width="6" height="1"/>
+    <rect x="4" y="2" width="8" height="1"/>
+    <rect x="4" y="3" width="8" height="1"/>
+    <rect x="4" y="4" width="8" height="1"/>
+    <rect x="4" y="5" width="8" height="1"/>
+    <rect x="5" y="6" width="6" height="1"/>
+  </g>
+  <!-- mantle highlight -->
+  <g fill="#e0698f">
+    <rect x="5" y="2" width="2" height="3"/>
+  </g>
+  <!-- big panic eyes -->
+  <rect x="5" y="3" width="2" height="2" fill="#fff"/>
+  <rect x="9" y="3" width="2" height="2" fill="#fff"/>
+  <rect x="6" y="4" width="1" height="1" fill="#1a1a1a"/>
+  <rect x="9" y="4" width="1" height="1" fill="#1a1a1a"/>
+  <!-- tentacles relaxed, dangling + splayed -->
+  <g fill="#c2476e">
+    <rect x="4" y="7" width="1" height="3"/>
+    <rect x="3" y="9" width="1" height="2"/>
+    <rect x="6" y="7" width="1" height="4"/>
+    <rect x="6" y="11" width="1" height="2"/>
+    <rect x="8" y="7" width="1" height="4"/>
+    <rect x="8" y="11" width="1" height="2"/>
+    <rect x="10" y="7" width="1" height="3"/>
+    <rect x="11" y="9" width="1" height="2"/>
+  </g>
+  <!-- suckers / tips -->
+  <g fill="#7a2545">
+    <rect x="3" y="11" width="1" height="1"/>
+    <rect x="6" y="13" width="1" height="1"/>
+    <rect x="8" y="13" width="1" height="1"/>
+    <rect x="11" y="11" width="1" height="1"/>
+  </g>
+</svg>

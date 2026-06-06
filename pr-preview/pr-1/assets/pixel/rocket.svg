@@ -1,0 +1,19 @@
+<!-- viewBox = squared content bbox so the body fills the same footprint as every
+     other model → the fixed circular hitbox stays visually fair. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 2 13 13" width="40" height="40" shape-rendering="crispEdges">
+  <!-- flame tail (left) -->
+  <g fill="#ff7b00"><rect x="1" y="7" width="2" height="2"/></g>
+  <g fill="#ffd23f"><rect x="3" y="6" width="1" height="4"/><rect x="2" y="7" width="1" height="2"/></g>
+  <!-- body (nose right) -->
+  <g fill="#e0e6ed">
+    <rect x="5" y="6" width="6" height="4"/>
+    <rect x="4" y="7" width="1" height="2"/>
+  </g>
+  <!-- nose cone -->
+  <g fill="#d13212"><rect x="11" y="6" width="2" height="4"/><rect x="13" y="7" width="1" height="2"/></g>
+  <!-- window -->
+  <rect x="7" y="7" width="2" height="2" fill="#00e5ff"/>
+  <rect x="7" y="7" width="1" height="1" fill="#aef7ff"/>
+  <!-- fins -->
+  <g fill="#9aa6b2"><rect x="5" y="4" width="2" height="2"/><rect x="5" y="10" width="2" height="2"/></g>
+</svg>

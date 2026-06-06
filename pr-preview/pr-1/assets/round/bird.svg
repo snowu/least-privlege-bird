@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- Forked tail (back, left side) -->
+  <polygon points="3,17 12,19 12,23 3,25" fill="#3b88c3"/>
+  <polygon points="3,17 9,21 3,25" fill="#55acee"/>
+  <!-- Body -->
+  <ellipse cx="22" cy="22" rx="13" ry="11" fill="#55acee"/>
+  <!-- Belly highlight -->
+  <ellipse cx="22" cy="26" rx="9" ry="6" fill="#8cc6f5"/>
+  <!-- Wing -->
+  <path d="M16 19 q9 -2 14 2 q-6 6 -14 4 q-3 -3 0 -6 z" fill="#3b88c3"/>
+  <!-- Head crest tuft -->
+  <path d="M31 11 q3 -3 5 -1 q-1 2 -4 3 z" fill="#3b88c3"/>
+  <!-- Eye white -->
+  <circle cx="30" cy="16" r="5" fill="#fff"/>
+  <!-- Pupil -->
+  <circle cx="31.3" cy="16" r="2.4" fill="#1a1a1a"/>
+  <circle cx="32.2" cy="15.1" r="0.9" fill="#fff"/>
+  <!-- Beak -->
+  <polygon points="35,15 40,18 35,20" fill="#f5a623"/>
+  <polygon points="35,18 39,19 35,21" fill="#e8890c"/>
+</svg>

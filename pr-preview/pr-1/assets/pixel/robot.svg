@@ -1,0 +1,23 @@
+<!-- viewBox = squared content bbox so the body fills the same footprint as every
+     other model → the fixed circular hitbox stays visually fair. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 1 13 13" width="40" height="40" shape-rendering="crispEdges">
+  <!-- antenna -->
+  <rect x="8" y="1" width="1" height="2" fill="#78909c"/>
+  <rect x="8" y="1" width="1" height="1" fill="#ef5350"/>
+  <!-- head -->
+  <rect x="4" y="3" width="9" height="6" fill="#90a4ae"/>
+  <rect x="4" y="3" width="9" height="1" fill="#b0bec5"/>
+  <!-- LED eyes -->
+  <rect x="6" y="5" width="2" height="2" fill="#00e5ff"/>
+  <rect x="9" y="5" width="2" height="2" fill="#00e5ff"/>
+  <!-- mouth -->
+  <rect x="6" y="8" width="5" height="1" fill="#1a1a1a"/>
+  <!-- body -->
+  <rect x="5" y="9" width="7" height="5" fill="#546e7a"/>
+  <!-- chest lights -->
+  <rect x="7" y="11" width="1" height="1" fill="#ff9800"/>
+  <rect x="9" y="11" width="1" height="1" fill="#76ff03"/>
+  <!-- arms -->
+  <rect x="3" y="9" width="2" height="4" fill="#455a64"/>
+  <rect x="12" y="9" width="2" height="4" fill="#455a64"/>
+</svg>

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Least Privilege Bird</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Style vars — populated by applyStyle() in game.js from the STYLE table, keyed
+       by the active art style (pixel | round). Defaults here are the pixel set so
+       first paint (before JS runs) is correct. */
+    :root {
+      --font-display: 'Press Start 2P', monospace;
+      --font-body: 'Press Start 2P', monospace;
+      --font-mono: 'Press Start 2P', monospace;
+      --radius: 4px;
+      --text-shadow: 3px 3px 0 #000;
+      --letter-spacing: 0px;
+    }
+    body { background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+    canvas { display: block; image-rendering: pixelated; }
+
+    #overlay {
+      position: absolute;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    #overlay h1 { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.5; text-shadow: var(--text-shadow); letter-spacing: var(--letter-spacing); }
+    #overlay input, #overlay select {
+      font-family: var(--font-body); padding: 10px 12px; border-radius: var(--radius); border: none;
+      font-size: 0.62rem; line-height: 1.5; text-align: center; width: 220px; color: #1a1a1a;
+    }
+    #overlay button {
+      font-family: var(--font-display); padding: 12px 20px; border-radius: var(--radius); border: none;
+      background: #4caf50; color: #fff; font-size: 0.7rem; line-height: 1.4; cursor: pointer;
+      box-shadow: 0 4px 0 rgba(0,0,0,.4); white-space: nowrap;
+    }
+    #overlay h2, #scores-panel h2 { font-family: var(--font-display); font-size: 0.9rem; line-height: 1.6; }
+    #overlay button:hover { background: #388e3c; }
+    #overlay button.secondary { background: #1976d2; }
+    #overlay button.secondary:hover { background: #0d47a1; }
+    #overlay button:disabled { background: #555; cursor: not-allowed; }
+
+    #scores-panel {
+      background: rgba(0,0,0,.75); border-radius: 12px;
+      padding: 16px 28px; max-height: 220px; overflow-y: auto;
+      font-size: 0.95rem; min-width: 220px;
+    }
+    #scores-panel h2 { margin-bottom: 8px; text-align: center; }
+    #scores-panel ol { padding-left: 20px; }
+    #scores-panel li { padding: 2px 0; }
+
+    /* ── CLAVE PANEL ── */
+    #clave-screen {
+      background: #1a1f2e;
+      border: 1px solid #2e3a55;
+      border-radius: 14px;
+      padding: 28px 36px;
+      min-width: 380px;
+      max-width: 460px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.7);
+    }
+    #clave-screen .clave-logo {
+      font-size: 1rem; letter-spacing: 3px; color: #7ca4f4;
+      text-transform: uppercase; font-weight: 700; border-bottom: 1px solid #2e3a55;
+      width: 100%; text-align: center; padding-bottom: 10px;
+    }
+    #clave-screen .clave-logo span { color: #fff; }
+    #clave-screen h2 { font-family: var(--font-display); font-size: 0.85rem; color: #c8d6f8; line-height: 1.6; text-align: center; }
+    #clave-screen p.sub  { font-family: var(--font-display); font-size: 0.6rem; color: #aebbd9; text-align: center; line-height: 1.8; }
+    /* MFA challenge prompt: bold + brightest so the (absurd) question is readable. */
+    #clave-screen p.sub#mfa-prompt { color: #eaf1ff; font-weight: 700; line-height: 2; }
+    #clave-screen p.info { font-family: var(--font-display); font-size: 0.62rem; color: #a0b0cc; text-align: center; line-height: 1.8; }
+    #clave-screen .error-msg { font-family: var(--font-display); color: #ff6b6b; font-size: 0.6rem; text-align: center; line-height: 1.7; min-height: 1.2em; }
+    #clave-screen .success-msg { font-family: var(--font-display); color: #51cf66; font-size: 0.6rem; text-align: center; line-height: 1.7; }
+    #clave-screen .clave-logo { font-family: var(--font-display); }
+
+    /* progress bar */
+    .clave-bar-wrap {
+      width: 100%; background: #2e3a55; border-radius: 6px; height: 8px; overflow: hidden;
+    }
+    .clave-bar { height: 100%; background: #7ca4f4; border-radius: 6px; width: 0%; transition: width 0.1s linear; }
+
+    /* spinner */
+    .clave-spinner {
+      width: 36px; height: 36px; border: 3px solid #2e3a55;
+      border-top-color: #7ca4f4; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* MFA input */
+    #overlay #mfa-input {
+      font-size: 0.85rem; letter-spacing: 4px; text-align: center;
+      width: 250px; padding: 8px; border-radius: var(--radius); border: 2px solid #2e3a55;
+      background: #0d1117; color: #fff;
+    }
+    #mfa-input.shake {
+      animation: shake 0.4s ease;
+      border-color: #ff6b6b;
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60%  { transform: translateX(-6px); }
+      40%,80%  { transform: translateX(6px); }
+    }
+
+    /* entitlements log — pixel font, smaller + taller lines so it stays legible */
+    #entitlements-log {
+      width: 100%; background: #0d1117; border-radius: 8px;
+      padding: 10px 14px; font-family: var(--font-mono); font-size: 0.5rem;
+      color: #51cf66; height: 130px; overflow: hidden;
+      border: 1px solid #2e3a55; line-height: 2;
+    }
+
+    /* remember checkbox */
+    .clave-check { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #aebbd9; cursor: pointer; }
+    .clave-check input { width: auto; cursor: pointer; }
+
+    /* ── CAPTCHA ── */
+    .captcha-panel {
+      background: #1a1f2e; border: 1px solid #2e3a55; border-radius: 14px;
+      padding: 22px 28px; min-width: 420px; max-width: 520px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.7);
+    }
+    .captcha-panel h2 { font-family: var(--font-display); font-size: 0.72rem; color: #c8d6f8; text-align: center; line-height: 1.7; }
+    .captcha-panel p.sub { font-family: var(--font-display); font-size: 0.62rem; color: #cdd8f0; text-align: center; line-height: 1.8; }
+    .captcha-grid {
+      display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%;
+    }
+    .captcha-tile {
+      background: #0d1117; border-radius: 8px;
+      border: 2px solid #2e3a55; padding: 10px 14px;
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer; user-select: none; transition: border-color 0.15s, background 0.15s;
+    }
+    .captcha-tile:hover { border-color: #4a6a99; }
+    .captcha-tile.selected { border-color: #7ca4f4; background: #1c2a4a; }
+    .captcha-tile .tile-emoji { font-size: 1.6rem; flex-shrink: 0; }
+    .captcha-tile .tile-label { font-family: var(--font-display); font-size: 0.56rem; color: #c8d6f8; line-height: 1.7; }
+    .captcha-error { font-family: var(--font-display); color: #ff6b6b; font-size: 0.6rem; line-height: 1.6; min-height: 1.2em; text-align: center; }
+
+    .hidden { display: none !important; }
+
+    /* Fortune cow — anchored to the game window (overlay) bottom-right corner.
+       ALWAYS true monospace (never the pixel font) so the ASCII art + speech
+       balloon stay column-aligned. */
+    #fortune-cow {
+      position: absolute; right: 14px; bottom: 12px; z-index: 40;
+      margin: 0; padding: 10px 14px; pointer-events: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px; line-height: 1.15; white-space: pre;
+      color: #c2eaa8;
+      /* full outline on the glyphs so the cow reads on any background */
+      text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+      background: rgba(8,12,10,0.88); border: 1px solid rgba(120,160,120,0.25);
+      border-radius: 6px;
+      opacity: 0; transition: opacity 0.4s ease;
+    }
+    #fortune-cow.show { opacity: 1; }
+
+    /* ── GAME OVER (retro arcade + IAM satire) ── */
+    #gameover-panel {
+      position: relative; overflow: hidden;
+      background: #12060a; border: 3px solid #d13212;
+      border-radius: 6px; padding: 28px 36px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      box-shadow: 0 0 0 3px #2a0c10, 0 10px 40px rgba(0,0,0,.8);
+      min-width: 340px;
+    }
+    /* CRT scanline overlay */
+    #gameover-panel .scanlines {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      background: repeating-linear-gradient(
+        to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,.18) 3px, rgba(0,0,0,0) 4px);
+      mix-blend-mode: multiply;
+    }
+    #gameover-panel > *:not(.scanlines) { position: relative; z-index: 3; }
+    .go-title {
+      font-family: var(--font-display); font-size: 2rem; line-height: 1.2; text-align: center;
+      color: #ff3b30; text-shadow: 3px 3px 0 #5a0a0a, -1px -1px 0 #ffec3d;
+      animation: go-flicker 2.2s infinite;
+    }
+    @keyframes go-flicker { 0%,93%,100% { opacity:1; } 94% { opacity:.55; } 96% { opacity:1; } 97% { opacity:.7; } }
+    .go-revoked { font-family: var(--font-display); font-size: 0.8rem; color: #ffec3d; letter-spacing: 1px; }
+    .go-policy { font-size: 0.78rem; color: #c98; text-align: center; line-height: 1.6; }
+    #go-errcode { color: #e8890c; font-family: var(--font-mono); font-size: 0.72rem; }
+    .go-score {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      border-top: 1px solid #3a1316; border-bottom: 1px solid #3a1316;
+      padding: 10px 0; width: 100%;
+    }
+    .go-score-label { font-family: var(--font-display); font-size: 0.6rem; color: #879196; letter-spacing: 2px; }
+    .go-score-num { font-family: var(--font-display); font-size: 1.8rem; color: #76ff03; text-shadow: 2px 2px 0 #0a2a00; }
+    .go-msg { font-size: 0.78rem; color: #c8d6f8; text-align: center; min-height: 1em; }
+    .go-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    #gameover-panel button { font-size: 0.6rem; padding: 12px 14px; }
+
+    #avatar-picker { display: flex; gap: 10px; }
+    .avatar-opt {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; padding: 6px 8px; border-radius: 10px;
+      border: 2px solid transparent; background: rgba(255,255,255,0.08);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .avatar-opt img { width: 36px; height: 36px; image-rendering: pixelated; }
+    #avatar-picker.round-gfx .avatar-opt img { image-rendering: auto; }
+    .avatar-opt span { font-size: 0.62rem; color: #ccc; }
+    .avatar-opt.selected { border-color: #ffd600; background: rgba(255,214,0,0.15); }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="overlay">
+
+    <!-- ══ FORTUNE COW — anchored to the game window's bottom-right corner ══
+         Lives inside #overlay (which is sized to the canvas), so it pins to the
+         canvas corner, not the viewport. Populated by game.js from the `fortune`
+         edge function, wrapped cowsay-style with the selected avatar's ASCII.
+         Always true monospace so the art stays aligned in either art style. -->
+    <pre id="fortune-cow" class="hidden" aria-hidden="true"></pre>
+
+    <!-- ══ MENU ══ -->
+    <div id="menu-screen" style="background:rgba(0,0,0,0.55);border-radius:16px;padding:32px 40px;display:flex;flex-direction:column;align-items:center;gap:14px;min-width:300px;">
+      <h1 style="display:flex;align-items:center;gap:12px;justify-content:center;"><img id="title-logo" src="assets/pixel/penguin.svg" alt="" style="width:60px;height:60px;" /> Least Privilege Bird</h1>
+      <p style="font-size:0.8rem;color:#7ca4f4;letter-spacing:1px;margin-top:-8px;">Authenticated · Verified · Compliant · Audited</p>
+      <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.15);" />
+      <select id="user-select" class="hidden" style="width:220px;">
+        <option value="">— pick user —</option>
+      </select>
+      <input id="name-input" type="text" placeholder="or enter a new name" maxlength="20" autocomplete="off" style="width:220px;" />
+      <button id="btn-play" style="width:220px;">Login &amp; Play</button>
+      <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.1);" />
+      <div id="avatar-picker"></div>
+      <button id="btn-scores" class="secondary" style="width:220px;">🏆 High Scores</button>
+      <a id="btn-recover-home" href="#" style="color:#7ca4f4;font-size:0.82rem;margin-top:4px;">🔑 Recover account with token</a>
+    </div>
+
+    <!-- ══ SCORES ══ -->
+    <div id="scores-screen" class="hidden">
+      <div id="scores-panel">
+        <h2>🏆 High Scores</h2>
+        <ol id="scores-list"></ol>
+      </div>
+      <button id="btn-back">Back</button>
+    </div>
+
+    <!-- ══ CLAVE FLOW ══ -->
+    <div id="clave-screen" class="hidden">
+      <div class="clave-logo">☁️ <span>CLAVE</span> SSO Amazon Internal</div>
+
+      <!-- Step 1: CAPTCHA pre-login -->
+      <div id="clave-step-captcha-pre">
+        <!-- populated by JS -->
+      </div>
+
+      <!-- Step 2: Connecting -->
+      <div id="clave-step-connecting" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:14px;width:100%">
+        <h2>Connecting to Clave SSO...</h2>
+        <div class="clave-spinner"></div>
+        <p class="sub">Establishing secure mTLS tunnel to identity provider<br/>Region: us-east-1 · Endpoint: sso.corp.amazon.com</p>
+      </div>
+
+      <!-- Step 3: Verifying -->
+      <div id="clave-step-verifying" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+        <h2>Verifying corporate identity...</h2>
+        <p class="sub">Cross-referencing Active Directory, Midway, and 3 additional identity sources</p>
+        <div class="clave-bar-wrap"><div class="clave-bar" id="verify-bar"></div></div>
+        <p class="info" id="verify-status">Initializing...</p>
+      </div>
+
+      <!-- Step 4: MFA -->
+      <div id="clave-step-mfa" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+        <h2>🔐 Multi-Factor Authentication</h2>
+        <p class="sub" id="mfa-prompt"></p>
+        <input id="mfa-input" type="text" maxlength="32" autocomplete="off" />
+        <label class="clave-check"><input type="checkbox" id="remember-device" style="width:auto;" /> Remember this device for 8 hours</label>
+        <p class="error-msg" id="mfa-error"></p>
+        <div id="btn-mfa-verify-wrap" style="position:relative;height:52px;display:flex;align-items:center;justify-content:center;">
+          <button id="btn-mfa-verify" style="position:relative;">Verify Identity</button>
+        </div>
+        <p class="sub" id="mfa-attempt-hint" class="hidden"></p>
+      </div>
+
+      <!-- Step 5: Entitlements -->
+      <div id="clave-step-entitlements" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+        <h2>Fetching IAM entitlements...</h2>
+        <div id="entitlements-log"></div>
+        <p class="sub">Evaluating 847 policy statements across 12 permission boundaries</p>
+      </div>
+
+      <!-- Step 6: Granted -->
+      <div id="clave-step-granted" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+        <p style="font-size:2.5rem">✅</p>
+        <h2>Access Granted</h2>
+        <p class="success-msg">Welcome, <strong id="granted-user"></strong></p>
+        <p class="sub">
+          Account: <code>139478927430</code> · Role: <code>FlappyKiroPlayer-Prod</code><br/>
+          Authorized scopes: <code>game:flap:write</code> · <code>score:submit:put</code><br/>
+          Session expires in 8 hours (or at first death)
+        </p>
+      </div>
+
+      <!-- Session expired banner -->
+      <div id="clave-step-expired" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+        <p style="font-size:2rem">⚠️</p>
+        <h2 style="color:#ffa94d">Session Timeout</h2>
+        <p class="sub">Your Clave session expired during entitlement evaluation.<br/>This is expected behaviour. Please re-authenticate.</p>
+        <button id="btn-reauth">Re-authenticate</button>
+      </div>
+    </div>
+
+    <!-- ══ CAPTCHA post-game ══ -->
+    <div id="captcha-post-screen" class="hidden">
+      <!-- populated by JS -->
+    </div>
+
+    <!-- ══ SCORE SUBMIT ══ -->
+    <div id="score-submit-screen" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+      <div class="clave-logo">☁️ <span>CLAVE</span> SSO  Amazon Internal</div>
+      <h2 style="color:#c8d6f8">Submitting score to compliance audit log...</h2>
+      <div class="clave-spinner"></div>
+      <div id="submit-log" style="width:100%;background:#0d1117;border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:0.5rem;color:#51cf66;height:130px;overflow:hidden;border:1px solid #2e3a55;line-height:2;" data-mono></div>
+      <p class="sub" style="font-size:0.5rem;word-break:break-all;line-height:2;">PUT s3://flappy-kiro-audit-logs-prod/scores/<span id="submit-user-path"></span>.json<br/>
+      Encrypting with KMS key arn:aws:kms:us-east-1:139478927430:key/mrk-flappy</p>
+    </div>
+
+    <!-- ══ GAME OVER ══ -->
+    <div id="gameover-screen" class="hidden">
+      <div id="gameover-panel">
+        <div class="scanlines"></div>
+        <h1 class="go-title">GAME<br/>OVER</h1>
+        <p class="go-revoked">⛔ ACCESS REVOKED</p>
+        <p class="go-policy">Session terminated by IAM policy<br/><span id="go-errcode"></span></p>
+        <div class="go-score">
+          <span class="go-score-label">SCORE</span>
+          <span id="go-score-val" class="go-score-num">0</span>
+        </div>
+        <p id="gameover-msg" class="go-msg"></p>
+        <div class="go-btns">
+          <button id="btn-retry">Re-authenticate</button>
+          <button id="btn-menu" class="secondary">Sign out</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ STYLE TOGGLE (fixed bottom-left corner) ══ -->
+  <label id="gfx-toggle" style="
+    position:fixed;left:14px;bottom:12px;z-index:50;
+    display:flex;align-items:center;gap:7px;cursor:pointer;
+    font-family:var(--font-body);font-size:0.62rem;color:#7ca4f4;
+    background:rgba(0,0,0,0.45);padding:7px 11px;border-radius:var(--radius);
+    user-select:none;">
+    <input type="checkbox" id="gfx-check" style="width:auto;cursor:pointer;" />
+    <span id="gfx-label">Round graphics</span>
+  </label>
+
+  <!-- ══ TASTE MODAL (intercepts pixel → round switch) ══ -->
+  <div id="taste-modal" class="hidden" style="
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);
+    display:flex;align-items:center;justify-content:center;
+    z-index:999;color:#fff;">
+    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;padding:32px 36px;max-width:440px;display:flex;flex-direction:column;gap:18px;align-items:center;text-align:center;">
+      <p style="font-size:2.5rem">😔</p>
+      <h2 style="font-family:var(--font-display);font-size:1rem;line-height:1.6;color:#c8d6f8;">Oh.<br/>I thought you had taste.<br/>Pity.</h2>
+      <p style="font-family:var(--font-display);font-size:0.55rem;line-height:1.9;color:#aebbd9;">Pixel art is objectively superior. This is not an opinion.<br/>You are about to make a documented mistake.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%;">
+        <button id="btn-taste-keep" style="font-family:var(--font-display);font-size:0.62rem;line-height:1.5;padding:12px 16px;border-radius:var(--radius);border:none;background:#4caf50;color:#fff;cursor:pointer;">I have impeccable taste</button>
+        <button id="btn-taste-switch" style="font-family:var(--font-display);font-size:0.62rem;line-height:1.5;padding:12px 16px;border-radius:var(--radius);border:none;background:#5a6270;color:#dfe4ec;cursor:pointer;">I don't have taste.</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TOKEN MODAL (outside overlay, full-screen) ══ -->
+  <div id="token-modal" class="hidden" style="
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);
+    display:flex;align-items:center;justify-content:center;
+    z-index:999;font-family:'Segoe UI',sans-serif;color:#fff;">
+    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;padding:32px 36px;max-width:460px;display:flex;flex-direction:column;gap:14px;align-items:center;">
+      <p style="font-size:2rem">🔑</p>
+      <h2 style="color:#c8d6f8;text-align:center;">Save your access token</h2>
+      <p style="font-size:0.85rem;color:#aebbd9;text-align:center;line-height:1.6;">
+        This token identifies you as <strong id="token-modal-name" style="color:#fff;"></strong>.<br/>
+        Store it somewhere safe — like a GitHub PAT.<br/>
+        You'll need it to recover your session on a new device.
+      </p>
+      <div style="display:flex;gap:8px;width:100%;">
+        <input id="token-display" readonly style="
+          flex:1;background:#0d1117;border:1px solid #2e3a55;border-radius:8px;
+          padding:10px 12px;font-family:monospace;font-size:0.8rem;color:#51cf66;
+          cursor:text;" />
+        <button id="btn-copy-token" style="
+          padding:10px 16px;border-radius:8px;border:none;
+          background:#1976d2;color:#fff;cursor:pointer;font-size:0.85rem;white-space:nowrap;">
+          Copy
+        </button>
+      </div>
+      <p style="font-size:0.75rem;color:#ff6b6b;text-align:center;">
+        ⚠️ This will not be shown again. Copy it now.
+      </p>
+      <button id="btn-token-done" style="
+        padding:10px 28px;border-radius:10px;border:none;
+        background:#4caf50;color:#fff;font-size:1rem;cursor:pointer;">
+        I've saved it, let's play
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ TOKEN RECOVERY MODAL ══ -->
+  <div id="recover-modal" class="hidden" style="
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);
+    display:flex;align-items:center;justify-content:center;
+    z-index:999;font-family:var(--font-body);color:#fff;">
+    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:var(--radius);padding:32px 36px;max-width:440px;display:flex;flex-direction:column;gap:14px;align-items:center;">
+      <h2 style="font-family:var(--font-display);font-size:0.9rem;line-height:1.6;color:#c8d6f8;text-align:center;">Recover Session</h2>
+      <p style="font-family:var(--font-body);font-size:0.6rem;line-height:1.8;color:#aebbd9;text-align:center;">Paste your saved token — we'll restore your account from it.</p>
+      <input id="recover-token-input" type="text" placeholder="Paste token here"
+        style="width:100%;background:#0d1117;border:1px solid #2e3a55;border-radius:var(--radius);padding:10px 12px;font-family:var(--font-mono);font-size:0.6rem;color:#fff;text-align:center;" />
+      <p id="recover-error" style="font-family:var(--font-body);color:#ff6b6b;font-size:0.6rem;line-height:1.7;min-height:1.2em;text-align:center;"></p>
+      <button id="btn-recover-confirm" style="font-family:var(--font-display);padding:12px 20px;border-radius:var(--radius);border:none;background:#4caf50;color:#fff;font-size:0.7rem;line-height:1.4;cursor:pointer;">Restore</button>
+      <button id="btn-recover-cancel" style="font-family:var(--font-body);background:none;border:none;color:#aebbd9;cursor:pointer;font-size:0.55rem;">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    // Set on window before the bundle loads; the modules read window.DEV_MODE / window.LIVE_DB.
+    // DEV_MODE: skip the friction theater (SSO/captchas) for fast gameplay iteration.
+    // window.DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
+    window.DEV_MODE = true;
+    // LIVE_DB: talk to the real Supabase. ALWAYS true in production. Locally it is OFF
+    // by default (don't pollute prod from a laptop); flip it from the devtools console:
+    //   localStorage.lpb_live = '1'   → reload to enable real reads/writes locally
+    //   delete localStorage.lpb_live  → back to offline-local
+    window.LIVE_DB = (location.hostname !== 'localhost' && location.hostname !== '')
+      || localStorage.getItem('lpb_live') === '1';
+  </script>
+  <script src="dist/bundle.js"></script>
+</body>
+</html>
