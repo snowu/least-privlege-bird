@@ -316,8 +316,16 @@
     </div>
   </div>
 
-  <script>var DEV_MODE = location.hostname === 'localhost' || location.hostname === '';</script>
-  <!-- <script>var DEV_MODE = false;</script> -->
+  <script>
+    // DEV_MODE: skip the friction theater (SSO/captchas) for fast gameplay iteration.
+    var DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
+    // LIVE_DB: talk to the real Supabase. ALWAYS true in production. Locally it is OFF
+    // by default (don't pollute prod from a laptop); flip it from the devtools console:
+    //   localStorage.lpb_live = '1'   → reload to enable real reads/writes locally
+    //   delete localStorage.lpb_live  → back to offline-local
+    var LIVE_DB = (location.hostname !== 'localhost' && location.hostname !== '')
+      || localStorage.getItem('lpb_live') === '1';
+  </script>
   <script src="scores.js"></script>
   <script src="clave.js"></script>
   <script src="game.js"></script>

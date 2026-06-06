@@ -186,7 +186,7 @@ function mulberry32(a) {
 }
 
 // ─── GAME STATE ───────────────────────────────────────────────────────────────
-let player, pipes, score, animId, currentPlayer;
+let player, pipes, score, animId, currentPlayer, currentBest = null;
 let pipeSpeed, countdown, countdownStart;
 let tick, acc, lastFrameTime;        // fixed-timestep bookkeeping
 let lastSpeedUpTick, lastPipeTick;   // spawn/ramp timers in ticks (not wall-clock)
@@ -309,13 +309,15 @@ function drawPlayer() {
 }
 
 function drawHUD() {
-  const best = bestForPlayer(currentPlayer);
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 22px "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
   const sl = speedLevel() + 1;
+  // High is shown only when we have an authoritative value from Supabase.
+  // currentBest === null means offline/unknown → omit it rather than show a stale number.
+  const high = currentBest == null ? '' : `High: ${Math.max(score, currentBest)}  |  `;
   ctx.fillText(
-    `Score: ${score}  |  High: ${Math.max(score, best)}  |  ${currentPlayer}  |  Spd ${sl}`,
+    `Score: ${score}  |  ${high}${currentPlayer}  |  Spd ${sl}`,
     C.W / 2, C.GROUND + 32
   );
 }
@@ -408,21 +410,27 @@ function loop(now) {
   animId = requestAnimationFrame(loop);
 }
 
-function startGame(playerName) {
+async function startGame(playerName) {
   showScreen(null);
+  // Fetch the authoritative best from Supabase once, before the loop starts.
+  // null ⇒ offline/unknown → HUD omits the High readout.
+  currentBest = await fetchBest(playerName);
   initGame(playerName);
   animId = requestAnimationFrame(loop);
 }
 
-function endGame() {
+async function endGame() {
   cancelAnimationFrame(animId);
   sndGameOver.currentTime = 0;
   sndGameOver.play().catch(() => {});
 
-  const prev  = bestForPlayer(currentPlayer);
-  const isNew = score > prev;
+  const prev  = currentBest;            // authoritative best, or null when offline
+  const isNew = prev != null && score > prev;
 
   if (DEV_MODE) {
+    // Skip the friction theater. saveScore self-gates on LIVE_DB, so this still
+    // exercises the real Supabase round-trip when the DB is enabled locally.
+    await saveScore(currentPlayer, score);
     document.getElementById('gameover-msg').textContent = `Score: ${score}`;
     overlay.classList.remove('hidden');
     showScreen('gameover');
@@ -434,7 +442,9 @@ function endGame() {
     document.getElementById('gameover-msg').textContent =
       isNew
         ? `New high score: ${score}! 🎉`
-        : `Score: ${score} — Best: ${Math.max(score, prev)}`;
+        : prev == null
+          ? `Score: ${score}`
+          : `Score: ${score} — Best: ${Math.max(score, prev)}`;
     overlay.classList.remove('hidden');
     showScreen('gameover');
   });
@@ -479,8 +489,10 @@ userSelect.addEventListener('change', () => {
 document.getElementById('btn-play').addEventListener('click', async () => {
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
-  if (DEV_MODE) { startGame(name); return; }
+  // DB interaction (token) is self-gated on LIVE_DB inside ensurePlayerToken.
+  // DEV_MODE independently controls only the SSO/captcha friction below.
   await ensurePlayerToken(name);
+  if (DEV_MODE) { startGame(name); return; }
   showScreen(null);
   overlay.classList.remove('hidden');
   Clave.startLogin(name, () => startGame(name));

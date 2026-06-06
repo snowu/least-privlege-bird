@@ -12,7 +12,18 @@ function _loadLocal() {
 function _saveLocal(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 
 function getLocalToken(name)      { const v = _loadLocal()[name]; return v?.token || v || null; }
-function setLocalToken(name, tok) { const d = _loadLocal(); d[name] = tok; _saveLocal(d); }
+function setLocalToken(name, tok) { const d = _loadLocal(); d[name] = tok; _saveLocal(d); } // always a string
+
+// Strip-on-read migration: normalize legacy { token, score } entries to bare token
+// strings, dropping the (untrustworthy) cached score. Runs once at load.
+(function normalizeLocal() {
+  const d = _loadLocal();
+  let changed = false;
+  for (const k of Object.keys(d)) {
+    if (d[k] && typeof d[k] === 'object') { d[k] = d[k].token || ''; changed = true; }
+  }
+  if (changed) _saveLocal(d);
+})();
 
 // ── TOKEN GENERATION ──────────────────────────────────────────────────────────
 function generateToken() {
@@ -26,7 +37,9 @@ async function sha256hex(str) {
 }
 
 // ── SUPABASE CALLS ────────────────────────────────────────────────────────────
-const _sb = SUPABASE_URL && SUPABASE_KEY && location.hostname !== 'localhost';
+// LIVE_DB (set in index.html) decides whether we touch Supabase — always true in prod,
+// manually toggleable locally via localStorage.lpb_live. Decoupled from DEV_MODE.
+const _sb = SUPABASE_URL && SUPABASE_KEY && (typeof LIVE_DB !== 'undefined' ? LIVE_DB : false);
 
 async function _sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -44,8 +57,23 @@ async function _sbFetch(path, opts = {}) {
 
 async function sbLoadScores() {
   if (!_sb) return null;
-  const res = await _sbFetch('/scores?select=name,score&order=score.desc');
+  // score=gt.0 hides registered-but-never-played accounts (created at score 0).
+  const res = await _sbFetch('/scores?select=name,score&score=gt.0&order=score.desc');
   return res.json(); // [{ name, score }, ...]
+}
+
+// Authoritative best score for a player — read from Supabase, never localStorage.
+// Returns the score, or null when Supabase is unavailable / the fetch fails.
+async function fetchBest(name) {
+  if (!_sb) return null;
+  try {
+    const res = await _sbFetch(`/scores?name=eq.${encodeURIComponent(name)}&select=score`);
+    const rows = await res.json();
+    return rows.length ? rows[0].score : null;
+  } catch (e) {
+    console.warn('Supabase fetchBest failed', e);
+    return null;
+  }
 }
 
 async function sbSubmitScore(name, token, score) {
@@ -112,12 +140,18 @@ function showRecoverModal(name) {
 // ── PUBLIC API ────────────────────────────────────────────────────────────────
 
 // Call before starting a game. Returns the player's token (existing or new).
+// No-op when the DB is off (LIVE_DB) — a token only matters for writing scores,
+// and we don't want the modal interrupting pure gameplay testing.
 async function ensurePlayerToken(name) {
+  if (!_sb) return null;
   const existing = getLocalToken(name);
   if (existing) return existing;
-  // New player — generate, show modal, persist
+  // New player — generate, persist locally, register the row in the DB now (score 0)
+  // so the account is real the moment the token exists, not only after first play.
   const tok = generateToken();
   setLocalToken(name, tok);
+  try { await sbSubmitScore(name, tok, 0); }
+  catch (e) { console.warn('Supabase register failed', e); }
   await showTokenModal(name, tok);
   return tok;
 }
@@ -131,29 +165,16 @@ async function loadScores() {
       return Object.fromEntries(rows.map(r => [r.name, r.score]));
     } catch (e) { console.warn('Supabase load failed, using local', e); }
   }
-  // localStorage fallback: stored as { name: { token, score } }
-  const d = _loadLocal();
-  return Object.fromEntries(Object.entries(d).map(([n, v]) => [n, v.score || 0]));
+  // No Supabase → no authoritative scores. localStorage holds tokens only.
+  return {};
 }
 
-// Save score: Supabase if configured, always update local cache too
+// Save score: Supabase only. Scores are NOT cached locally — a client-side
+// number is trivially editable, so the leaderboard must stay server-authoritative.
 async function saveScore(name, score) {
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
+  if (!_sb) return; // _sb already encodes LIVE_DB — no separate localhost check needed
   const tok = getLocalToken(name);
   if (!tok) return;
-  // Update local cache score
-  const d = _loadLocal();
-  if (!d[name] || score > (d[name].score || 0)) {
-    d[name] = { token: tok, score };
-    _saveLocal(d);
-  }
-  if (_sb) {
-    try { await sbSubmitScore(name, tok, score); }
-    catch (e) { console.warn('Supabase submit failed', e); }
-  }
-}
-
-function bestForPlayer(name) {
-  const d = _loadLocal();
-  return d[name]?.score || 0;
+  try { await sbSubmitScore(name, tok, score); }
+  catch (e) { console.warn('Supabase submit failed', e); }
 }
