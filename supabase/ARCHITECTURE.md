@@ -23,7 +23,12 @@ stores only a score it independently reproduces.
    → if `recomputed !== claimedScore` rejects (`422`) → token-hash verify → max-only write
    with the service-role key (bypasses RLS).
 5. **Leaderboard read** — Client reads `scores` directly (anon SELECT), filtered
-   `score > 0`.
+   `score > 0`. Anon can only read the `name` and `score` columns — `token_hash` is
+   revoked from anon (column grant), so hashes never leave the server.
+6. **Token-only recovery** — On a new device (or wiped localStorage), the player pastes
+   their token. The client POSTs `{token}` to the `recover-account` edge function, which
+   hashes it server-side (service role) and returns the matching account `name` (or
+   `null`). The browser rebinds to that name — no name entry, the token *is* the identity.
 
 ## The four security locks
 
@@ -52,17 +57,20 @@ graph TB
     subgraph SUPABASE["☁️ SUPABASE — trusted (server-side)"]
         direction TB
         EDGE["submit-score Edge Function<br/>validate → replay → verify → write"]
+        RECOVER["recover-account Edge Function<br/>hash token → return name"]
         SIMTS["sim.ts<br/>authoritative physics<br/>(mirror of game.js)"]
         DB[("scores table<br/>name · token_hash · score")]
-        RLS{{"RLS: anon = SELECT only<br/>NO direct writes"}}
+        RLS{{"RLS: anon = SELECT (name, score) only<br/>NO direct writes · token_hash hidden"}}
         EDGE --> SIMTS
         EDGE -->|"service-role key<br/>(bypasses RLS)"| DB
+        RECOVER -->|"service-role key<br/>(reads token_hash)"| DB
         RLS -.guards.-> DB
     end
 
     GAME --> SCORES
     SCORES -->|"POST {name, token,<br/>seed, flapTicks, claimedScore}"| EDGE
-    SCORES -->|"GET scores?score=gt.0<br/>(anon SELECT)"| DB
+    SCORES -->|"POST {token}<br/>(recovery)"| RECOVER
+    SCORES -->|"GET scores?score=gt.0<br/>select=name,score (anon)"| DB
     SIMCLIENT -.identical to.-> SIMTS
 
     EDGE -->|"422 if recomputed ≠ claimed"| SCORES
@@ -70,6 +78,7 @@ graph TB
     style BROWSER fill:#3a1f1f,stroke:#c0392b,color:#fff
     style SUPABASE fill:#1f3a2a,stroke:#27ae60,color:#fff
     style EDGE fill:#27ae60,stroke:#fff,color:#fff
+    style RECOVER fill:#16a085,stroke:#fff,color:#fff
     style DB fill:#2980b9,stroke:#fff,color:#fff
     style RLS fill:#e67e22,stroke:#fff,color:#fff
 ```
