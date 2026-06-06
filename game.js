@@ -913,12 +913,33 @@ buildAvatarPicker();
 // sprites + thumbnails + the live preview. Gameplay is unaffected (see hitbox note).
 const gfxCheck = document.getElementById('gfx-check');
 gfxCheck.checked = (gfxStyle === 'round');
-gfxCheck.addEventListener('change', () => {
-  gfxStyle = gfxCheck.checked ? 'round' : 'pixel';
+
+function applyGfx(style) {
+  gfxStyle = style;
   localStorage.setItem('lpb_gfx', gfxStyle);
+  gfxCheck.checked = (gfxStyle === 'round');
   loadSprites();        // also re-applies STYLE via applyStyle()
   buildAvatarPicker();
   drawBackground();
+}
+
+// Switching pixel→round is a documented mistake. Intercept with a judgmental modal.
+const tasteModal = document.getElementById('taste-modal');
+gfxCheck.addEventListener('change', () => {
+  if (gfxCheck.checked) {
+    // pixel → round: don't apply yet; ask the user to confront their choices.
+    gfxCheck.checked = false; // keep visual state on pixel until they decide
+    tasteModal.classList.remove('hidden');
+  } else {
+    applyGfx('pixel'); // round → pixel: always welcome, no questions asked
+  }
+});
+document.getElementById('btn-taste-keep').addEventListener('click', () => {
+  tasteModal.classList.add('hidden'); // stay on pixel — correct choice
+});
+document.getElementById('btn-taste-switch').addEventListener('click', () => {
+  tasteModal.classList.add('hidden');
+  applyGfx('round'); // they admitted it
 });
 
 // Draw a static background while on menu
