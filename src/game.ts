@@ -135,6 +135,53 @@ function applyStyle() {
   ctx.imageSmoothingEnabled = s.smoothing;
 }
 
+// ─── SHARED PIPE DRAWERS ────────────────────────────────────────────────────────
+// Pure render-only. Collision is geometry-only (physics-core collides()), so pipe art
+// never touches the sim/replay path. Themes pass colors as data → composition, no OOP.
+
+// Hard-edged pixel pipe: body + highlight band (left) + shadow band (right) + hard
+// edges, with a chunky capped top/bottom. Shared by bird/penguin/squid (colors only).
+function bandedPipe(x, topH, gap, { body, light, dark, edge, capH = 28 }) {
+  const capW = C.PIPE_W + 12, capX = x - 6;
+  const shaft = (sx, sy, sw, sh) => {
+    ctx.fillStyle = body;  ctx.fillRect(sx, sy, sw, sh);
+    ctx.fillStyle = light; ctx.fillRect(sx + 4, sy, 8, sh);          // highlight band
+    ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
+    ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);              // hard left edge
+    ctx.fillRect(sx + sw - 2, sy, 2, sh);                            // hard right edge
+  };
+  const cap = (cy) => {
+    ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
+    ctx.fillStyle = light; ctx.fillRect(capX + 4, cy + 4, 8, capH - 8);
+    ctx.fillStyle = dark;  ctx.fillRect(capX + capW - 12, cy + 4, 8, capH - 8);
+    ctx.fillStyle = edge;
+    ctx.fillRect(capX, cy, capW, 3);                 // top edge
+    ctx.fillRect(capX, cy + capH - 3, capW, 3);      // bottom edge
+    ctx.fillRect(capX, cy, 3, capH);                 // left edge
+    ctx.fillRect(capX + capW - 3, cy, 3, capH);      // right edge
+  };
+  const botY = topH + gap;
+  shaft(x, 0, C.PIPE_W, topH - capH);
+  cap(topH - capH);
+  cap(botY);
+  shaft(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+}
+
+// Plain body + 2 caps skeleton; `decorate({x, topH, botY, capX, capW, capH})` paints
+// theme detail (rivets / brick lines / warning stripes) over it. Shared by
+// rocket/wizard/robot.
+function framedPipe(x, topH, gap, { bodyColor, capColor, capH, capW, decorate }) {
+  const capX = x - (capW - C.PIPE_W) / 2;
+  const botY = topH + gap;
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
+  ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+  ctx.fillStyle = capColor;
+  ctx.fillRect(capX, topH - capH, capW, capH);
+  ctx.fillRect(capX, botY, capW, capH);
+  if (decorate) decorate({ x, topH, botY, capX, capW, capH });
+}
+
 // Themes are built as loose object literals (optional anim/img/img2/bgLayers per
 // avatar); type as a permissive record so render code can read those fields.
 const THEMES: { [key: string]: any } = {
@@ -142,66 +189,18 @@ const THEMES: { [key: string]: any } = {
     label: 'Bird',
     sky: '#7ec8e3', ground: '#2b2b3b',
     cloudFill: 'rgba(255,255,255,0.82)',
-    // Classic pixel-art green pipe: hard-edged body with a highlight band on the
-    // left, a shadow band on the right, and a chunky cap. No anti-aliasing.
+    // Classic pixel-art green pipe: hard-edged body with bands and a chunky cap.
     drawPipe(x, topH, gap) {
-      const capH = 28, capW = C.PIPE_W + 12, capX = x - 6;
-      const body = '#5aa02c', light = '#7ec850', dark = '#3a6e1a', edge = '#1f3d0e';
-      const shaft = (sx, sy, sw, sh) => {
-        ctx.fillStyle = body;  ctx.fillRect(sx, sy, sw, sh);
-        ctx.fillStyle = light; ctx.fillRect(sx + 4, sy, 8, sh);          // highlight band
-        ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
-        ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);              // hard left edge
-        ctx.fillRect(sx + sw - 2, sy, 2, sh);                            // hard right edge
-      };
-      const cap = (cy) => {
-        ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
-        ctx.fillStyle = light; ctx.fillRect(capX + 4, cy + 4, 8, capH - 8);
-        ctx.fillStyle = dark;  ctx.fillRect(capX + capW - 12, cy + 4, 8, capH - 8);
-        ctx.fillStyle = edge;
-        ctx.fillRect(capX, cy, capW, 3);                 // top edge
-        ctx.fillRect(capX, cy + capH - 3, capW, 3);      // bottom edge
-        ctx.fillRect(capX, cy, 3, capH);                 // left edge
-        ctx.fillRect(capX + capW - 3, cy, 3, capH);      // right edge
-      };
-      const botY = topH + gap;
-      shaft(x, 0, C.PIPE_W, topH - capH);
-      cap(topH - capH);
-      cap(botY);
-      shaft(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+      bandedPipe(x, topH, gap, { body: '#5aa02c', light: '#7ec850', dark: '#3a6e1a', edge: '#1f3d0e' });
     },
   },
   penguin: {
     label: 'Penguin',
     sky: '#bfe6f2', ground: '#dfeef5',
     cloudFill: 'rgba(255,255,255,0.9)',
-    // Ice pillars: pale cyan body with a bright highlight band, a cool shadow band,
-    // and a frosted cap. Same hard-edged pixel construction as the classic pipe.
+    // Ice pillars: pale cyan body with bands and a frosted cap. Same construction.
     drawPipe(x, topH, gap) {
-      const capH = 28, capW = C.PIPE_W + 12, capX = x - 6;
-      const body = '#7fc6dd', light = '#bce7f2', dark = '#4f9ab5', edge = '#2e6e85';
-      const shaft = (sx, sy, sw, sh) => {
-        ctx.fillStyle = body;  ctx.fillRect(sx, sy, sw, sh);
-        ctx.fillStyle = light; ctx.fillRect(sx + 4, sy, 8, sh);          // highlight band
-        ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
-        ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);              // hard left edge
-        ctx.fillRect(sx + sw - 2, sy, 2, sh);                            // hard right edge
-      };
-      const cap = (cy) => {
-        ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
-        ctx.fillStyle = light; ctx.fillRect(capX + 4, cy + 4, 8, capH - 8);
-        ctx.fillStyle = dark;  ctx.fillRect(capX + capW - 12, cy + 4, 8, capH - 8);
-        ctx.fillStyle = edge;
-        ctx.fillRect(capX, cy, capW, 3);
-        ctx.fillRect(capX, cy + capH - 3, capW, 3);
-        ctx.fillRect(capX, cy, 3, capH);
-        ctx.fillRect(capX + capW - 3, cy, 3, capH);
-      };
-      const botY = topH + gap;
-      shaft(x, 0, C.PIPE_W, topH - capH);
-      cap(topH - capH);
-      cap(botY);
-      shaft(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+      bandedPipe(x, topH, gap, { body: '#7fc6dd', light: '#bce7f2', dark: '#4f9ab5', edge: '#2e6e85' });
     },
   },
   squid: {
@@ -209,51 +208,25 @@ const THEMES: { [key: string]: any } = {
     sky: '#0a3d52', ground: '#06212e',
     cloudFill: 'none',                        // underwater — no clouds at all
     anim: true,                               // 2-frame: tentacles tighten on flap
-    // Kelp / coral columns: deep teal body with a glow band and rounded knobs.
+    // Kelp / coral columns: deep teal body with a glow band. Same construction (capH 26).
     drawPipe(x, topH, gap) {
-      const capH = 26, capW = C.PIPE_W + 12, capX = x - 6;
-      const body = '#1f7a6a', light = '#3fbfa6', dark = '#0f4a40', edge = '#08332c';
-      const shaft = (sx, sy, sw, sh) => {
-        ctx.fillStyle = body;  ctx.fillRect(sx, sy, sw, sh);
-        ctx.fillStyle = light; ctx.fillRect(sx + 4, sy, 8, sh);          // glow band
-        ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
-        ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);
-        ctx.fillRect(sx + sw - 2, sy, 2, sh);
-      };
-      const cap = (cy) => {
-        ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
-        ctx.fillStyle = light; ctx.fillRect(capX + 4, cy + 4, 8, capH - 8);
-        ctx.fillStyle = dark;  ctx.fillRect(capX + capW - 12, cy + 4, 8, capH - 8);
-        ctx.fillStyle = edge;
-        ctx.fillRect(capX, cy, capW, 3);
-        ctx.fillRect(capX, cy + capH - 3, capW, 3);
-        ctx.fillRect(capX, cy, 3, capH);
-        ctx.fillRect(capX + capW - 3, cy, 3, capH);
-      };
-      const botY = topH + gap;
-      shaft(x, 0, C.PIPE_W, topH - capH);
-      cap(topH - capH);
-      cap(botY);
-      shaft(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+      bandedPipe(x, topH, gap, { body: '#1f7a6a', light: '#3fbfa6', dark: '#0f4a40', edge: '#08332c', capH: 26 });
     },
   },
   rocket: {
     label: 'Rocket',
     sky: '#05071a', ground: '#1a1a2e',
     cloudFill: null, // stars instead
+    // Metal station columns with cyan rivets.
     drawPipe(x, topH, gap) {
-      // Metal station columns
-      const capH = 20, capW = C.PIPE_W + 10, capX = x - 5;
-      ctx.fillStyle = '#546e7a';
-      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
-      ctx.fillRect(capX, topH - capH, capW, capH);
-      const botY = topH + gap;
-      ctx.fillRect(capX, botY, capW, capH);
-      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
-      // Rivet highlight
-      ctx.fillStyle = '#00e5ff';
-      for (let y = 10; y < topH - capH; y += 20) ctx.fillRect(x + 4, y, 4, 4);
-      for (let y = botY + capH + 10; y < C.GROUND; y += 20) ctx.fillRect(x + 4, y, 4, 4);
+      framedPipe(x, topH, gap, {
+        bodyColor: '#546e7a', capColor: '#546e7a', capH: 20, capW: C.PIPE_W + 10,
+        decorate({ x, topH, botY, capH }) {
+          ctx.fillStyle = '#00e5ff';
+          for (let y = 10; y < topH - capH; y += 20) ctx.fillRect(x + 4, y, 4, 4);
+          for (let y = botY + capH + 10; y < C.GROUND; y += 20) ctx.fillRect(x + 4, y, 4, 4);
+        },
+      });
     },
   },
   bee: {
@@ -278,23 +251,19 @@ const THEMES: { [key: string]: any } = {
     label: 'Wizard',
     sky: '#1a0533', ground: '#4a4453',
     cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
+    // Stone brick towers with mortar lines and moss-tinted caps.
     drawPipe(x, topH, gap) {
-      // Stone brick towers
-      const capH = 24, capW = C.PIPE_W + 10, capX = x - 5;
-      ctx.fillStyle = '#6d6875';
-      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
-      ctx.fillRect(capX, topH - capH, capW, capH);
-      const botY = topH + gap;
-      ctx.fillRect(capX, botY, capW, capH);
-      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
-      // Brick lines
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
-      for (let y = 8; y < topH - capH; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
-      for (let y = botY + capH + 8; y < C.GROUND; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
-      // Moss cap tint
-      ctx.fillStyle = 'rgba(100,200,80,0.25)';
-      ctx.fillRect(capX, topH - capH, capW, capH);
-      ctx.fillRect(capX, botY, capW, capH);
+      framedPipe(x, topH, gap, {
+        bodyColor: '#6d6875', capColor: '#6d6875', capH: 24, capW: C.PIPE_W + 10,
+        decorate({ x, topH, botY, capX, capW, capH }) {
+          ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+          for (let y = 8; y < topH - capH; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
+          for (let y = botY + capH + 8; y < C.GROUND; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
+          ctx.fillStyle = 'rgba(100,200,80,0.25)';
+          ctx.fillRect(capX, topH - capH, capW, capH);
+          ctx.fillRect(capX, botY, capW, capH);
+        },
+      });
     },
   },
   airplane: {
@@ -338,24 +307,21 @@ const THEMES: { [key: string]: any } = {
     label: 'Robot',
     sky: '#0d1f2d', ground: '#1c2a3a',
     cloudFill: null, // square data-packet clouds
+    // Steel girders with yellow hazard-striped caps.
     drawPipe(x, topH, gap) {
-      // Steel girders
-      const capH = 20, capW = C.PIPE_W + 8, capX = x - 4;
-      ctx.fillStyle = '#37474f';
-      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
-      ctx.fillRect(capX, topH - capH, capW, capH);
-      const botY = topH + gap;
-      ctx.fillRect(capX, botY, capW, capH);
-      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
-      // Yellow warning stripes on caps
-      ctx.fillStyle = '#fdd835';
-      for (let i = 0; i < 4; i++) {
-        ctx.fillRect(capX + i * (capW / 4), topH - capH, capW / 8, capH);
-        ctx.fillRect(capX + i * (capW / 4), botY, capW / 8, capH);
-      }
-      ctx.fillStyle = 'rgba(55,71,79,0.6)';
-      ctx.fillRect(capX, topH - capH, capW, capH);
-      ctx.fillRect(capX, botY, capW, capH);
+      framedPipe(x, topH, gap, {
+        bodyColor: '#37474f', capColor: '#37474f', capH: 20, capW: C.PIPE_W + 8,
+        decorate({ topH, botY, capX, capW, capH }) {
+          ctx.fillStyle = '#fdd835';
+          for (let i = 0; i < 4; i++) {
+            ctx.fillRect(capX + i * (capW / 4), topH - capH, capW / 8, capH);
+            ctx.fillRect(capX + i * (capW / 4), botY, capW / 8, capH);
+          }
+          ctx.fillStyle = 'rgba(55,71,79,0.6)';
+          ctx.fillRect(capX, topH - capH, capW, capH);
+          ctx.fillRect(capX, botY, capW, capH);
+        },
+      });
     },
   },
 };

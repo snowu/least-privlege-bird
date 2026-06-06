@@ -32,6 +32,7 @@ export const C: { [k: string]: number } = {
   SPEED_UP_AMOUNT: 0.5,     // px/frame added each interval
   COUNTDOWN_SEC: 3,         // render-only: seconds counted down before play
   PLAYER_X: 120,
+  FIRST_PIPE_X: 700,        // first pipe spawns mid-screen so it arrives ~4.8s in (vs ~10.7s at full width)
   PLAYER_SIZE: 40,          // collision box
   SPRITE_SCALE: 1.5,        // render-only: sprite drawn bigger than the hitbox
   GROUND: 0,                // y of ground = H - HUD (computed below)
@@ -70,7 +71,7 @@ export interface GameState {
 }
 
 export function createState(seed: number): GameState {
-  return {
+  const s: GameState = {
     player: { y: C.H / 2, vy: 0 },
     pipes: [],
     score: 0,
@@ -80,6 +81,22 @@ export function createState(seed: number): GameState {
     lastPipeTick: null,
     rng: mulberry32(seed),
   };
+  prefillField(s);   // pipes exist from construction so they render during the countdown
+  return s;
+}
+
+// Pre-fill the field so the stream is already on-screen (rendered during countdown and
+// arriving ~6s sooner): pipes at their natural spacing, nearest at FIRST_PIPE_X out to
+// the right edge. Phases lastPipeTick so the first edge spawn keeps the rhythm (no seam).
+// Draws rng once per pipe in order — identical on client + server (determinism intact).
+function prefillField(s: GameState): void {
+  const intervalTicks = currentInterval(s) / TICK_MS;
+  const spacing = s.pipeSpeed * intervalTicks;           // px between pipes at start
+  const xs: number[] = [];
+  for (let x = C.FIRST_PIPE_X; x <= C.W; x += spacing) xs.push(x);
+  for (const x of xs) spawnPipe(s, x);                   // nearest → farthest (left→right)
+  const xr = xs[xs.length - 1];
+  s.lastPipeTick = -Math.round((C.W - xr) / s.pipeSpeed); // virtual: spawned before tick 0
 }
 
 // ── Difficulty ramp ───────────────────────────────────────────────────────────
@@ -94,12 +111,12 @@ function currentInterval(s: GameState): number {
   return Math.max(C.PIPE_INTERVAL_MIN, C.PIPE_INTERVAL_MAX - speedLevel(s) * C.PIPE_INTERVAL_STEP);
 }
 
-function spawnPipe(s: GameState): void {
+function spawnPipe(s: GameState, x: number = C.W): void {
   const gap = currentGap(s);
   const minTop = 60;
   const maxTop = C.GROUND - gap - 60;
   const topH = minTop + s.rng() * (maxTop - minTop); // seeded → reproducible
-  s.pipes.push({ x: C.W, topH, gap, scored: false });
+  s.pipes.push({ x, topH, gap, scored: false });
   s.lastPipeTick = s.tick;
 }
 
@@ -130,12 +147,9 @@ export function step(s: GameState, flapped: boolean): StepResult {
   // INPUT before physics — mirrors event-driven flap landing before stepPhysics.
   if (flapped) s.player.vy = C.FLAP;
 
-  // Initialize spawn/ramp timers + first pipe on the first active tick.
-  if (s.lastSpeedUpTick === null) {
-    s.lastSpeedUpTick = s.tick;
-    s.lastPipeTick = s.tick;
-    spawnPipe(s);
-  }
+  // Start the speed-ramp clock on the first active tick. The pipe field is already
+  // pre-filled at construction (see prefillField), so nothing to spawn here.
+  if (s.lastSpeedUpTick === null) s.lastSpeedUpTick = s.tick;
 
   // Speed ramp (every SPEED_UP_TICKS ticks).
   if (s.tick - s.lastSpeedUpTick >= SPEED_UP_TICKS) {
