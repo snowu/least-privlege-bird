@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- Mantle (rounded body, pointing up) -->
+  <path d="M20 3 q11 0 11 13 q0 6 -11 6 q-11 0 -11 -6 q0 -13 11 -13 z" fill="#c2476e"/>
+  <!-- Highlight -->
+  <ellipse cx="15" cy="11" rx="3" ry="5" fill="#e0698f"/>
+  <!-- Panic eyes -->
+  <circle cx="15" cy="13" r="4" fill="#fff"/>
+  <circle cx="25" cy="13" r="4" fill="#fff"/>
+  <circle cx="16.5" cy="13.5" r="1.8" fill="#1a1a1a"/>
+  <circle cx="23.5" cy="13.5" r="1.8" fill="#1a1a1a"/>
+  <!-- Tentacles relaxed: splayed + dangling -->
+  <g stroke="#c2476e" stroke-width="2.4" fill="none" stroke-linecap="round">
+    <path d="M11 21 q-3 6 -5 11"/>
+    <path d="M15 22 q-1 7 -2 13"/>
+    <path d="M20 22 q0 7 0 14"/>
+    <path d="M25 22 q1 7 2 13"/>
+    <path d="M29 21 q3 6 5 11"/>
+  </g>
+</svg>

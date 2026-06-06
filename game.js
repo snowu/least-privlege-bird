@@ -68,6 +68,7 @@ const AudioFX = (() => {
   const FLAPS = {
     bird:   () => beep(900, 1500, 0.10, 'square', 0.15),               // chirp up
     penguin:() => { beep(300, 240, 0.12, 'sawtooth', 0.16); beep(260, 200, 0.1, 'square', 0.1, 0.04); }, // honk-flail
+    squid:  () => { beep(180, 70, 0.18, 'sine', 0.16); beep(90, 50, 0.12, 'sine', 0.1, 0.05); },         // water-jet blub
     rocket: () => beep(220, 90,  0.16, 'sawtooth', 0.16),              // whoosh down
     bee:    () => { beep(420, 380, 0.12, 'square', 0.12); beep(440, 400, 0.12, 'square', 0.1, 0.01); }, // buzzy
     wizard: () => { beep(700, 1300, 0.09, 'triangle', 0.14); beep(1300, 2000, 0.08, 'triangle', 0.1, 0.06); }, // sparkle
@@ -195,6 +196,39 @@ const THEMES = {
         ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
         ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);              // hard left edge
         ctx.fillRect(sx + sw - 2, sy, 2, sh);                            // hard right edge
+      };
+      const cap = (cy) => {
+        ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
+        ctx.fillStyle = light; ctx.fillRect(capX + 4, cy + 4, 8, capH - 8);
+        ctx.fillStyle = dark;  ctx.fillRect(capX + capW - 12, cy + 4, 8, capH - 8);
+        ctx.fillStyle = edge;
+        ctx.fillRect(capX, cy, capW, 3);
+        ctx.fillRect(capX, cy + capH - 3, capW, 3);
+        ctx.fillRect(capX, cy, 3, capH);
+        ctx.fillRect(capX + capW - 3, cy, 3, capH);
+      };
+      const botY = topH + gap;
+      shaft(x, 0, C.PIPE_W, topH - capH);
+      cap(topH - capH);
+      cap(botY);
+      shaft(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
+    },
+  },
+  squid: {
+    label: 'Squid',
+    sky: '#0a3d52', ground: '#06212e',
+    cloudFill: 'rgba(180,235,255,0.18)',     // faint light shafts instead of clouds
+    anim: true,                               // 2-frame: tentacles tighten on flap
+    // Kelp / coral columns: deep teal body with a glow band and rounded knobs.
+    drawPipe(x, topH, gap) {
+      const capH = 26, capW = C.PIPE_W + 12, capX = x - 6;
+      const body = '#1f7a6a', light = '#3fbfa6', dark = '#0f4a40', edge = '#08332c';
+      const shaft = (sx, sy, sw, sh) => {
+        ctx.fillStyle = body;  ctx.fillRect(sx, sy, sw, sh);
+        ctx.fillStyle = light; ctx.fillRect(sx + 4, sy, 8, sh);          // glow band
+        ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
+        ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);
+        ctx.fillRect(sx + sw - 2, sy, 2, sh);
       };
       const cap = (cy) => {
         ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
@@ -389,6 +423,38 @@ THEMES.penguin.bgLayers = [
   }); } },
 ];
 
+THEMES.squid.bgLayers = [
+  // Deep layer: drifting bubbles of various sizes (rise read comes from size/spacing)
+  { speed: 0.2, draw(o) { tileMotif(o, 320, x => {
+      const bub = (bx, by, r) => {
+        pixelDisc(bx, by, r, 'rgba(150,230,255,0.16)');
+        pixelDisc(bx, by, Math.max(1, r - 3), 'rgba(180,240,255,0.10)'); // hollow ring
+      };
+      bub(x + 40, G() - 220, 9);
+      bub(x + 110, G() - 120, 5);
+      bub(x + 180, G() - 300, 13);
+      bub(x + 250, G() - 180, 4);
+      bub(x + 300, G() - 90, 7);
+  }); } },
+  // Foreground: tall swaying-look algae stalks (static curve via stepped offset)
+  { speed: 0.55, draw(o) { tileMotif(o, 240, x => {
+      const algae = (ax, h, c) => {
+        // stepped stalk that leans alternately — reads like kelp without RNG
+        for (let i = 0, y = G(); y > G() - h; i++, y -= 10) {
+          const sway = (i % 4 < 2 ? 1 : -1) * (i % 2 ? 3 : 0);
+          pxRect(ax + sway, y - 10, 6, 11, c);
+        }
+      };
+      algae(x + 30, 210, '#1f8a5a');
+      algae(x + 70, 150, '#27a06a');
+      algae(x + 150, 240, '#176e48');
+      algae(x + 195, 130, '#27a06a');
+      // a couple of foreground bubbles too
+      pixelDisc(x + 110, G() - 60, 6, 'rgba(180,240,255,0.18)');
+      pixelDisc(x + 215, G() - 100, 4, 'rgba(180,240,255,0.18)');
+  }); } },
+];
+
 THEMES.bee.bgLayers = [
   // Soft green hills
   { speed: 0.18, draw(o) { tileMotif(o, 300, x => { pixelHill(x, 280, 100, '#9ccc65'); pixelHill(x + 150, 220, 70, '#aed581'); }); } },
@@ -471,6 +537,10 @@ THEMES.rocket.bgLayers = [
 function loadSprites() {
   for (const [key, theme] of Object.entries(THEMES)) {
     theme.img = makeImg(`assets/${gfxStyle}/${key}.svg`);
+    // Themes flagged `anim` get a second frame (<key>-2.svg) shown briefly on flap.
+    // Render-only: never read by physics/replay, so determinism is unaffected.
+    // Themes without it just keep using frame 1 (automatic single-frame fallback).
+    theme.img2 = theme.anim ? makeImg(`assets/${gfxStyle}/${key}-2.svg`) : null;
   }
   applyStyle();
 }
@@ -504,13 +574,13 @@ function showScreen(name) {
 const COW_ART = {
   // Minimal cowsay-style line art: the classic `\  ^__^ \ (oo)` two-line tail
   // leading into a small, sparse figure. Sparse on purpose — reads cleanly at 11px.
-  // Bird (secondary) — upright, flippers out, gaping beak.
+  // Bird (secondary) — mid-flap, both wings spread. Most "flappy".
   bird: [
-    '        \\   .--.',
-    '         \\ (o..o)',
-    '           ( >< )',
-    '          _/(  )\\_',
-    '            `\'\'`',
+    '        \\',
+    '         \\  \\(o)/',
+    '          --( ; )--',
+    '             > <',
+    '             ^ ^',
   ].join('\n'),
   // Penguin — the mascot. Famously cannot fly. Deeply relatable.
   penguin: [
@@ -518,6 +588,14 @@ const COW_ART = {
     '         \\ (o>',
     '           //\\',
     '           V_/_',
+  ].join('\n'),
+  // Squid — mantle up, panic eyes, dangling tentacles. Should not be airborne.
+  squid: [
+    '        \\   ___',
+    '         \\ /o o\\',
+    '           \\ - /',
+    '          /|/|\\|\\',
+    '          \' \' \' \'',
   ].join('\n'),
   bee: [
     '        \\   \\|/',
@@ -640,6 +718,10 @@ function mulberry32(a) {
 
 // ─── GAME STATE ───────────────────────────────────────────────────────────────
 let player, pipes, score, animId, currentPlayer, currentBest = null;
+// Wall-clock timestamp of the last flap, for the render-only 2-frame animation.
+// Deliberately NOT tied to the sim tick — purely cosmetic, never feeds replay.
+let lastFlapAt = -1e9;
+const FLAP_FRAME_MS = 180; // how long frame 2 (the "push") shows after a flap
 let pipeSpeed, countdown, countdownStart;
 let tick, acc, lastFrameTime;        // fixed-timestep bookkeeping
 let lastSpeedUpTick, lastPipeTick;   // spawn/ramp timers in ticks (not wall-clock)
@@ -784,10 +866,14 @@ function drawPlayer() {
   // draw-only scale, so replay validation is unaffected. The pixel-art SVGs also
   // carry transparent padding, so the visible body roughly matches the hitbox.
   const s = C.PLAYER_SIZE * C.SPRITE_SCALE;
+  // 2-frame avatars show frame 2 (the "push") for a beat after each flap; others
+  // (img2 == null) always render frame 1. Render-only, so replay is unaffected.
+  const inFlap = (performance.now() - lastFlapAt) < FLAP_FRAME_MS;
+  const sprite = (inFlap && currentTheme.img2) ? currentTheme.img2 : currentTheme.img;
   ctx.save();
   ctx.translate(C.PLAYER_X, player.y);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, player.vy * 0.05)));
-  ctx.drawImage(currentTheme.img, -s / 2, -s / 2, s, s);
+  ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
   ctx.restore();
 }
 
@@ -968,6 +1054,7 @@ async function endGame() {
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 function flap() {
   player.vy = C.FLAP;
+  lastFlapAt = performance.now();      // trigger the render-only flap frame
   if (flapTicks) flapTicks.push(tick); // log input tick for server-side replay
   const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   AudioFX.flap(key);
