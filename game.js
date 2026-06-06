@@ -1,6 +1,6 @@
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const C = {
-  W: 910, H: 730,           // canvas dimensions
+  W: 1400, H: 830,          // canvas dimensions (W & H mirrored in sim.ts — pipes spawn at x=W)
   HUD: 48,                  // bottom bar height
   GRAVITY: 0.5,
   FLAP: -9,

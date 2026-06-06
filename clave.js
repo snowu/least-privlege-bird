@@ -458,8 +458,38 @@ const Clave = (() => {
   }
 
   // ── MFA STEP ────────────────────────────────────────────────────────────────
+  // The challenge is pure theater — input is never validated (always fail-then-
+  // succeed). Rotate the prompt + the zero-trust "this is normal" excuse so the
+  // step isn't identical every login.
+  const MFA_CHALLENGES = [
+    'Please enter the first 10 digits of π.',
+    'Please enter your grandmother\'s maiden ARN.',
+    'Please re-type the CAPTCHA you solved 4 seconds ago, from memory.',
+    'Please enter the 12-digit account ID you were never given.',
+    'Please provide the SHA-256 of your own determination.',
+    'Please enter the current epoch timestamp. Be quick.',
+    'Please type your security questions\' answers, in reverse.',
+    'Please enter the last 4 digits of a credit card we did not specify.',
+    'Please transcribe the contents of your clipboard. We trust you.',
+    'Please enter the airspeed velocity of an unladen S3 bucket.',
+  ];
+  const MFA_EXCUSES = [
+    'ℹ️ Esto es normal. Cl@ve realiza una doble verificación de confianza cero (zero-trust). Vuelva a introducir el código.',
+    'ℹ️ Expected behaviour. The first attempt warms the HSM. Please try once more.',
+    'ℹ️ This is fine. Our zero-trust model distrusts even correct answers once. Retry.',
+    'ℹ️ Normal. The token was valid but arrived during a leap second. Re-enter it.',
+    'ℹ️ As designed. Compliance requires that you fail at least once. You\'re doing great.',
+  ];
+  function _pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
   function showMFA() {
     showClaveStep('clave-step-mfa');
+    // Fresh challenge + excuse each time (display only — never validated).
+    const promptEl = document.getElementById('mfa-prompt');
+    if (promptEl) {
+      promptEl.innerHTML = 'Security policy requires cryptographic proof of identity.<br/>' + _pick(MFA_CHALLENGES);
+    }
+    const excuse = _pick(MFA_EXCUSES);
     let mfaAttempts = 0;
     const input  = document.getElementById('mfa-input');
     const errEl  = document.getElementById('mfa-error');
@@ -512,7 +542,7 @@ const Clave = (() => {
           // First attempt: always fail
           input.classList.add('shake');
           errEl.textContent = '❌ Token mismatch. Security policy requires re-verification.';
-          hint.textContent  = 'ℹ️ Esto es normal. Cl@ve realiza una doble verificación de confianza cero (zero-trust). Vuelva a introducir el código.';
+          hint.textContent  = excuse;
           hint.classList.remove('hidden');
           setTimeout(() => input.classList.remove('shake'), 500);
           input.value = '';

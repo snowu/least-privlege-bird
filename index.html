@@ -72,7 +72,9 @@
     }
     #clave-screen .clave-logo span { color: #fff; }
     #clave-screen h2 { font-family: var(--font-display); font-size: 0.85rem; color: #c8d6f8; line-height: 1.6; text-align: center; }
-    #clave-screen p.sub  { font-family: var(--font-display); font-size: 0.6rem; color: #6b7a99; text-align: center; line-height: 1.8; }
+    #clave-screen p.sub  { font-family: var(--font-display); font-size: 0.6rem; color: #aebbd9; text-align: center; line-height: 1.8; }
+    /* MFA challenge prompt: bold + brightest so the (absurd) question is readable. */
+    #clave-screen p.sub#mfa-prompt { color: #eaf1ff; font-weight: 700; line-height: 2; }
     #clave-screen p.info { font-family: var(--font-display); font-size: 0.62rem; color: #a0b0cc; text-align: center; line-height: 1.8; }
     #clave-screen .error-msg { font-family: var(--font-display); color: #ff6b6b; font-size: 0.6rem; text-align: center; line-height: 1.7; min-height: 1.2em; }
     #clave-screen .success-msg { font-family: var(--font-display); color: #51cf66; font-size: 0.6rem; text-align: center; line-height: 1.7; }
@@ -128,7 +130,7 @@
       box-shadow: 0 8px 32px rgba(0,0,0,.7);
     }
     .captcha-panel h2 { font-family: var(--font-display); font-size: 0.72rem; color: #c8d6f8; text-align: center; line-height: 1.7; }
-    .captcha-panel p.sub { font-family: var(--font-display); font-size: 0.62rem; color: #6b7a99; text-align: center; line-height: 1.8; }
+    .captcha-panel p.sub { font-family: var(--font-display); font-size: 0.62rem; color: #cdd8f0; text-align: center; line-height: 1.8; }
     .captcha-grid {
       display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%;
     }
@@ -146,10 +148,11 @@
 
     .hidden { display: none !important; }
 
-    /* Fortune cow — fixed bottom-right. ALWAYS true monospace (never the pixel
-       font) so the ASCII art + speech balloon stay column-aligned. */
+    /* Fortune cow — anchored to the game window (overlay) bottom-right corner.
+       ALWAYS true monospace (never the pixel font) so the ASCII art + speech
+       balloon stay column-aligned. */
     #fortune-cow {
-      position: fixed; right: 14px; bottom: 12px; z-index: 40;
+      position: absolute; right: 14px; bottom: 12px; z-index: 40;
       margin: 0; padding: 10px 14px; pointer-events: none;
       font-family: 'Courier New', Courier, monospace;
       font-size: 11px; line-height: 1.15; white-space: pre;
@@ -214,6 +217,13 @@
 
   <div id="overlay">
 
+    <!-- ══ FORTUNE COW — anchored to the game window's bottom-right corner ══
+         Lives inside #overlay (which is sized to the canvas), so it pins to the
+         canvas corner, not the viewport. Populated by game.js from the `fortune`
+         edge function, wrapped cowsay-style with the selected avatar's ASCII.
+         Always true monospace so the art stays aligned in either art style. -->
+    <pre id="fortune-cow" class="hidden" aria-hidden="true"></pre>
+
     <!-- ══ MENU ══ -->
     <div id="menu-screen" style="background:rgba(0,0,0,0.55);border-radius:16px;padding:32px 40px;display:flex;flex-direction:column;align-items:center;gap:14px;min-width:300px;">
       <h1 style="display:flex;align-items:center;gap:12px;justify-content:center;"><img id="title-logo" src="assets/pixel/penguin.svg" alt="" style="width:60px;height:60px;" /> Least Privilege Bird</h1>
@@ -266,8 +276,8 @@
       <!-- Step 4: MFA -->
       <div id="clave-step-mfa" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
         <h2>🔐 Multi-Factor Authentication</h2>
-        <p class="sub">Security policy requires cryptographic proof of identity.<br/>Please enter the first 10 digits of π.</p>
-        <input id="mfa-input" type="text" maxlength="10" placeholder="3141592653" autocomplete="off" />
+        <p class="sub" id="mfa-prompt">Security policy requires cryptographic proof of identity.<br/>Please enter the first 10 digits of π.</p>
+        <input id="mfa-input" type="text" maxlength="32" autocomplete="off" />
         <label class="clave-check"><input type="checkbox" id="remember-device" style="width:auto;" /> Remember this device for 8 hours</label>
         <p class="error-msg" id="mfa-error"></p>
         <div id="btn-mfa-verify-wrap" style="position:relative;height:52px;display:flex;align-items:center;justify-content:center;">
@@ -366,12 +376,6 @@
       </div>
     </div>
   </div>
-
-  <!-- ══ FORTUNE COW (avatar says a real Unix fortune; bottom-right corner) ══
-       Populated by game.js from the `fortune` edge function, wrapped cowsay-style
-       with the selected avatar's ASCII. Always true monospace so the art stays
-       aligned regardless of pixel/round style. -->
-  <pre id="fortune-cow" class="hidden" aria-hidden="true"></pre>
 
   <!-- ══ TOKEN MODAL (outside overlay, full-screen) ══ -->
   <div id="token-modal" class="hidden" style="

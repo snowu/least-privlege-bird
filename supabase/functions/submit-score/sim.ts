@@ -4,7 +4,7 @@
 
 // Constants mirror game.js `C` (GROUND = H - HUD).
 export const C = {
-  W: 910, H: 730, HUD: 48,
+  W: 1400, H: 830, HUD: 48,
   GRAVITY: 0.5, FLAP: -9,
   PIPE_W: 64,
   PIPE_GAP_MIN: 120, PIPE_GAP_MAX: 260, PIPE_GAP_STEP: 20,
@@ -12,7 +12,7 @@ export const C = {
   PIPE_INTERVAL_MAX: 2200, PIPE_INTERVAL_MIN: 800, PIPE_INTERVAL_STEP: 300,
   SPEED_UP_INTERVAL: 5000, SPEED_UP_AMOUNT: 0.5,
   PLAYER_X: 120, PLAYER_SIZE: 40,
-  GROUND: 730 - 48,
+  GROUND: 830 - 48,
 };
 
 const TICK_MS = 1000 / 60;
