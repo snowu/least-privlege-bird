@@ -48,6 +48,7 @@ heuristics) is out of scope for this project.
 | `config.toml` | Project ref + `submit-score` declared with `verify_jwt = false` (the game calls it with the publishable anon key; the function does its own auth). |
 | `functions/submit-score/index.ts` | HTTP handler: validate → replay → token verify → write. |
 | `functions/submit-score/sim.ts` | Authoritative physics. **Keep in lockstep with `game.js`** — any change to constants/physics/PRNG must be mirrored here or honest runs will be rejected. |
+| `functions/recover-account/index.ts` | Token-only recovery: hashes a raw token (service role) and returns its account name. Lets `token_hash` stay hidden from anon. |
 
 ## Deploy
 
@@ -55,10 +56,27 @@ heuristics) is out of scope for this project.
 npx supabase login
 npx supabase link --project-ref yozllinwvvprtguinflm
 npx supabase functions deploy submit-score
+npx supabase functions deploy recover-account
 ```
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected into deployed
 functions — no manual secret setup needed.
+
+### Hide `token_hash` from anon (least privilege)
+
+The leaderboard read only needs `name` and `score`. Token recovery goes through the
+`recover-account` function (service role), so `anon` never needs to read `token_hash`.
+Lock the column down — revoke the table-wide SELECT and re-grant only what the
+leaderboard reads:
+
+```sql
+revoke select on public.scores from anon;
+grant  select (name, score) on public.scores to anon;
+```
+
+After this, `GET /scores?select=name,token_hash` returns a column-permission error for
+anon, while `select=name,score` still works. The recover function is unaffected (it uses
+the service role).
 
 ### After deploying: drop the legacy RPC
 

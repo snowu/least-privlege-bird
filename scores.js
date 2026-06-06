@@ -77,16 +77,24 @@ async function fetchBest(name) {
 }
 
 // Token-only recovery: given a raw token, find which account it belongs to.
-// Hashes the token client-side and looks the row up by token_hash (anon SELECT).
-// The hash is a SHA-256 of a 192-bit random token, so querying it leaks nothing.
+// Goes through the recover-account edge function (service role) rather than a direct
+// SELECT — token_hash is NOT exposed to anon, so hashes never leave the server.
 // Returns the name, or null if the token matches no account / DB is off.
 async function resolveToken(token) {
   if (!_sb) return null;
   try {
-    const h = await sha256hex(token);
-    const res = await _sbFetch(`/scores?token_hash=eq.${h}&select=name`);
-    const rows = await res.json();
-    return rows.length ? rows[0].name : null;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/recover-account`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) return null;
+    const { name } = await res.json();
+    return name || null;
   } catch (e) {
     console.warn('Supabase resolveToken failed', e);
     return null;

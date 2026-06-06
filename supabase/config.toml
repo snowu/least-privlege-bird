@@ -6,3 +6,8 @@ project_id = "yozllinwvvprtguinflm"
 # No user JWT — the game calls this with the publishable anon key. The function does
 # its own auth (token-hash verify) and writes with the service role internally.
 verify_jwt = false
+
+[functions.recover-account]
+# Token-only recovery. Called with the publishable anon key; resolves a raw token to
+# its account name using the service role, so token_hash stays hidden from anon SELECT.
+verify_jwt = false
