@@ -302,7 +302,7 @@
         <h2>Access Granted</h2>
         <p class="success-msg">Welcome, <strong id="granted-user"></strong></p>
         <p class="sub">
-          Account: <code>139478927430</code> · Role: <code>FlappyKiroPlayer-Prod</code><br/>
+          Account: <code>139478927430</code> · Role: <code>LeastPrivilegeBirdPlayer-Prod</code><br/>
           Authorized scopes: <code>game:flap:write</code> · <code>score:submit:put</code><br/>
           Session expires in 8 hours (or at first death)
         </p>
@@ -328,8 +328,8 @@
       <h2 style="color:#c8d6f8">Submitting score to compliance audit log...</h2>
       <div class="clave-spinner"></div>
       <div id="submit-log" style="width:100%;background:#0d1117;border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:0.5rem;color:#51cf66;height:130px;overflow:hidden;border:1px solid #2e3a55;line-height:2;" data-mono></div>
-      <p class="sub" style="font-size:0.5rem;word-break:break-all;line-height:2;">PUT s3://flappy-kiro-audit-logs-prod/scores/<span id="submit-user-path"></span>.json<br/>
-      Encrypting with KMS key arn:aws:kms:us-east-1:139478927430:key/mrk-flappy</p>
+      <p class="sub" style="font-size:0.5rem;word-break:break-all;line-height:2;">PUT s3://least-privilege-bird-audit-logs-prod/scores/<span id="submit-user-path"></span>.json<br/>
+      Encrypting with KMS key arn:aws:kms:us-east-1:139478927430:key/mrk-lpb</p>
     </div>
 
     <!-- ══ GAME OVER ══ -->
