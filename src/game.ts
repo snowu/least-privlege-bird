@@ -573,24 +573,48 @@ THEMES.squid.bgLayers = [
 THEMES.bee.bgLayers = [
   // Soft green hills
   { speed: 0.18, draw(o) { tileMotif(o, 300, x => { pixelHill(x, 280, 100, '#9ccc65'); pixelHill(x + 150, 220, 70, '#aed581'); }); } },
-  // Flower stalks + small trees up front — blooms sway, a bee bobs between them
+  // Flower stalks + small trees up front — blooms sway in the breeze (tiled; a
+  // repeating meadow reads naturally, unlike repeating insects).
   { speed: 0.55, draw(o) { tileMotif(o, 170, x => {
       const t = nowSec();
       pixelTree(x + 30, 3, '#558b2f', '#6d4c41');
-      // a swaying flower: bloom leans on the stem top
       const sway = Math.sin(t * 1.8 + x * 0.01) * 4;
       pxRect(x + 110, G() - 26, 2, 26, '#33691e');               // stem
       pxRect(x + 106 + sway, G() - 32, 10, 8, '#ec407a');        // bloom (sways)
       pxRect(x + 109 + sway, G() - 30, 4, 4, '#ffeb3b');         // center
-      // a little bee bobbing in a figure-eight near the flower
-      const bx = x + 60 + Math.sin(t * 1.2) * 22;
-      const by = G() - 70 + Math.sin(t * 2.4) * 12;
-      pixelDisc(bx, by, 3, '#ffca28');                           // body
-      ctx.fillStyle = '#3a2a10';
-      ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2, 2, 4); // stripe
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      pixelDisc(bx - 3, by - 3, 1.5, 'rgba(255,255,255,0.7)');    // wing glint
   }); } },
+  // A few free-roaming bees on distinct wandering paths across the whole screen —
+  // NOT tiled, so they never read as synchronized clones. Each bee meanders via two
+  // out-of-phase sines (Lissajous), drifts steadily, wraps, and faces its heading.
+  { speed: 0, draw() {
+      const t = nowSec();
+      const drawBee = (i, driftSpd, yBand, yAmp, wx, wy, sx, sy) => {
+        // position: steady horizontal drift + 2D Lissajous wander
+        const px = (((t * driftSpd + i * 311) % (C.W + 80)) - 40);
+        const py = yBand + Math.sin(t * wy + i) * yAmp + Math.sin(t * sy + i * 2) * 6;
+        // heading from the velocity (derivative-ish: sample a hair ahead)
+        const px2 = px + driftSpd * 0.05 + Math.cos(t * wx + i) * 0.5;
+        const py2 = (yBand + Math.sin((t + 0.05) * wy + i) * yAmp + Math.sin((t + 0.05) * sy + i * 2) * 6);
+        const ang = Math.atan2(py2 - py, px2 - px);
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(ang * 0.4);                                   // subtle banking, not full
+        // flutter wings (alternate up/down quickly)
+        const wf = Math.sin(t * 30 + i) > 0 ? -2 : -3;
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        pixelDisc(-1, wf, 2, 'rgba(255,255,255,0.75)');          // wing
+        pixelDisc(2, wf, 2, 'rgba(255,255,255,0.75)');           // wing
+        pixelDisc(0, 0, 3.2, '#ffca28');                         // body
+        ctx.fillStyle = '#3a2a10';
+        ctx.fillRect(-2, -1, 1, 3);                              // stripe
+        ctx.fillRect(1, -1, 1, 3);                               // stripe
+        ctx.restore();
+      };
+      // (index, driftSpeed, baseY, vertAmp, wanderX, wanderY, swayX, swayY)
+      drawBee(0, 38, G() - 110, 40, 1.1, 0.8, 2.3, 1.7);
+      drawBee(1, -27, G() - 180, 55, 0.9, 1.2, 1.9, 2.5);
+      drawBee(2, 31, G() - 240, 35, 1.4, 0.6, 2.7, 1.3);
+  } },
 ];
 
 // Lightning strength for the wizard theme: a sharp flash that decays, firing on a
