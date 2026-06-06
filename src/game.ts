@@ -785,8 +785,8 @@ THEMES.airplane.bgLayers = [
           const blink = 0.35 + 0.65 * (Math.sin(t * 3.2 + seed) > 0 ? 1 : 0.2);
           pixelDisc(mx, topY - mastH - 2, 3.5, `rgba(255,40,40,${blink})`);
         }
-        // Occasional backlit ad board on the slab face (~40% of slabs).
-        if (h > 110 && hash01(seed * 19) > 0.6) {
+        // Backlit ad board on the slab face — most tall-enough slabs carry one.
+        if (h > 100 && hash01(seed * 19) > 0.25) {
           const bw = Math.min(w - 16, 60 + Math.floor(hash01(seed * 23) * 30));
           const bh = 30 + Math.floor(hash01(seed * 29) * 12);
           const warm = hash01(seed * 31) > 0.5;
@@ -971,7 +971,7 @@ THEMES.robot.bgLayers = [
   // MAIN neon circuit-city skyline — towers with antenna spires, setback crowns and a
   // grid of pulsing window lights. Pixel mode = square lights blinking; round mode
   // = soft glowing dots. Each window has its own phase so the grid shimmers.
-  { speed: 0.16, draw(o) { tileMotif(o, 320, x => {
+  { speed: 0.16, draw(o) { tileMotif(o, 320, (x, tile) => {
       const t = nowSec();
       const tower = (sx, w, h, edge, seed) => {
         const topY = G() - h, round = isRound();
@@ -1018,9 +1018,15 @@ THEMES.robot.bgLayers = [
       tower(x, 80, 200, '#00e5ff', 1);
       tower(x + 110, 60, 150, '#76ff03', 2);
       tower(x + 200, 90, 240, '#00e5ff', 3);
-      // Neon ad boards bolted to the tower faces — readable cloud-corp slogans.
-      adBillboard(x + 8, G() - 150, 84, 40, '255,40,200', AD_SLOGANS, 0);   // first tower
-      adBillboard(x + 206, G() - 205, 90, 44, '0,229,255', AD_SLOGANS, 2);  // tall tower
+      // One neon ad board per tile, centered on a tower face (width clamped inside the
+      // tower so it never clips the edges). Seed off the tile index so each tile cycles
+      // a different slogan, desynced from its neighbours. Alternate which tower hosts it.
+      const onTall = tile % 2 === 0;
+      const bw = onTall ? 74 : 64, bh = 40;
+      const tsx = onTall ? x + 200 : x, tw = onTall ? 90 : 80;          // host tower face
+      const bsx = tsx + Math.round((tw - bw) / 2);                      // centered on tower
+      const by = onTall ? G() - 205 : G() - 150;
+      adBillboard(bsx, by, bw, bh, onTall ? '0,229,255' : '255,40,200', AD_SLOGANS, tile);
   }); } },
   // Neon perspective grid on the ground bar + a periodic scanline sweep over all.
   { speed: 0, draw() {
@@ -1553,13 +1559,26 @@ function adBillboard(sx, sy, w, h, col, slogans, seed) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.lineWidth = 1;
 }
 
-// Slogans for the building ad boards — same cloud-corp IAM satire as the rest of
-// the game. Kept short so they wrap cleanly on a small panel.
+// Slogans for the building ad boards — dystopian cloud-corp / IAM satire, the same
+// absurdist tone as the rest of the game. A big, varied pool so neighbouring boards
+// and successive cycles rarely repeat. Kept short so they wrap cleanly on a panel.
 const AD_SLOGANS = [
-  'ACCESS\nDENIED', '99.99%\nUPTIME*', 'SCALE\nINFINITELY', 'ROOT NOT\nINCLUDED',
-  'EGRESS\nFEES APPLY', 'ZERO\nTRUST', 'PER-MS\nBILLING', 'POLICY:\nDENY',
-  'SUDO AS A\nSERVICE', 'NOW WITH\nMORE MFA', 'TERMS\nAPPLY*', 'RECONFIRM\nIDENTITY',
-].map(s => s.replace(/\n/g, ' '));
+  // access / auth bureaucracy
+  'ACCESS DENIED', 'POLICY: DENY', 'RECONFIRM IDENTITY', 'ZERO TRUST',
+  'NOW WITH MORE MFA', 'SUDO AS A SERVICE', 'ROOT NOT INCLUDED',
+  'PROVE YOU ARE REAL', 'CAPTCHA REQUIRED', 'SESSION EXPIRED', 'PLEASE RE-AUTH',
+  'PERMISSION PENDING', 'AWAIT APPROVAL', 'TICKET #44291 OPEN',
+  // billing dystopia
+  '99.99% UPTIME*', 'EGRESS FEES APPLY', 'PER-MS BILLING', 'TERMS APPLY*',
+  'BILLED PER BREATH', 'FREE* TIER', 'SURGE PRICING ON', 'YOUR BILL: PENDING',
+  'INVOICE INBOUND', 'COSTS MAY VARY', 'PRICED PER REGRET',
+  // scale / corporate nonsense
+  'SCALE INFINITELY', 'SYNERGIZE NOW', 'DISRUPT YOURSELF', 'TRUST THE CLOUD',
+  'OBEY THE SLA', 'COMPLIANCE = JOY', 'WE OWN YOUR LOGS', 'DATA IS LOVE',
+  'SMILE: AUDITED', 'PRODUCTIVITY ↑', 'CONSUME COMPUTE', 'EMBRACE LATENCY',
+  'THE QUEUE IS LIFE', 'RESISTANCE = 503', 'UPGRADE OR PERISH',
+  'YOUR REGION: GONE', 'BLAME THE INTERN', 'IT WORKS ON PROD',
+];
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
