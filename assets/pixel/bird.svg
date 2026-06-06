@@ -1,0 +1,48 @@
+<!-- viewBox = squared content bbox so the body fills the same footprint as every
+     other model → the fixed circular hitbox stays visually fair. -->
+<!-- "Derpy panic bird": cross-eyed, gaping beak, a single alarmed feather tuft.
+     Clearly unqualified to hold any IAM role. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 0 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- alarmed feather tuft (sticking up) -->
+  <g fill="#3b88c3">
+    <rect x="7" y="0" width="1" height="2"/>
+    <rect x="8" y="1" width="1" height="1"/>
+  </g>
+  <!-- body -->
+  <g fill="#55acee">
+    <rect x="5" y="3" width="6" height="1"/>
+    <rect x="4" y="4" width="8" height="1"/>
+    <rect x="3" y="5" width="10" height="1"/>
+    <rect x="3" y="6" width="10" height="1"/>
+    <rect x="3" y="7" width="10" height="1"/>
+    <rect x="3" y="8" width="10" height="1"/>
+    <rect x="4" y="9" width="8" height="1"/>
+    <rect x="5" y="10" width="6" height="1"/>
+  </g>
+  <!-- belly -->
+  <g fill="#cce8fb">
+    <rect x="5" y="8" width="5" height="1"/>
+    <rect x="6" y="9" width="4" height="1"/>
+  </g>
+  <!-- droopy wing (mid-flail) -->
+  <g fill="#3b88c3">
+    <rect x="3" y="7" width="4" height="1"/>
+    <rect x="3" y="8" width="5" height="1"/>
+    <rect x="4" y="9" width="3" height="1"/>
+  </g>
+  <!-- cross-eyes: two wide whites, pupils pulled toward the nose -->
+  <rect x="6" y="4" width="2" height="3" fill="#fff"/>
+  <rect x="9" y="4" width="2" height="3" fill="#fff"/>
+  <rect x="7" y="5" width="1" height="1" fill="#1a1a1a"/>  <!-- right-eye pupil, inward -->
+  <rect x="9" y="5" width="1" height="1" fill="#1a1a1a"/>  <!-- left-eye pupil, inward -->
+  <!-- gaping beak (open, panicked) -->
+  <rect x="12" y="5" width="3" height="1" fill="#f5a623"/>
+  <rect x="13" y="6" width="2" height="1" fill="#e8890c"/>  <!-- open gap -->
+  <rect x="12" y="7" width="3" height="1" fill="#f5a623"/>
+  <rect x="13" y="8" width="2" height="1" fill="#e8890c"/>
+  <!-- tail -->
+  <g fill="#3b88c3">
+    <rect x="1" y="6" width="2" height="1"/>
+    <rect x="1" y="7" width="2" height="1"/>
+  </g>
+</svg>

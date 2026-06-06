@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🐦 Least Privilege Bird
+<img src="assets/logo.svg" alt="Least Privilege Bird" width="120" height="120" />
+
+# Least Privilege Bird
 
 ![Permissions](https://img.shields.io/badge/permissions-insufficient-red)
 ![Auth](https://img.shields.io/badge/auth-7%20factors-blueviolet)

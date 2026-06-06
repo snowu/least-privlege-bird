@@ -1,0 +1,53 @@
+<!-- Logo: the "derpy panic bird" in the 🐦 perch pose — facing LEFT, short beak on
+     the left, but cross-eyed with a gaping beak and an alarmed feather tuft.
+     Used beside the title + in the README. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="64" height="64" shape-rendering="crispEdges">
+  <!-- alarmed tuft -->
+  <g fill="#3b88c3">
+    <rect x="7" y="0" width="1" height="2"/>
+    <rect x="6" y="1" width="1" height="1"/>
+  </g>
+  <!-- tail (up-right) -->
+  <g fill="#3b88c3">
+    <rect x="12" y="3" width="2" height="1"/>
+    <rect x="11" y="4" width="3" height="1"/>
+    <rect x="11" y="5" width="2" height="1"/>
+  </g>
+  <!-- body -->
+  <g fill="#55acee">
+    <rect x="5" y="3" width="5" height="1"/>
+    <rect x="4" y="4" width="7" height="1"/>
+    <rect x="3" y="5" width="9" height="1"/>
+    <rect x="3" y="6" width="9" height="1"/>
+    <rect x="3" y="7" width="9" height="1"/>
+    <rect x="4" y="8" width="7" height="1"/>
+    <rect x="5" y="9" width="5" height="1"/>
+  </g>
+  <!-- belly highlight -->
+  <g fill="#cce8fb">
+    <rect x="5" y="7" width="4" height="1"/>
+    <rect x="5" y="8" width="4" height="1"/>
+  </g>
+  <!-- folded wing -->
+  <g fill="#3b88c3">
+    <rect x="7" y="5" width="4" height="1"/>
+    <rect x="6" y="6" width="5" height="1"/>
+    <rect x="7" y="7" width="3" height="1"/>
+  </g>
+  <!-- cross-eyes (head, left side) -->
+  <rect x="3" y="3" width="2" height="3" fill="#fff"/>
+  <rect x="6" y="3" width="2" height="3" fill="#fff"/>
+  <rect x="4" y="4" width="1" height="1" fill="#1a1a1a"/>  <!-- pulled inward -->
+  <rect x="6" y="4" width="1" height="1" fill="#1a1a1a"/>  <!-- pulled inward -->
+  <!-- gaping beak, pointing left -->
+  <rect x="0" y="4" width="3" height="1" fill="#f5a623"/>
+  <rect x="0" y="5" width="2" height="1" fill="#e8890c"/>  <!-- open gap -->
+  <rect x="0" y="6" width="3" height="1" fill="#f5a623"/>
+  <!-- legs/feet -->
+  <g fill="#e8890c">
+    <rect x="6" y="10" width="1" height="2"/>
+    <rect x="8" y="10" width="1" height="2"/>
+    <rect x="5" y="12" width="2" height="1"/>
+    <rect x="8" y="12" width="2" height="1"/>
+  </g>
+</svg>

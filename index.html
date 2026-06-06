@@ -3,8 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <title>Least Privilege Bird</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Style vars — populated by applyStyle() in game.js from the STYLE table, keyed
+       by the active art style (pixel | round). Defaults here are the pixel set so
+       first paint (before JS runs) is correct. */
+    :root {
+      --font-display: 'Press Start 2P', monospace;
+      --font-body: 'Press Start 2P', monospace;
+      --font-mono: 'Press Start 2P', monospace;
+      --radius: 4px;
+      --text-shadow: 3px 3px 0 #000;
+      --letter-spacing: 0px;
+    }
     body { background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
     canvas { display: block; image-rendering: pixelated; }
 
@@ -15,16 +29,17 @@
       color: #fff;
       font-family: 'Segoe UI', sans-serif;
     }
-    #overlay h1 { font-size: 2.4rem; text-shadow: 2px 2px 6px #000; }
+    #overlay h1 { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.5; text-shadow: var(--text-shadow); letter-spacing: var(--letter-spacing); }
     #overlay input, #overlay select {
-      padding: 8px 14px; border-radius: 8px; border: none;
-      font-size: 1rem; text-align: center; width: 220px;
+      font-family: var(--font-body); padding: 10px 12px; border-radius: var(--radius); border: none;
+      font-size: 0.62rem; line-height: 1.5; text-align: center; width: 220px; color: #1a1a1a;
     }
     #overlay button {
-      padding: 10px 28px; border-radius: 10px; border: none;
-      background: #4caf50; color: #fff; font-size: 1rem; cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,.4);
+      font-family: var(--font-display); padding: 12px 20px; border-radius: var(--radius); border: none;
+      background: #4caf50; color: #fff; font-size: 0.7rem; line-height: 1.4; cursor: pointer;
+      box-shadow: 0 4px 0 rgba(0,0,0,.4); white-space: nowrap;
     }
+    #overlay h2, #scores-panel h2 { font-family: var(--font-display); font-size: 0.9rem; line-height: 1.6; }
     #overlay button:hover { background: #388e3c; }
     #overlay button.secondary { background: #1976d2; }
     #overlay button.secondary:hover { background: #0d47a1; }
@@ -56,11 +71,12 @@
       width: 100%; text-align: center; padding-bottom: 10px;
     }
     #clave-screen .clave-logo span { color: #fff; }
-    #clave-screen h2 { font-size: 1.15rem; color: #c8d6f8; font-weight: 600; }
-    #clave-screen p.sub  { font-size: 0.8rem; color: #6b7a99; text-align: center; line-height: 1.5; }
-    #clave-screen p.info { font-size: 0.85rem; color: #a0b0cc; text-align: center; }
-    #clave-screen .error-msg { color: #ff6b6b; font-size: 0.85rem; text-align: center; min-height: 1.2em; }
-    #clave-screen .success-msg { color: #51cf66; font-size: 0.85rem; text-align: center; }
+    #clave-screen h2 { font-family: var(--font-display); font-size: 0.85rem; color: #c8d6f8; line-height: 1.6; text-align: center; }
+    #clave-screen p.sub  { font-family: var(--font-display); font-size: 0.6rem; color: #6b7a99; text-align: center; line-height: 1.8; }
+    #clave-screen p.info { font-family: var(--font-display); font-size: 0.62rem; color: #a0b0cc; text-align: center; line-height: 1.8; }
+    #clave-screen .error-msg { font-family: var(--font-display); color: #ff6b6b; font-size: 0.6rem; text-align: center; line-height: 1.7; min-height: 1.2em; }
+    #clave-screen .success-msg { font-family: var(--font-display); color: #51cf66; font-size: 0.6rem; text-align: center; line-height: 1.7; }
+    #clave-screen .clave-logo { font-family: var(--font-display); }
 
     /* progress bar */
     .clave-bar-wrap {
@@ -92,12 +108,12 @@
       40%,80%  { transform: translateX(6px); }
     }
 
-    /* entitlements log */
+    /* entitlements log — pixel font, smaller + taller lines so it stays legible */
     #entitlements-log {
       width: 100%; background: #0d1117; border-radius: 8px;
-      padding: 10px 14px; font-family: monospace; font-size: 0.72rem;
-      color: #51cf66; height: 110px; overflow: hidden;
-      border: 1px solid #2e3a55; line-height: 1.6;
+      padding: 10px 14px; font-family: var(--font-mono); font-size: 0.5rem;
+      color: #51cf66; height: 130px; overflow: hidden;
+      border: 1px solid #2e3a55; line-height: 2;
     }
 
     /* remember checkbox */
@@ -111,8 +127,8 @@
       display: flex; flex-direction: column; align-items: center; gap: 12px;
       box-shadow: 0 8px 32px rgba(0,0,0,.7);
     }
-    .captcha-panel h2 { font-size: 1rem; color: #c8d6f8; text-align: center; }
-    .captcha-panel p.sub { font-size: 0.78rem; color: #6b7a99; text-align: center; }
+    .captcha-panel h2 { font-family: var(--font-display); font-size: 0.72rem; color: #c8d6f8; text-align: center; line-height: 1.7; }
+    .captcha-panel p.sub { font-family: var(--font-display); font-size: 0.62rem; color: #6b7a99; text-align: center; line-height: 1.8; }
     .captcha-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;
     }
@@ -125,10 +141,47 @@
     .captcha-tile:hover { border-color: #4a6a99; }
     .captcha-tile.selected { border-color: #7ca4f4; background: #1c2a4a; }
     .captcha-tile .tile-emoji { font-size: 1.6rem; flex-shrink: 0; }
-    .captcha-tile .tile-label { font-size: 0.78rem; color: #c8d6f8; line-height: 1.3; }
-    .captcha-error { color: #ff6b6b; font-size: 0.82rem; min-height: 1.2em; text-align: center; }
+    .captcha-tile .tile-label { font-family: var(--font-display); font-size: 0.56rem; color: #c8d6f8; line-height: 1.7; }
+    .captcha-error { font-family: var(--font-display); color: #ff6b6b; font-size: 0.6rem; line-height: 1.6; min-height: 1.2em; text-align: center; }
 
     .hidden { display: none !important; }
+
+    /* ── GAME OVER (retro arcade + IAM satire) ── */
+    #gameover-panel {
+      position: relative; overflow: hidden;
+      background: #12060a; border: 3px solid #d13212;
+      border-radius: 6px; padding: 28px 36px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      box-shadow: 0 0 0 3px #2a0c10, 0 10px 40px rgba(0,0,0,.8);
+      min-width: 340px;
+    }
+    /* CRT scanline overlay */
+    #gameover-panel .scanlines {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      background: repeating-linear-gradient(
+        to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,.18) 3px, rgba(0,0,0,0) 4px);
+      mix-blend-mode: multiply;
+    }
+    #gameover-panel > *:not(.scanlines) { position: relative; z-index: 3; }
+    .go-title {
+      font-family: var(--font-display); font-size: 2rem; line-height: 1.2; text-align: center;
+      color: #ff3b30; text-shadow: 3px 3px 0 #5a0a0a, -1px -1px 0 #ffec3d;
+      animation: go-flicker 2.2s infinite;
+    }
+    @keyframes go-flicker { 0%,93%,100% { opacity:1; } 94% { opacity:.55; } 96% { opacity:1; } 97% { opacity:.7; } }
+    .go-revoked { font-family: var(--font-display); font-size: 0.8rem; color: #ffec3d; letter-spacing: 1px; }
+    .go-policy { font-size: 0.78rem; color: #c98; text-align: center; line-height: 1.6; }
+    #go-errcode { color: #e8890c; font-family: var(--font-mono); font-size: 0.72rem; }
+    .go-score {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      border-top: 1px solid #3a1316; border-bottom: 1px solid #3a1316;
+      padding: 10px 0; width: 100%;
+    }
+    .go-score-label { font-family: var(--font-display); font-size: 0.6rem; color: #879196; letter-spacing: 2px; }
+    .go-score-num { font-family: var(--font-display); font-size: 1.8rem; color: #76ff03; text-shadow: 2px 2px 0 #0a2a00; }
+    .go-msg { font-size: 0.78rem; color: #c8d6f8; text-align: center; min-height: 1em; }
+    .go-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    #gameover-panel button { font-size: 0.6rem; padding: 12px 14px; }
 
     #avatar-picker { display: flex; gap: 10px; }
     .avatar-opt {
@@ -138,6 +191,7 @@
       transition: border-color 0.15s, background 0.15s;
     }
     .avatar-opt img { width: 36px; height: 36px; image-rendering: pixelated; }
+    #avatar-picker.round-gfx .avatar-opt img { image-rendering: auto; }
     .avatar-opt span { font-size: 0.62rem; color: #ccc; }
     .avatar-opt.selected { border-color: #ffd600; background: rgba(255,214,0,0.15); }
   </style>
@@ -149,14 +203,14 @@
 
     <!-- ══ MENU ══ -->
     <div id="menu-screen" style="background:rgba(0,0,0,0.55);border-radius:16px;padding:32px 40px;display:flex;flex-direction:column;align-items:center;gap:14px;min-width:300px;">
-      <h1>🐦 Least Privilege Bird</h1>
+      <h1 style="display:flex;align-items:center;gap:12px;justify-content:center;"><img src="assets/logo.svg" alt="" style="width:60px;height:60px;image-rendering:pixelated;" /> Least Privilege Bird</h1>
       <p style="font-size:0.8rem;color:#7ca4f4;letter-spacing:1px;margin-top:-8px;">Authenticated · Verified · Compliant · Audited</p>
       <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.15);" />
       <select id="user-select" class="hidden" style="width:220px;">
-        <option value="">— pick existing user —</option>
+        <option value="">— pick user —</option>
       </select>
       <input id="name-input" type="text" placeholder="or enter a new name" maxlength="20" autocomplete="off" style="width:220px;" />
-      <button id="btn-play" style="width:220px;">Login with Clave &amp; Play</button>
+      <button id="btn-play" style="width:220px;">Login &amp; Play</button>
       <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.1);" />
       <div id="avatar-picker"></div>
       <button id="btn-scores" class="secondary" style="width:220px;">🏆 High Scores</button>
@@ -174,7 +228,7 @@
 
     <!-- ══ CLAVE FLOW ══ -->
     <div id="clave-screen" class="hidden">
-      <div class="clave-logo">☁️ <span>CLAVE</span> SSO &nbsp;·&nbsp; Amazon Internal</div>
+      <div class="clave-logo">☁️ <span>CLAVE</span> SSO Amazon Internal</div>
 
       <!-- Step 1: CAPTCHA pre-login -->
       <div id="clave-step-captcha-pre">
@@ -203,8 +257,8 @@
         <input id="mfa-input" type="text" maxlength="10" placeholder="3141592653" autocomplete="off" />
         <label class="clave-check"><input type="checkbox" id="remember-device" style="width:auto;" /> Remember this device for 8 hours</label>
         <p class="error-msg" id="mfa-error"></p>
-        <div id="btn-mfa-verify-wrap" style="position:relative;width:200px;height:44px;">
-          <button id="btn-mfa-verify" style="position:absolute;">Verify Identity</button>
+        <div id="btn-mfa-verify-wrap" style="position:relative;height:52px;display:flex;align-items:center;justify-content:center;">
+          <button id="btn-mfa-verify" style="position:relative;">Verify Identity</button>
         </div>
         <p class="sub" id="mfa-attempt-hint" class="hidden"></p>
       </div>
@@ -244,23 +298,45 @@
 
     <!-- ══ SCORE SUBMIT ══ -->
     <div id="score-submit-screen" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:14px;">
-      <div class="clave-logo">☁️ <span>CLAVE</span> SSO &nbsp;·&nbsp; Amazon Internal</div>
+      <div class="clave-logo">☁️ <span>CLAVE</span> SSO  Amazon Internal</div>
       <h2 style="color:#c8d6f8">Submitting score to compliance audit log...</h2>
       <div class="clave-spinner"></div>
-      <div id="submit-log" style="width:100%;background:#0d1117;border-radius:8px;padding:10px 14px;font-family:monospace;font-size:0.72rem;color:#51cf66;height:110px;overflow:hidden;border:1px solid #2e3a55;line-height:1.6;"></div>
-      <p class="sub">PUT s3://flappy-kiro-audit-logs-prod/scores/<span id="submit-user-path"></span>.json<br/>
+      <div id="submit-log" style="width:100%;background:#0d1117;border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:0.5rem;color:#51cf66;height:130px;overflow:hidden;border:1px solid #2e3a55;line-height:2;" data-mono></div>
+      <p class="sub" style="font-size:0.5rem;word-break:break-all;line-height:2;">PUT s3://flappy-kiro-audit-logs-prod/scores/<span id="submit-user-path"></span>.json<br/>
       Encrypting with KMS key arn:aws:kms:us-east-1:139478927430:key/mrk-flappy</p>
     </div>
 
     <!-- ══ GAME OVER ══ -->
     <div id="gameover-screen" class="hidden">
-      <h1>Game Over</h1>
-      <p id="gameover-msg" style="font-size:1.1rem; text-shadow:1px 1px 4px #000;"></p>
-      <button id="btn-retry">Play Again</button>
-      <button id="btn-menu" class="secondary">Menu</button>
+      <div id="gameover-panel">
+        <div class="scanlines"></div>
+        <h1 class="go-title">GAME<br/>OVER</h1>
+        <p class="go-revoked">⛔ ACCESS REVOKED</p>
+        <p class="go-policy">Session terminated by IAM policy<br/><span id="go-errcode"></span></p>
+        <div class="go-score">
+          <span class="go-score-label">SCORE</span>
+          <span id="go-score-val" class="go-score-num">0</span>
+        </div>
+        <p id="gameover-msg" class="go-msg"></p>
+        <div class="go-btns">
+          <button id="btn-retry">Re-authenticate</button>
+          <button id="btn-menu" class="secondary">Sign out</button>
+        </div>
+      </div>
     </div>
 
   </div>
+
+  <!-- ══ STYLE TOGGLE (fixed bottom-left corner) ══ -->
+  <label id="gfx-toggle" style="
+    position:fixed;left:14px;bottom:12px;z-index:50;
+    display:flex;align-items:center;gap:7px;cursor:pointer;
+    font-family:var(--font-body);font-size:0.62rem;color:#7ca4f4;
+    background:rgba(0,0,0,0.45);padding:7px 11px;border-radius:var(--radius);
+    user-select:none;">
+    <input type="checkbox" id="gfx-check" style="width:auto;cursor:pointer;" />
+    <span id="gfx-label">Round graphics</span>
+  </label>
 
   <!-- ══ TOKEN MODAL (outside overlay, full-screen) ══ -->
   <div id="token-modal" class="hidden" style="
@@ -316,6 +392,7 @@
   <script>
     // DEV_MODE: skip the friction theater (SSO/captchas) for fast gameplay iteration.
     var DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
+    // var DEV_MODE = true;
     // LIVE_DB: talk to the real Supabase. ALWAYS true in production. Locally it is OFF
     // by default (don't pollute prod from a laptop); flip it from the devtools console:
     //   localStorage.lpb_live = '1'   → reload to enable real reads/writes locally

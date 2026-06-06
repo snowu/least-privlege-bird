@@ -140,7 +140,7 @@ const Clave = (() => {
       panel.className = 'captcha-panel';
       panel.innerHTML = `
         <h2>🤖 Identity Verification — AWS Knowledge Check</h2>
-        <p class="sub" style="font-size:0.9rem;color:#c8d6f8;">${q.prompt}</p>
+        <p class="sub" style="font-size:0.62rem;color:#c8d6f8;line-height:1.9;">${q.prompt}</p>
         <div class="captcha-grid" id="${containerId}-grid"></div>
         <div id="${containerId}-feedback" style="width:100%;display:none;flex-direction:column;gap:6px;"></div>
         <p class="captcha-error" id="${containerId}-err"></p>
@@ -154,7 +154,7 @@ const Clave = (() => {
         const tile = document.createElement('div');
         tile.className = 'captcha-tile';
         tile.dataset.idx = i;
-        tile.innerHTML = `<span class="tile-label" style="font-size:0.88rem;">${opt.text}</span>`;
+        tile.innerHTML = `<span class="tile-label">${opt.text}</span>`;
         tile.addEventListener('click', () => {
           if (q.type === 'single') {
             // deselect others
@@ -182,7 +182,7 @@ const Clave = (() => {
         fb.innerHTML = q.options.map((o, i) => {
           const wasSelected = selected.includes(i);
           const icon = o.correct ? '✅' : (wasSelected ? '❌' : '◻️');
-          return `<div style="font-size:0.78rem;color:#a0b0cc;line-height:1.4;">
+          return `<div style="font-family:var(--pixel);font-size:0.52rem;color:#a0b0cc;line-height:1.9;">
             <span>${icon}</span> <strong style="color:${o.correct ? '#51cf66' : '#ff6b6b'}">${o.text}</strong>
             — ${o.explain}
           </div>`;
@@ -250,13 +250,17 @@ const Clave = (() => {
   }
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
+  // Mashup of AWS IAM theater and Spanish state-portal (Cl@ve) bureaucracy — the
+  // same "prove who you are before any trivial action" energy, two flavors at once.
   const VERIFY_STEPS = [
+    'Conectando con la Sede Electrónica... hecho',
+    'Validando certificado digital FNMT... hecho',
     'Querying Active Directory... done',
-    'Validating Midway token... done',
-    'Checking Isengard federation... done',
+    'Comprobando DNIe en el registro... hecho',
     'Resolving group memberships (847 groups)...',
+    'Verificando datos en el Padrón Municipal...',
     'Applying ABAC policies...',
-    'Cross-referencing Phonetool... done',
+    'Cotejando con la Agencia Tributaria... hecho',
     'Evaluating SCPs... done',
     'Verifying MFA posture...',
   ];
@@ -274,6 +278,8 @@ const Clave = (() => {
     'Effective permissions: score:submit:put ✓',
     'Generating STS session token... done',
     'Token ARN: arn:aws:sts::139478927430:assumed-role/FlappyKiroPlayer-Prod/session',
+    'Registrando trámite en el expediente Nº ES-2026-FLAP-0042/IAM... hecho',
+    'Justificante de autorización disponible en la carpeta ciudadana ✓',
   ];
 
   const SUBMIT_LINES = [
@@ -378,7 +384,7 @@ const Clave = (() => {
           // First attempt: always fail
           input.classList.add('shake');
           errEl.textContent = '❌ Token mismatch. Security policy requires re-verification.';
-          hint.textContent  = 'ℹ️ This is expected. Clave performs zero-trust double-verification. Please re-enter.';
+          hint.textContent  = 'ℹ️ Esto es normal. Cl@ve realiza una doble verificación de confianza cero (zero-trust). Vuelva a introducir el código.';
           hint.classList.remove('hidden');
           setTimeout(() => input.classList.remove('shake'), 500);
           input.value = '';

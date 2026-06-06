@@ -16,7 +16,8 @@ const C = {
   SPEED_UP_AMOUNT: 0.5,     // px/frame added each interval
   COUNTDOWN_SEC: 3,         // seconds to count down before play starts
   PLAYER_X: 120,
-  PLAYER_SIZE: 40,
+  PLAYER_SIZE: 40,         // collision box (mirrored in sim.ts — do NOT change lightly)
+  SPRITE_SCALE: 1.5,       // draw-only: sprite rendered this much bigger than the hitbox
   GROUND: 0,                // y of ground = H - HUD (computed below)
   CLOUD_COUNT: 6,
 };
@@ -27,38 +28,154 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 canvas.width  = C.W;
 canvas.height = C.H;
+// Pin the displayed size to the internal resolution so the browser never rescales
+// the canvas (rescaling + image-rendering:pixelated is what produced vertical bands).
+canvas.style.width  = C.W + 'px';
+canvas.style.height = C.H + 'px';
+// Crisp sprite scaling: our 16px pixel-art SVGs are drawn up to 40px — keep hard edges.
+ctx.imageSmoothingEnabled = false;
 
 // Size overlay to match canvas
 const overlay = document.getElementById('overlay');
 overlay.style.width  = C.W + 'px';
 overlay.style.height = C.H + 'px';
 
-// ─── ASSETS & THEMES ──────────────────────────────────────────────────────────
-const sndJump     = new Audio('assets/jump.wav');
-const sndGameOver = new Audio('assets/game_over.wav');
+// ─── AUDIO (synthesized, no files) ────────────────────────────────────────────
+// All SFX are generated at runtime with the Web Audio API — retro 8-bit blips that
+// match the pixel aesthetic, with a distinct flap timbre per avatar. Zero assets.
+const AudioFX = (() => {
+  let ac = null;
+  const ctxAudio = () => (ac ||= new (window.AudioContext || window.webkitAudioContext)());
 
+  // One beep: type=wave, glide from f0→f1 Hz over dur s, with a quick volume env.
+  function beep(f0, f1, dur, type = 'square', vol = 0.18, delay = 0) {
+    const a = ctxAudio();
+    const t0 = a.currentTime + delay;
+    const osc = a.createOscillator();
+    const g = a.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f0, t0);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(a.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  // Per-avatar flap voices.
+  const FLAPS = {
+    bird:   () => beep(900, 1500, 0.10, 'square', 0.15),               // chirp up
+    rocket: () => beep(220, 90,  0.16, 'sawtooth', 0.16),              // whoosh down
+    bee:    () => { beep(420, 380, 0.12, 'square', 0.12); beep(440, 400, 0.12, 'square', 0.1, 0.01); }, // buzzy
+    wizard: () => { beep(700, 1300, 0.09, 'triangle', 0.14); beep(1300, 2000, 0.08, 'triangle', 0.1, 0.06); }, // sparkle
+    robot:  () => beep(140, 140, 0.09, 'square', 0.16),                // flat blip
+  };
+
+  return {
+    // Resume the context on first user gesture (browsers require it).
+    unlock() { const a = ctxAudio(); if (a.state === 'suspended') a.resume(); },
+    flap(key) { (FLAPS[key] || FLAPS.bird)(); },
+    score() { beep(1200, 1600, 0.06, 'square', 0.13); },
+    // Descending minor jingle — that N64/PS1 "you died" sting.
+    gameOver() {
+      const seq = [660, 550, 440, 330, 220];
+      seq.forEach((f, i) => beep(f, f * 0.98, 0.18, 'triangle', 0.2, i * 0.13));
+      beep(110, 90, 0.5, 'sawtooth', 0.16, seq.length * 0.13); // low tail
+    },
+  };
+})();
+
+// ─── ASSETS & THEMES ──────────────────────────────────────────────────────────
 function makeImg(src) { const i = new Image(); i.src = src; return i; }
+
+// Art style: 'pixel' (8-bit) or 'round' (smooth). Both sprite sets live under
+// assets/<style>/<key>.svg. Persisted so the choice sticks across sessions.
+let gfxStyle = localStorage.getItem('lpb_gfx') === 'round' ? 'round' : 'pixel';
+
+// ─── STYLE TABLE ────────────────────────────────────────────────────────────────
+// Every style-dependent visual setting lives here, keyed by gfxStyle. The toggle
+// just flips the key; applyStyle() pushes these into CSS custom properties (so the
+// DOM chrome restyles) and the canvas (fonts + smoothing). Nothing visual is
+// hardcoded per-style outside this table.
+const STYLE = {
+  pixel: {
+    fontDisplay: "'Press Start 2P', monospace", // titles, buttons, HUD
+    fontBody:    "'Press Start 2P', monospace", // labels, prose
+    fontMono:    "'Press Start 2P', monospace", // dense logs
+    smoothing: false,        // crisp sprite edges
+    radius: '4px',           // button / tile corner radius
+    textShadow: '3px 3px 0 #000',
+    letterSpacing: '0px',
+    fontScale: 1,            // baseline — all rem sizes were tuned for this font
+  },
+  round: {
+    fontDisplay: "'Segoe UI', system-ui, sans-serif",
+    fontBody:    "'Segoe UI', system-ui, sans-serif",
+    fontMono:    "'SFMono-Regular', Consolas, monospace",
+    smoothing: true,         // smooth vector art
+    radius: '12px',
+    textShadow: '0 2px 4px rgba(0,0,0,.5)',
+    letterSpacing: 'normal',
+    // Segoe glyphs are ~1.4× narrower than Press Start 2P, so the same rem size
+    // reads small. Bump the root font-size so round text fills the same width.
+    fontScale: 1.4,
+  },
+};
+function activeStyle() { return STYLE[gfxStyle] || STYLE.pixel; }
+
+// Push the active style into the DOM (CSS vars) and canvas. Called on load + toggle.
+function applyStyle() {
+  const s = activeStyle();
+  const root = document.documentElement.style;
+  root.setProperty('--font-display', s.fontDisplay);
+  root.setProperty('--font-body', s.fontBody);
+  root.setProperty('--font-mono', s.fontMono);
+  root.setProperty('--radius', s.radius);
+  root.setProperty('--text-shadow', s.textShadow);
+  root.setProperty('--letter-spacing', s.letterSpacing);
+  // Scale every rem-based size at once by setting the root font-size (16px × scale).
+  document.documentElement.style.fontSize = (16 * s.fontScale) + 'px';
+  ctx.imageSmoothingEnabled = s.smoothing;
+}
 
 const THEMES = {
   bird: {
-    label: 'Bird', img: makeImg('assets/bird.svg'),
+    label: 'Bird',
     sky: '#7ec8e3', ground: '#2b2b3b',
     cloudFill: 'rgba(255,255,255,0.82)',
+    // Classic pixel-art green pipe: hard-edged body with a highlight band on the
+    // left, a shadow band on the right, and a chunky cap. No anti-aliasing.
     drawPipe(x, topH, gap) {
-      const capH = 24, capW = C.PIPE_W + 12, capX = x - 6;
-      ctx.fillStyle = '#3a7d1e';
-      ctx.fillRect(x, 0, C.PIPE_W, topH - capH);
-      ctx.fillRect(capX, topH - capH, capW, capH);
+      const capH = 28, capW = C.PIPE_W + 12, capX = x - 6;
+      const body = '#5aa02c', light = '#7ec850', dark = '#3a6e1a', edge = '#1f3d0e';
+      const shaft = (sx, sy, sw, sh) => {
+        ctx.fillStyle = body;  ctx.fillRect(sx, sy, sw, sh);
+        ctx.fillStyle = light; ctx.fillRect(sx + 4, sy, 8, sh);          // highlight band
+        ctx.fillStyle = dark;  ctx.fillRect(sx + sw - 10, sy, 8, sh);    // shadow band
+        ctx.fillStyle = edge;  ctx.fillRect(sx, sy, 2, sh);              // hard left edge
+        ctx.fillRect(sx + sw - 2, sy, 2, sh);                            // hard right edge
+      };
+      const cap = (cy) => {
+        ctx.fillStyle = body;  ctx.fillRect(capX, cy, capW, capH);
+        ctx.fillStyle = light; ctx.fillRect(capX + 4, cy + 4, 8, capH - 8);
+        ctx.fillStyle = dark;  ctx.fillRect(capX + capW - 12, cy + 4, 8, capH - 8);
+        ctx.fillStyle = edge;
+        ctx.fillRect(capX, cy, capW, 3);                 // top edge
+        ctx.fillRect(capX, cy + capH - 3, capW, 3);      // bottom edge
+        ctx.fillRect(capX, cy, 3, capH);                 // left edge
+        ctx.fillRect(capX + capW - 3, cy, 3, capH);      // right edge
+      };
       const botY = topH + gap;
-      ctx.fillRect(capX, botY, capW, capH);
-      ctx.fillRect(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
-      ctx.fillRect(x + 6, 0, 10, topH - capH);
-      ctx.fillRect(x + 6, botY + capH, 10, C.GROUND - botY - capH);
+      shaft(x, 0, C.PIPE_W, topH - capH);
+      cap(topH - capH);
+      cap(botY);
+      shaft(x, botY + capH, C.PIPE_W, C.GROUND - botY - capH);
     },
   },
   rocket: {
-    label: 'Rocket', img: makeImg('assets/rocket.png'),
+    label: 'Rocket',
     sky: '#05071a', ground: '#1a1a2e',
     cloudFill: null, // stars instead
     drawPipe(x, topH, gap) {
@@ -77,7 +194,7 @@ const THEMES = {
     },
   },
   bee: {
-    label: 'Bee', img: makeImg('assets/bee.png'),
+    label: 'Bee',
     sky: '#fffde7', ground: '#388e3c',
     cloudFill: 'rgba(255,255,255,0.9)',
     drawPipe(x, topH, gap) {
@@ -95,7 +212,7 @@ const THEMES = {
     },
   },
   wizard: {
-    label: 'Wizard', img: makeImg('assets/wizard.png'),
+    label: 'Wizard',
     sky: '#1a0533', ground: '#4a4453',
     cloudFill: 'rgba(180,100,255,0.25)',
     drawPipe(x, topH, gap) {
@@ -117,8 +234,45 @@ const THEMES = {
       ctx.fillRect(capX, botY, capW, capH);
     },
   },
+  airplane: {
+    label: 'Airplane',
+    sky: '#aebfd0', ground: '#3a4150',   // overcast server-room haze
+    cloudFill: 'rgba(255,255,255,0.7)',
+    // Data-center server-rack towers: dark steel columns with rack-unit slots,
+    // rows of status LEDs, and a vented cap. (Not buildings — racks.)
+    drawPipe(x, topH, gap) {
+      const capH = 22, capW = C.PIPE_W + 10, capX = x - 5;
+      const body = '#2b313c', face = '#363d4a', edge = '#1a1e26', vent = '#11141a';
+      const rack = (sy, sh) => {
+        if (sh <= 0) return;
+        ctx.fillStyle = body; ctx.fillRect(x, sy, C.PIPE_W, sh);
+        ctx.fillStyle = face; ctx.fillRect(x + 4, sy, C.PIPE_W - 8, sh);   // recessed face
+        ctx.fillStyle = edge; ctx.fillRect(x, sy, 2, sh); ctx.fillRect(x + C.PIPE_W - 2, sy, 2, sh);
+        // rack-unit slots every 10px
+        ctx.fillStyle = vent;
+        for (let y = sy + 6; y < sy + sh - 4; y += 10) ctx.fillRect(x + 6, y, C.PIPE_W - 12, 3);
+        // status LEDs (steady pattern → deterministic, no RNG in the sim path)
+        for (let y = sy + 6; y < sy + sh - 4; y += 10) {
+          ctx.fillStyle = ((y / 10) | 0) % 3 === 0 ? '#ff5252' : '#76ff03';
+          ctx.fillRect(x + C.PIPE_W - 10, y, 2, 2);
+        }
+      };
+      const cap = (cy) => {
+        ctx.fillStyle = body; ctx.fillRect(capX, cy, capW, capH);
+        ctx.fillStyle = edge; ctx.fillRect(capX, cy, capW, 2); ctx.fillRect(capX, cy + capH - 2, capW, 2);
+        // cooling vents
+        ctx.fillStyle = vent;
+        for (let vx = capX + 5; vx < capX + capW - 4; vx += 6) ctx.fillRect(vx, cy + 5, 3, capH - 10);
+      };
+      const botY = topH + gap;
+      rack(0, topH - capH);
+      cap(topH - capH);
+      cap(botY);
+      rack(botY + capH, C.GROUND - botY - capH);
+    },
+  },
   robot: {
-    label: 'Robot', img: makeImg('assets/robot.png'),
+    label: 'Robot',
     sky: '#0d1f2d', ground: '#1c2a3a',
     cloudFill: null, // square data-packet clouds
     drawPipe(x, topH, gap) {
@@ -142,6 +296,16 @@ const THEMES = {
     },
   },
 };
+
+// (Re)load every theme's sprite for the active art style. Pixel art wants crisp
+// scaling; round art wants smooth — flip the canvas hint to match.
+function loadSprites() {
+  for (const [key, theme] of Object.entries(THEMES)) {
+    theme.img = makeImg(`assets/${gfxStyle}/${key}.svg`);
+  }
+  applyStyle();
+}
+loadSprites();
 
 let currentTheme = THEMES.bird;
 
@@ -252,17 +416,30 @@ function drawBackground() {
       ctx.fillRect(cl.x, cl.y, cl.w, cl.h * 0.7);
     }
   } else {
-    // Day themes: just sky + soft clouds.
-    ctx.fillStyle = t.cloudFill;
-    for (const cl of clouds) {
-      roundRect(ctx, cl.x, cl.y, cl.w, cl.h, 20);
-      ctx.fill();
-    }
+    // Day themes: blocky pixel clouds (stepped silhouette, no curves).
+    for (const cl of clouds) pixelCloud(cl.x, cl.y, cl.w, cl.h, t.cloudFill);
   }
 
-  // Ground / HUD bar
+  // Ground / HUD bar — pixel grass lip on top of a dirt bar.
+  const px = 6; // pixel block size for ground detail
   ctx.fillStyle = t.ground;
   ctx.fillRect(0, C.GROUND, C.W, C.HUD);
+  // grass strip
+  ctx.fillStyle = '#5aa02c';
+  ctx.fillRect(0, C.GROUND, C.W, px * 2);
+  ctx.fillStyle = '#7ec850';
+  for (let gx = 0; gx < C.W; gx += px * 2) ctx.fillRect(gx, C.GROUND, px, px); // dither highlights
+  ctx.fillStyle = '#3a6e1a';
+  ctx.fillRect(0, C.GROUND + px * 2, C.W, px); // shadow seam under grass
+}
+
+// Blocky pixel cloud: a stepped lozenge built from a few hard rectangles.
+function pixelCloud(x, y, w, h, fill) {
+  ctx.fillStyle = fill;
+  const u = Math.max(6, Math.round(h / 4)); // block unit
+  ctx.fillRect(x, y + u, w, h - u * 2);            // mid band (full width)
+  ctx.fillRect(x + u, y, w - u * 2, h);            // tall center
+  ctx.fillRect(x + u * 2, y - u, w - u * 4, u);    // top bump
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -285,7 +462,7 @@ function drawCountdown(n) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(0, 0, C.W, C.GROUND);
   ctx.fillStyle = '#fff';
-  ctx.font = `bold ${C.H * 0.22}px "Segoe UI", sans-serif`;
+  ctx.font = `${C.H * 0.16}px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(n > 0 ? n : 'GO!', C.W / 2, C.GROUND / 2);
@@ -293,7 +470,11 @@ function drawCountdown(n) {
 }
 
 function drawPlayer() {
-  const s = C.PLAYER_SIZE;
+  // Render LARGER than the hitbox so the sprite looks meaty. The collision radius
+  // (PLAYER_SIZE/2 - 4) is unchanged and stays mirrored in sim.ts — this is a
+  // draw-only scale, so replay validation is unaffected. The pixel-art SVGs also
+  // carry transparent padding, so the visible body roughly matches the hitbox.
+  const s = C.PLAYER_SIZE * C.SPRITE_SCALE;
   ctx.save();
   ctx.translate(C.PLAYER_X, player.y);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, player.vy * 0.05)));
@@ -303,7 +484,7 @@ function drawPlayer() {
 
 function drawHUD() {
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 22px "Segoe UI", sans-serif';
+  ctx.font = `14px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'center';
   const sl = speedLevel() + 1;
   // High is shown only when we have an authoritative value from Supabase.
@@ -352,7 +533,7 @@ function stepPhysics() {
   // Update pipes
   for (const p of pipes) {
     p.x -= pipeSpeed;
-    if (!p.scored && p.x + C.PIPE_W < C.PLAYER_X) { score++; p.scored = true; }
+    if (!p.scored && p.x + C.PIPE_W < C.PLAYER_X) { score++; p.scored = true; AudioFX.score(); }
   }
   pipes = pipes.filter(p => p.x + C.PIPE_W > 0);
 
@@ -412,10 +593,38 @@ async function startGame(playerName) {
   animId = requestAnimationFrame(loop);
 }
 
+// Mock AWS-style error codes for flavor — deterministic-ish from the score so it
+// feels like a real (absurd) policy denial rather than random noise.
+const GO_ERRORS = [
+  'AccessDenied: explicit deny in flappy-bird-boundary',
+  'ThrottlingException: rate exceeded (gravity)',
+  'InvalidGroundError: collision with s3://terra-firma',
+  'TokenExpired: STS session ended mid-flight',
+  'PolicyEvaluation: NotAuthorized to continue',
+];
+
+// Reveal the game-over screen: count the score up, set a fake error code, show msg.
+function showGameOver(msg) {
+  document.getElementById('gameover-msg').textContent = msg;
+  document.getElementById('go-errcode').textContent =
+    GO_ERRORS[score % GO_ERRORS.length] + ` (req ${(score * 7919 + 1009).toString(16)})`;
+  overlay.classList.remove('hidden');
+  showScreen('gameover');
+
+  // Count-up animation on the score readout (display only — purely cosmetic).
+  const el = document.getElementById('go-score-val');
+  const target = score, steps = Math.min(30, target) || 1, t0 = performance.now(), dur = 600;
+  el.textContent = '0';
+  (function tick(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    el.textContent = Math.round(target * p);
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+
 async function endGame() {
   cancelAnimationFrame(animId);
-  sndGameOver.currentTime = 0;
-  sndGameOver.play().catch(() => {});
+  AudioFX.gameOver();
 
   const prev  = currentBest;            // authoritative best, or null when offline
   const isNew = prev != null && score > prev;
@@ -426,22 +635,19 @@ async function endGame() {
     // Skip the friction theater. saveScore self-gates on LIVE_DB, so this still
     // exercises the real Supabase round-trip when the DB is enabled locally.
     await saveScore(currentPlayer, score, replay);
-    document.getElementById('gameover-msg').textContent = `Score: ${score}`;
-    overlay.classList.remove('hidden');
-    showScreen('gameover');
+    showGameOver(isNew ? 'New high score! 🎉' : '');
     return;
   }
 
   Clave.startScoreSubmit(currentPlayer, score, async () => {
     await saveScore(currentPlayer, score, replay);
-    document.getElementById('gameover-msg').textContent =
+    showGameOver(
       isNew
-        ? `New high score: ${score}! 🎉`
+        ? 'New high score! 🎉'
         : prev == null
-          ? `Score: ${score}`
-          : `Score: ${score} — Best: ${Math.max(score, prev)}`;
-    overlay.classList.remove('hidden');
-    showScreen('gameover');
+          ? ''
+          : `Best: ${Math.max(score, prev)}`
+    );
   });
   overlay.classList.remove('hidden'); // keep visible for CAPTCHA + submit screens
 }
@@ -450,8 +656,8 @@ async function endGame() {
 function flap() {
   player.vy = C.FLAP;
   if (flapTicks) flapTicks.push(tick); // log input tick for server-side replay
-  sndJump.currentTime = 0;
-  sndJump.play().catch(() => {});
+  const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'bird';
+  AudioFX.flap(key);
 }
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && !overlay.classList.contains('hidden') === false) flap();
@@ -482,6 +688,7 @@ userSelect.addEventListener('change', () => {
 });
 
 document.getElementById('btn-play').addEventListener('click', async () => {
+  AudioFX.unlock(); // first user gesture — enable audio
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
   // DB interaction (token) is self-gated on LIVE_DB inside ensurePlayerToken.
@@ -531,23 +738,48 @@ document.getElementById('btn-retry').addEventListener('click', () => startGame(c
 document.getElementById('btn-menu').addEventListener('click', () => { populateUserSelect(); showScreen('menu'); });
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-// Build avatar picker
+// Build avatar picker (rebuildable so the art-style toggle can refresh thumbnails)
 const avatarPicker = document.getElementById('avatar-picker');
-Object.entries(THEMES).forEach(([key, theme]) => {
-  const div = document.createElement('div');
-  div.className = 'avatar-opt' + (key === 'bird' ? ' selected' : '');
-  div.dataset.key = key;
-  div.innerHTML = `<img src="${theme.img.src}" alt="${theme.label}"><span>${theme.label}</span>`;
-  div.addEventListener('click', () => {
-    document.querySelectorAll('.avatar-opt').forEach(d => d.classList.remove('selected'));
-    div.classList.add('selected');
-    currentTheme = THEMES[key];
-    drawBackground(); // preview on menu
+function buildAvatarPicker() {
+  const selectedKey = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'bird';
+  avatarPicker.innerHTML = '';
+  avatarPicker.classList.toggle('round-gfx', gfxStyle === 'round');
+  Object.entries(THEMES).forEach(([key, theme]) => {
+    const div = document.createElement('div');
+    div.className = 'avatar-opt' + (key === selectedKey ? ' selected' : '');
+    div.dataset.key = key;
+    div.innerHTML = `<img src="${theme.img.src}" alt="${theme.label}"><span>${theme.label}</span>`;
+    div.addEventListener('click', () => {
+      document.querySelectorAll('.avatar-opt').forEach(d => d.classList.remove('selected'));
+      div.classList.add('selected');
+      currentTheme = THEMES[key];
+      drawBackground(); // preview on menu
+    });
+    avatarPicker.appendChild(div);
   });
-  avatarPicker.appendChild(div);
+}
+buildAvatarPicker();
+
+// Art-style toggle: a checkbox in the bottom-left corner. Checked → round graphics.
+// Flips the STYLE key (fonts, smoothing, radii — all of it), persists, and refreshes
+// sprites + thumbnails + the live preview. Gameplay is unaffected (see hitbox note).
+const gfxCheck = document.getElementById('gfx-check');
+gfxCheck.checked = (gfxStyle === 'round');
+gfxCheck.addEventListener('change', () => {
+  gfxStyle = gfxCheck.checked ? 'round' : 'pixel';
+  localStorage.setItem('lpb_gfx', gfxStyle);
+  loadSprites();        // also re-applies STYLE via applyStyle()
+  buildAvatarPicker();
+  drawBackground();
 });
 
 // Draw a static background while on menu
 drawBackground();
 populateUserSelect();
 showScreen('menu');
+
+// Canvas text uses the pixel webfont; redraw once it's loaded so the first menu
+// paint isn't stuck on the fallback monospace.
+if (document.fonts && document.fonts.ready) {
+  document.fonts.load('14px "Press Start 2P"').then(() => drawBackground()).catch(() => {});
+}

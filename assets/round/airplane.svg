@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- Tail fin (left) -->
+  <polygon points="6,10 12,18 12,24 6,24" fill="#d13212"/>
+  <!-- Fuselage -->
+  <ellipse cx="22" cy="20" rx="14" ry="6" fill="#e6ebf2"/>
+  <ellipse cx="22" cy="22" rx="14" ry="4" fill="#c2cad6"/>
+  <!-- Nose cone (right) -->
+  <ellipse cx="34" cy="20" rx="4" ry="5" fill="#9aa6b2"/>
+  <!-- Spinning prop -->
+  <ellipse cx="38" cy="20" rx="1.5" ry="8" fill="rgba(55,71,79,0.7)"/>
+  <!-- Red cheat-line -->
+  <rect x="8" y="19" width="26" height="2.5" rx="1.2" fill="#d13212"/>
+  <!-- Cockpit windows -->
+  <circle cx="27" cy="19" r="2.4" fill="#4fc3f7"/>
+  <circle cx="22" cy="19" r="2.4" fill="#4fc3f7"/>
+  <circle cx="27.8" cy="18.2" r="0.8" fill="#aef7ff"/>
+  <!-- Wing jutting down -->
+  <polygon points="18,25 30,25 24,34 20,34" fill="#cdd5e0"/>
+  <polygon points="18,25 30,25 27,29 21,29" fill="#b3bcca"/>
+</svg>
