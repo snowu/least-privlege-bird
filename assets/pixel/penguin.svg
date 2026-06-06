@@ -1,12 +1,15 @@
 <!-- viewBox = squared content bbox so the body fills the same footprint as every
      other model → the fixed circular hitbox stays visually fair. -->
-<!-- "Disheveled panic penguin": cross-eyed, gaping beak, one flipper flailing.
-     A bird that famously cannot fly, in a game about flapping. Deeply unqualified. -->
+<!-- "Total meltdown penguin": frazzled spiky tufts, bloodshot red bug-eyes, sweat
+     beads, screaming beak, both flippers flailing mismatched. A bird that famously
+     cannot fly, in a game about flapping. Deeply unqualified, and aware of it. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 0 14 14" width="40" height="40" shape-rendering="crispEdges">
-  <!-- ruffled head tuft (sticking up) -->
+  <!-- frazzled spiky head tufts (sticking up every which way) -->
   <g fill="#1a1a2e">
+    <rect x="6" y="0" width="1" height="2"/>
     <rect x="8" y="0" width="1" height="2"/>
     <rect x="9" y="1" width="1" height="1"/>
+    <rect x="5" y="1" width="1" height="1"/>
   </g>
   <!-- black back/head/body -->
   <g fill="#23233a">
@@ -30,23 +33,39 @@
     <rect x="6" y="9" width="4" height="1"/>
     <rect x="6" y="10" width="4" height="1"/>
   </g>
-  <!-- cross-eyes: two wide whites, pupils pulled inward (panic) -->
+  <!-- bug-eyes: white, with a bloodshot red corner pixel each, pinprick pupils
+       pulled inward (panic) -->
   <rect x="5" y="3" width="2" height="2" fill="#fff"/>
   <rect x="8" y="3" width="2" height="2" fill="#fff"/>
+  <rect x="5" y="3" width="1" height="1" fill="#e05050"/>
+  <rect x="9" y="3" width="1" height="1" fill="#e05050"/>
   <rect x="6" y="4" width="1" height="1" fill="#1a1a1a"/>
   <rect x="8" y="4" width="1" height="1" fill="#1a1a1a"/>
-  <!-- gaping orange beak (open, panicked) -->
+  <!-- exhausted dark bags under outer edge of each eye (beak fills the centre) -->
+  <rect x="5" y="5" width="1" height="1" fill="#3a3a5a"/>
+  <rect x="9" y="5" width="1" height="1" fill="#3a3a5a"/>
+  <!-- screaming open beak (orange, dark-red interior) -->
   <rect x="6" y="5" width="3" height="1" fill="#f5a623"/>
-  <rect x="6" y="6" width="2" height="1" fill="#e8890c"/>
-  <!-- flailing flipper (left, mid-flap) -->
+  <rect x="6" y="6" width="3" height="1" fill="#c0392b"/>
+  <rect x="7" y="7" width="1" height="1" fill="#e8890c"/>
+  <!-- flailing flipper (left, flung up) -->
   <g fill="#1a1a2e">
-    <rect x="3" y="6" width="1" height="1"/>
-    <rect x="2" y="7" width="2" height="1"/>
-    <rect x="3" y="8" width="1" height="1"/>
+    <rect x="3" y="5" width="1" height="1"/>
+    <rect x="2" y="6" width="2" height="1"/>
+    <rect x="3" y="7" width="1" height="1"/>
   </g>
-  <!-- orange feet -->
+  <!-- flailing flipper (right, drooping down — mismatched) -->
+  <g fill="#1a1a2e">
+    <rect x="12" y="7" width="1" height="1"/>
+    <rect x="12" y="8" width="2" height="1"/>
+    <rect x="13" y="9" width="1" height="1"/>
+  </g>
+  <!-- sweat beads (flying off the head) -->
+  <rect x="11" y="2" width="1" height="1" fill="#7ec8f2"/>
+  <rect x="3" y="3" width="1" height="1" fill="#7ec8f2"/>
+  <!-- orange feet (splayed) -->
   <g fill="#f5a623">
-    <rect x="5" y="12" width="2" height="1"/>
-    <rect x="9" y="12" width="2" height="1"/>
+    <rect x="4" y="12" width="2" height="1"/>
+    <rect x="10" y="12" width="2" height="1"/>
   </g>
 </svg>
