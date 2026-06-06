@@ -19,9 +19,9 @@ stores only a score it independently reproduces.
    reproducible from `{seed, flapTicks}` alone.
 3. **Death → submit** — Client captures `{seed, flapTicks}` (before `initGame` wipes them)
    and POSTs `{name, token, seed, flapTicks, claimedScore}` to the edge function.
-4. **Edge function (server-side)** — Validates payload shape → **replays** via `sim.ts`
-   → if `recomputed !== claimedScore` rejects (`422`) → token-hash verify → max-only write
-   with the service-role key (bypasses RLS).
+4. **Edge function (server-side)** — Validates payload shape → **replays** via the shared
+   `src/physics-core.ts` → if `recomputed !== claimedScore` rejects (`422`) → token-hash
+   verify → max-only write with the service-role key (bypasses RLS).
 5. **Leaderboard read** — Client reads `scores` directly (anon SELECT), filtered
    `score > 0`. Anon can only read the `name` and `score` columns — `token_hash` is
    revoked from anon (column grant), so hashes never leave the server.
@@ -49,16 +49,16 @@ Break any one and it leaks; all four hold:
 graph TB
     subgraph BROWSER["🌐 BROWSER — untrusted (attacker's machine)"]
         direction TB
-        GAME["game.js<br/>fixed-timestep loop<br/>seeded PRNG · logs flapTicks"]
-        SCORES["scores.js<br/>token in localStorage<br/>(never the score)"]
-        SIMCLIENT["sim logic<br/>(readable, but harmless)"]
+        GAME["game.ts<br/>fixed-timestep loop<br/>seeded PRNG · logs flapTicks"]
+        SCORES["scores.ts<br/>token in localStorage<br/>(never the score)"]
+        SIMCLIENT["physics-core.ts<br/>(same module, readable but harmless)"]
     end
 
     subgraph SUPABASE["☁️ SUPABASE — trusted (server-side)"]
         direction TB
         EDGE["submit-score Edge Function<br/>validate → replay → verify → write"]
         RECOVER["recover-account Edge Function<br/>hash token → return name"]
-        SIMTS["sim.ts<br/>authoritative physics<br/>(mirror of game.js)"]
+        SIMTS["physics-core.ts<br/>authoritative physics<br/>(SAME module the browser runs)"]
         DB[("scores table<br/>name · token_hash · score")]
         RLS{{"RLS: anon = SELECT (name, score) only<br/>NO direct writes · token_hash hidden"}}
         EDGE --> SIMTS
@@ -71,7 +71,7 @@ graph TB
     SCORES -->|"POST {name, token,<br/>seed, flapTicks, claimedScore}"| EDGE
     SCORES -->|"POST {token}<br/>(recovery)"| RECOVER
     SCORES -->|"GET scores?score=gt.0<br/>select=name,score (anon)"| DB
-    SIMCLIENT -.identical to.-> SIMTS
+    SIMCLIENT -.same file as.-> SIMTS
 
     EDGE -->|"422 if recomputed ≠ claimed"| SCORES
 
@@ -90,9 +90,9 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant P as Player
-    participant G as game.js (browser)
+    participant G as game.ts (browser)
     participant E as Edge Function (Supabase)
-    participant S as sim.ts (replay)
+    participant S as physics-core (replay)
     participant DB as scores table
 
     Note over G: run records {seed, flapTicks}<br/>during fixed-timestep play

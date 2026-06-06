@@ -2,7 +2,7 @@
 // Exposes: Clave.startLogin(playerName, onSuccess)
 //          Clave.startScoreSubmit(playerName, score, onSuccess)
 
-const Clave = (() => {
+export const Clave = (() => {
 
   // ── QUIZ QUESTIONS ──────────────────────────────────────────────────────────
   // type: 'single' = one correct answer, 'multi' = multiple correct answers
@@ -452,7 +452,7 @@ const Clave = (() => {
       q.options.forEach((opt, i) => {
         const tile = document.createElement('div');
         tile.className = 'captcha-tile';
-        tile.dataset.idx = i;
+        tile.dataset.idx = String(i);
         tile.innerHTML = `<span class="tile-label">${opt.text}</span>`;
         tile.addEventListener('click', () => {
           if (q.type === 'single') {
@@ -700,7 +700,7 @@ const Clave = (() => {
     }
     btn.addEventListener('mouseenter', dodge);
 
-    return new Promise(resolve => {
+    return new Promise<void>(resolve => {
       btn.onclick = async () => {
         if (!input.value.trim()) {
           input.classList.add('shake');

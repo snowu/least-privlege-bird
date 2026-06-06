@@ -1,0 +1,65 @@
+name: Deploy to GitHub Pages
+
+# Builds the esbuild bundle and publishes the site. Pages "Source" must be set to
+# "GitHub Actions" (Settings → Pages) for this to take over from branch-serving.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish; queue the latest, don't cancel mid-publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Guard the anti-cheat determinism invariant before shipping: the golden
+      # replays must still reproduce known { seed, flapTicks } → score runs.
+      - name: Replay goldens
+        run: npm test
+
+      - name: Build bundle
+        run: npm run build
+
+      # Stage only the static site (HTML + built bundle + assets) so the Pages
+      # artifact stays small — no node_modules/src/supabase/.git.
+      - name: Assemble site
+        run: |
+          mkdir -p _site/dist
+          cp index.html _site/
+          cp dist/bundle.js _site/dist/
+          cp -r assets _site/assets
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

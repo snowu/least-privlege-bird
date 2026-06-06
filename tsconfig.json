@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    // The UI files (game.ts, clave.ts) are mechanically ported from loose JS and
+    // touch the DOM heavily; full strict-null + implicit-any would flag hundreds of
+    // getElementById()! casts with no runtime payoff. physics-core.ts — the file the
+    // anti-cheat depends on — is written strict-clean regardless. Relax the two
+    // noisiest checks so `tsc` still catches real type errors in new code.
+    "strictNullChecks": false,
+    "noUnusedLocals": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}

@@ -1,6 +1,16 @@
 #!/bin/sh
 # Shareable pre-commit hook. Install with:
 #   ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
-# (or copy it). Guards game.js ↔ sim.ts physics-constant drift.
+# (or copy it).
+#
+# Guards the anti-cheat determinism invariant: the physics core (src/physics-core.ts)
+# is the single source of truth for both the browser game and the server replay.
+# The golden replay tests assert it still reproduces known { seed, flapTicks } → score
+# runs, so any unintended physics drift fails the commit. (Replaces the old
+# game.js↔sim.ts constant-diff guard, which is obsolete now there's one copy.)
 
-node scripts/check-physics-sync.js || exit 1
+# Only run when physics-relevant files changed (keep commits of unrelated files fast).
+if git diff --cached --name-only | grep -qE '^src/physics-core\.ts$|^scripts/test-replay\.ts$|^supabase/functions/submit-score/'; then
+  echo "physics touched — running replay goldens…"
+  npm test --silent || { echo "✗ replay goldens failed — physics drifted. Commit blocked."; exit 1; }
+fi

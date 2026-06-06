@@ -1,31 +1,19 @@
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const C = {
-  W: 1400, H: 830,          // canvas dimensions (W & H mirrored in sim.ts — pipes spawn at x=W)
-  HUD: 48,                  // bottom bar height
-  GRAVITY: 0.5,
-  FLAP: -9,
-  PIPE_W: 64,
-  PIPE_GAP_MIN: 120,        // tightest vertical gap (reached at max speed)
-  PIPE_GAP_MAX: 260,        // widest vertical gap (at start)
-  PIPE_GAP_STEP: 20,        // gap shrinks by this per speed level
-  PIPE_SPEED: 2,            // initial pipe scroll speed (px/frame)
-  PIPE_INTERVAL_MAX: 2200,  // ms between pipes at start
-  PIPE_INTERVAL_MIN: 800,   // ms between pipes at max difficulty
-  PIPE_INTERVAL_STEP: 300,  // interval shrinks by this per speed level
-  SPEED_UP_INTERVAL: 5000,  // ms between each speed increase
-  SPEED_UP_AMOUNT: 0.5,     // px/frame added each interval
-  COUNTDOWN_SEC: 3,         // seconds to count down before play starts
-  PLAYER_X: 120,
-  PLAYER_SIZE: 40,         // collision box (mirrored in sim.ts — do NOT change lightly)
-  SPRITE_SCALE: 1.5,       // draw-only: sprite rendered this much bigger than the hitbox
-  GROUND: 0,                // y of ground = H - HUD (computed below)
-  CLOUD_COUNT: 6,
-};
-C.GROUND = C.H - C.HUD;
+// ─── IMPORTS ──────────────────────────────────────────────────────────────────
+// Physics is the shared core — same module the server replays with, so the game
+// and the anti-cheat validation can never drift. C holds all constants (incl.
+// render-only ones like HUD/SPRITE_SCALE/COUNTDOWN_SEC).
+import {
+  C, TICK_MS, createState, step, speedLevel, type GameState,
+} from './physics-core.ts';
+import {
+  fetchBest, saveScore, loadScores, ensurePlayerToken, fetchFortune,
+  showRecoverModal, _loadLocal,
+} from './scores.ts';
+import { Clave } from './clave.ts';
 
 // ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d')!;
 canvas.width  = C.W;
 canvas.height = C.H;
 // Pin the displayed size to the internal resolution so the browser never rescales
@@ -101,7 +89,7 @@ let gfxStyle = localStorage.getItem('lpb_gfx') === 'round' ? 'round' : 'pixel';
 // just flips the key; applyStyle() pushes these into CSS custom properties (so the
 // DOM chrome restyles) and the canvas (fonts + smoothing). Nothing visual is
 // hardcoded per-style outside this table.
-const STYLE = {
+const STYLE: { [key: string]: any } = {
   pixel: {
     fontDisplay: "'Press Start 2P', monospace", // titles, buttons, HUD
     fontBody:    "'Press Start 2P', monospace", // labels, prose
@@ -147,7 +135,9 @@ function applyStyle() {
   ctx.imageSmoothingEnabled = s.smoothing;
 }
 
-const THEMES = {
+// Themes are built as loose object literals (optional anim/img/img2/bgLayers per
+// avatar); type as a permissive record so render code can read those fields.
+const THEMES: { [key: string]: any } = {
   bird: {
     label: 'Bird',
     sky: '#7ec8e3', ground: '#2b2b3b',
@@ -546,7 +536,7 @@ function loadSprites() {
 }
 loadSprites();
 
-let currentTheme = THEMES.penguin;  // penguin is the mascot / default avatar
+let currentTheme: any = THEMES.penguin;  // penguin is the mascot / default avatar
 
 // ─── HIGH SCORES — provided by scores.js ──────────────────────────────────────
 
@@ -700,32 +690,28 @@ const clouds = Array.from({ length: C.CLOUD_COUNT }, () => ({
 }));
 
 // ─── DETERMINISM ──────────────────────────────────────────────────────────────
-// Fixed-timestep physics + seeded RNG so a run is reproducible from {seed, flapTicks}.
-// This is the foundation for server-side replay validation (Supabase edge function).
-const TICK_MS = 1000 / 60;                       // fixed physics step
-const SPEED_UP_TICKS = C.SPEED_UP_INTERVAL / TICK_MS;     // ticks between speed bumps
-const MAX_FRAME_MS = 250;                        // clamp to avoid spiral-of-death after tab stalls
-
-// mulberry32 — tiny deterministic PRNG. Same seed → same sequence in JS and TS.
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// All gameplay physics lives in the shared core (physics-core.ts): fixed-timestep
+// + seeded RNG so a run is reproducible from {seed, flapTicks}, which is what the
+// Supabase edge function replays to validate scores. The render loop below just
+// drives the core's step() and draws the resulting state — it owns no physics.
+const MAX_FRAME_MS = 250;            // clamp to avoid spiral-of-death after tab stalls
 
 // ─── GAME STATE ───────────────────────────────────────────────────────────────
-let player, pipes, score, animId, currentPlayer, currentBest = null;
+// gs IS the core's simulation state (player, pipes, score, tick, rng…). The
+// renderer reads it but never mutates it — only step() does.
+let gs: GameState;
+let animId, currentPlayer, currentBest = null;
 // Wall-clock timestamp of the last flap, for the render-only 2-frame animation.
 // Deliberately NOT tied to the sim tick — purely cosmetic, never feeds replay.
 let lastFlapAt = -1e9;
 const FLAP_FRAME_MS = 180; // how long frame 2 (the "push") shows after a flap
-let pipeSpeed, countdown, countdownStart;
-let tick, acc, lastFrameTime;        // fixed-timestep bookkeeping
-let lastSpeedUpTick, lastPipeTick;   // spawn/ramp timers in ticks (not wall-clock)
-let seed, rng, flapTicks;            // replay inputs
+let countdownStart;
+let acc, lastFrameTime;              // fixed-timestep bookkeeping (render side)
+let seed, flapTicks;                 // replay inputs (captured for submission)
+// Set by flap() and consumed by the NEXT physics tick, so the flap lands on the
+// tick it's logged at — preserving the input-before-physics-per-tick ordering the
+// server replay assumes. Mirrors the old "vy = FLAP immediately + push tick" code.
+let pendingFlap = false;
 // Parallax scroll offset — RENDER ONLY. Advanced per rendered frame by pipeSpeed,
 // never read by physics/collision/replay, so determinism is untouched. Always
 // pixel-art regardless of gfxStyle (the parallax is its own world).
@@ -733,42 +719,15 @@ let bgScroll = 0;
 
 function initGame(playerName) {
   currentPlayer = playerName;
-  player = { y: C.H / 2, vy: 0 };
-  pipes  = [];
-  score  = 0;
-  pipeSpeed      = C.PIPE_SPEED;
-  bgScroll       = 0;
-  countdown      = C.COUNTDOWN_SEC;
-  countdownStart = performance.now();
-  // fixed-timestep state
-  tick          = 0;
-  acc           = 0;
-  lastFrameTime = null;
-  lastSpeedUpTick = null; // starts on first active tick
-  lastPipeTick    = null;
-  // replay state — seed drives all gameplay-affecting randomness
-  seed     = crypto.getRandomValues(new Uint32Array(1))[0];
-  rng      = mulberry32(seed);
+  // seed drives all gameplay-affecting randomness; createState seeds the core PRNG.
+  seed = crypto.getRandomValues(new Uint32Array(1))[0];
+  gs = createState(seed);
   flapTicks = [];
-}
-
-function speedLevel() {
-  return Math.round((pipeSpeed - C.PIPE_SPEED) / C.SPEED_UP_AMOUNT);
-}
-function currentGap() {
-  return Math.max(C.PIPE_GAP_MIN, C.PIPE_GAP_MAX - speedLevel() * C.PIPE_GAP_STEP);
-}
-function currentInterval() {
-  return Math.max(C.PIPE_INTERVAL_MIN, C.PIPE_INTERVAL_MAX - speedLevel() * C.PIPE_INTERVAL_STEP);
-}
-
-function spawnPipe() {
-  const gap    = currentGap();
-  const minTop = 60;
-  const maxTop = C.GROUND - gap - 60;
-  const topH   = minTop + rng() * (maxTop - minTop); // seeded → reproducible
-  pipes.push({ x: C.W, topH, gap, scored: false });
-  lastPipeTick = tick;
+  pendingFlap = false;
+  bgScroll = 0;
+  countdownStart = performance.now();
+  acc = 0;
+  lastFrameTime = null;
 }
 
 // ─── DRAWING ──────────────────────────────────────────────────────────────────
@@ -887,8 +846,8 @@ function drawPlayer() {
   const inFlap = (performance.now() - lastFlapAt) < FLAP_FRAME_MS;
   const sprite = (inFlap && currentTheme.img2) ? currentTheme.img2 : currentTheme.img;
   ctx.save();
-  ctx.translate(C.PLAYER_X, player.y);
-  ctx.rotate(Math.max(-0.4, Math.min(0.4, player.vy * 0.05)));
+  ctx.translate(C.PLAYER_X, gs.player.y);
+  ctx.rotate(Math.max(-0.4, Math.min(0.4, gs.player.vy * 0.05)));
   ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
   ctx.restore();
 }
@@ -896,69 +855,38 @@ function drawPlayer() {
 function drawHUD() {
   ctx.font = `14px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'center';
-  const sl = speedLevel() + 1;
+  const sl = speedLevel(gs) + 1;
   // High is shown only when we have an authoritative value from Supabase.
   // currentBest === null means offline/unknown → omit it rather than show a stale number.
-  const high = currentBest == null ? '' : `High: ${Math.max(score, currentBest)}  |  `;
+  const high = currentBest == null ? '' : `High: ${Math.max(gs.score, currentBest)}  |  `;
   strokedText(
-    `Score: ${score}  |  ${high}${currentPlayer}  |  Spd ${sl}`,
+    `Score: ${gs.score}  |  ${high}${currentPlayer}  |  Spd ${sl}`,
     C.W / 2, C.GROUND + 32, 4
   );
 }
 
-// ─── COLLISION ────────────────────────────────────────────────────────────────
-function collides() {
-  const r = C.PLAYER_SIZE / 2 - 4;
-  const px = C.PLAYER_X, py = player.y;
-  if (py - r <= 0 || py + r >= C.GROUND) return true;
-  for (const p of pipes) {
-    if (px + r > p.x && px - r < p.x + C.PIPE_W) {
-      if (py - r < p.topH || py + r > p.topH + p.gap) return true;
-    }
-  }
-  return false;
-}
+// Collision lives in the shared core (collides()); step() returns whether the
+// player died this tick. The renderer never re-checks it.
 
 // ─── GAME LOOP ────────────────────────────────────────────────────────────────
-// Advance physics exactly one fixed tick. Deterministic: depends only on
-// tick count + seeded rng + logged flaps — never on wall-clock or frame rate.
+// Advance physics exactly one fixed tick by driving the shared core's step().
+// Deterministic: the core depends only on tick count + seeded rng + whether the
+// player flapped this tick. We log the flap tick HERE (at consumption), which
+// guarantees flapTicks stays strictly increasing with one entry per tick — what
+// the server replay validates — even if two flaps land in the same frame.
 // Returns true if the player died this tick.
-function stepPhysics() {
-  // Initialize spawn/ramp timers + first pipe on the first active tick
-  if (lastSpeedUpTick === null) {
-    lastSpeedUpTick = tick;
-    lastPipeTick    = tick;
-    spawnPipe();
-  }
-
-  // Speed ramp (every SPEED_UP_TICKS ticks)
-  if (tick - lastSpeedUpTick >= SPEED_UP_TICKS) {
-    pipeSpeed += C.SPEED_UP_AMOUNT;
-    lastSpeedUpTick = tick;
-  }
-
-  // Spawn pipes (interval in ms → ticks)
-  if ((tick - lastPipeTick) * TICK_MS >= currentInterval()) spawnPipe();
-
-  // Update pipes
-  for (const p of pipes) {
-    p.x -= pipeSpeed;
-    if (!p.scored && p.x + C.PIPE_W < C.PLAYER_X) { score++; p.scored = true; AudioFX.score(); }
-  }
-  pipes = pipes.filter(p => p.x + C.PIPE_W > 0);
-
-  // Update player physics
-  player.vy += C.GRAVITY;
-  player.y  += player.vy;
-
-  tick++;
-  return collides();
+function stepOnce() {
+  const flapped = pendingFlap;
+  if (flapped) { flapTicks.push(gs.tick); pendingFlap = false; }
+  const { scored, dead } = step(gs, flapped);
+  if (scored) AudioFX.score();       // side-effect kept in the render layer, not the core
+  return dead;
 }
 
 function loop(now) {
   ctx.clearRect(0, 0, C.W, C.H);
   drawBackground();
-  for (const p of pipes) drawPipe(p.x, p.topH, p.gap);
+  for (const p of gs.pipes) drawPipe(p.x, p.topH, p.gap);
   drawPlayer();
   drawHUD();
 
@@ -981,7 +909,7 @@ function loop(now) {
 
   // Advance the parallax scroll with the world. Render-only: tied to pipeSpeed so
   // scenery tracks pipe motion, but never fed into physics/replay.
-  bgScroll += pipeSpeed;
+  bgScroll += gs.pipeSpeed;
 
   // ── Active play: fixed-timestep accumulator ──
   // Advance physics in fixed TICK_MS steps regardless of monitor refresh rate,
@@ -991,7 +919,7 @@ function loop(now) {
   lastFrameTime = now;
 
   while (acc >= TICK_MS) {
-    if (stepPhysics()) { endGame(); return; }
+    if (stepOnce()) { endGame(); return; }
     acc -= TICK_MS;
   }
 
@@ -1021,13 +949,13 @@ const GO_ERRORS = [
 function showGameOver(msg) {
   document.getElementById('gameover-msg').textContent = msg;
   document.getElementById('go-errcode').textContent =
-    GO_ERRORS[score % GO_ERRORS.length] + ` (req ${(score * 7919 + 1009).toString(16)})`;
+    GO_ERRORS[gs.score % GO_ERRORS.length] + ` (req ${(gs.score * 7919 + 1009).toString(16)})`;
   overlay.classList.remove('hidden');
   showScreen('gameover');
 
   // Count-up animation on the score readout (display only — purely cosmetic).
   const el = document.getElementById('go-score-val');
-  const target = score, steps = Math.min(30, target) || 1, t0 = performance.now(), dur = 600;
+  const target = gs.score, steps = Math.min(30, target) || 1, t0 = performance.now(), dur = 600;
   el.textContent = '0';
   (function tick(now) {
     const p = Math.min(1, (now - t0) / dur);
@@ -1041,26 +969,27 @@ async function endGame() {
   AudioFX.gameOver();
 
   const prev  = currentBest;            // authoritative best, or null when offline
-  const isNew = prev != null && score > prev;
+  const finalScore = gs.score;
+  const isNew = prev != null && finalScore > prev;
   // Replay payload for server-side validation — captured before initGame resets it.
   const replay = { seed, flapTicks };
 
-  if (DEV_MODE) {
+  if (window.DEV_MODE) {
     // Skip the friction theater. saveScore self-gates on LIVE_DB, so this still
     // exercises the real Supabase round-trip when the DB is enabled locally.
-    await saveScore(currentPlayer, score, replay);
+    await saveScore(currentPlayer, finalScore, replay);
     showGameOver(isNew ? 'New high score! 🎉' : '');
     return;
   }
 
-  Clave.startScoreSubmit(currentPlayer, score, async () => {
-    await saveScore(currentPlayer, score, replay);
+  Clave.startScoreSubmit(currentPlayer, finalScore, async () => {
+    await saveScore(currentPlayer, finalScore, replay);
     showGameOver(
       isNew
         ? 'New high score! 🎉'
         : prev == null
           ? ''
-          : `Best: ${Math.max(score, prev)}`
+          : `Best: ${Math.max(finalScore, prev)}`
     );
   });
   overlay.classList.remove('hidden'); // keep visible for CAPTCHA + submit screens
@@ -1068,9 +997,11 @@ async function endGame() {
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 function flap() {
-  player.vy = C.FLAP;
+  // Queue the flap for the next physics tick, which applies it to the core AND
+  // logs that tick into flapTicks (see stepOnce). Routing input through the tick
+  // boundary keeps browser play byte-identical to the server replay.
+  pendingFlap = true;
   lastFlapAt = performance.now();      // trigger the render-only flap frame
-  if (flapTicks) flapTicks.push(tick); // log input tick for server-side replay
   const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   AudioFX.flap(key);
 }
@@ -1109,7 +1040,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
   // DB interaction (token) is self-gated on LIVE_DB inside ensurePlayerToken.
   // DEV_MODE independently controls only the SSO/captcha friction below.
   await ensurePlayerToken(name);
-  if (DEV_MODE) { startGame(name); return; }
+  if (window.DEV_MODE) { startGame(name); return; }
   showScreen(null);
   overlay.classList.remove('hidden');
   Clave.startLogin(name, () => startGame(name));
