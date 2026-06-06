@@ -59,7 +59,6 @@ localStorage and proves you own the name when you submit a score.
 **Save it somewhere.** You'll need it if your localStorage gets wiped (clearing browser
 data, incognito) or you want to play under the same name on another machine.
 
-To restore: hit **"🔑 Recover account with token"** (or the **"Recover session"** link on
-the token screen) and paste it. Your browser is bound to that name again and your high
-scores carry over. Lose the token with no copy saved and the name is effectively locked —
-pick a new one.
+To restore: hit **"🔑 Recover account with token"** on the home screen and paste it. Your
+browser is bound to that name again and your high scores carry over. Lose the token with
+no copy saved and the name is effectively locked — pick a new one.
