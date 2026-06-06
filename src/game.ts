@@ -481,6 +481,28 @@ function pixelTree(x, scale, leaf, trunk) {
 }
 
 THEMES.bird.bgLayers = [
+  // A sun in the corner with slowly pulsing rays.
+  { speed: 0, draw() {
+      const t = nowSec();
+      const cx = C.W - 120, cy = 110, r = 38;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate((t * 0.15) % (Math.PI * 2));                    // slow rotation
+      ctx.strokeStyle = 'rgba(255,213,79,0.55)';
+      ctx.lineWidth = 4; ctx.lineCap = 'round';
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const len = r + 14 + Math.sin(t * 2 + i) * 6;            // rays breathe
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * (r + 6), Math.sin(a) * (r + 6));
+        ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.lineWidth = 1;
+      pixelDisc(cx, cy, r, '#ffd54f');
+      pixelDisc(cx, cy, r - 6, '#ffe57f');
+  } },
   // Distant rolling hills
   { speed: 0.15, draw(o) { tileMotif(o, 360, x => { pixelHill(x, 320, 120, '#6aa84f'); pixelHill(x + 180, 260, 90, '#7cb85f'); }); } },
   // Near treeline
@@ -496,20 +518,42 @@ THEMES.penguin.bgLayers = [
       pixelHill(x + 140, 120, 34, '#eaf6fb');                    // smaller mound
       pxRect(x + 90, G() - 6, 30, 2, '#9cd2e6');                 // floe crack
   }); } },
+  // Falling snow: flakes drift down + sideways, wrapping at the ground. Fixed grid
+  // of columns offset by the render clock — no RNG, fully deterministic in position.
+  { speed: 0, draw() {
+      const t = nowSec();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      for (let i = 0; i < 70; i++) {
+        const baseX = (i * 197 + 30) % C.W;
+        const spd = 28 + (i % 5) * 10;                           // varied fall speed
+        const y = (t * spd + i * 53) % C.GROUND;
+        const x = (baseX + Math.sin(t * 0.6 + i) * 14) % C.W;    // sideways sway
+        const s = i % 4 === 0 ? 3 : 2;                           // a few bigger flakes
+        if (isRound()) pixelDisc(x, y, s / 2 + 1, 'rgba(255,255,255,0.85)');
+        else ctx.fillRect(Math.round(x), Math.round(y), s, s);
+      }
+  } },
 ];
 
 THEMES.squid.bgLayers = [
-  // Deep layer: drifting bubbles of various sizes (rise read comes from size/spacing)
+  // Deep layer: bubbles rising from the seabed, wobbling side to side, wrapping back
+  // to the bottom when they reach the surface. Render clock drives the rise.
   { speed: 0.2, draw(o) { tileMotif(o, 320, x => {
-      const bub = (bx, by, r) => {
-        pixelDisc(bx, by, r, 'rgba(150,230,255,0.16)');
-        pixelDisc(bx, by, Math.max(1, r - 3), 'rgba(180,240,255,0.10)'); // hollow ring
+      const t = nowSec();
+      // bx,by0 = column + spawn height; r = size; spd = rise speed (px/s); ph = wobble phase
+      const bub = (bx, by0, r, spd, ph) => {
+        const range = G() - 20;                                   // travel before wrapping
+        const rise = (t * spd) % range;
+        const by = G() - 10 - ((by0 + rise) % range);             // climb + wrap
+        const wob = Math.sin(t * 1.6 + ph) * 4;                   // gentle horizontal wobble
+        pixelDisc(bx + wob, by, r, 'rgba(150,230,255,0.16)');
+        pixelDisc(bx + wob, by, Math.max(1, r - 3), 'rgba(180,240,255,0.10)'); // hollow ring
       };
-      bub(x + 40, G() - 220, 9);
-      bub(x + 110, G() - 120, 5);
-      bub(x + 180, G() - 300, 13);
-      bub(x + 250, G() - 180, 4);
-      bub(x + 300, G() - 90, 7);
+      bub(x + 40, 40,  9,  22, 0);
+      bub(x + 110, 220, 5,  34, 1.5);
+      bub(x + 180, 120, 13, 16, 3);
+      bub(x + 250, 320, 4,  40, 4.2);
+      bub(x + 300, 180, 7,  28, 5.5);
   }); } },
   // Foreground: tall swaying-look algae stalks (static curve via stepped offset)
   { speed: 0.55, draw(o) { tileMotif(o, 240, x => {
@@ -547,46 +591,98 @@ THEMES.squid.bgLayers = [
 THEMES.bee.bgLayers = [
   // Soft green hills
   { speed: 0.18, draw(o) { tileMotif(o, 300, x => { pixelHill(x, 280, 100, '#9ccc65'); pixelHill(x + 150, 220, 70, '#aed581'); }); } },
-  // Flower stalks + small trees up front
+  // Flower stalks + small trees up front — blooms sway, a bee bobs between them
   { speed: 0.55, draw(o) { tileMotif(o, 170, x => {
+      const t = nowSec();
       pixelTree(x + 30, 3, '#558b2f', '#6d4c41');
-      // a couple of flowers
+      // a swaying flower: bloom leans on the stem top
+      const sway = Math.sin(t * 1.8 + x * 0.01) * 4;
       pxRect(x + 110, G() - 26, 2, 26, '#33691e');               // stem
-      pxRect(x + 106, G() - 32, 10, 8, '#ec407a');               // bloom
-      pxRect(x + 109, G() - 30, 4, 4, '#ffeb3b');                // center
+      pxRect(x + 106 + sway, G() - 32, 10, 8, '#ec407a');        // bloom (sways)
+      pxRect(x + 109 + sway, G() - 30, 4, 4, '#ffeb3b');         // center
+      // a little bee bobbing in a figure-eight near the flower
+      const bx = x + 60 + Math.sin(t * 1.2) * 22;
+      const by = G() - 70 + Math.sin(t * 2.4) * 12;
+      pixelDisc(bx, by, 3, '#ffca28');                           // body
+      ctx.fillStyle = '#3a2a10';
+      ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2, 2, 4); // stripe
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      pixelDisc(bx - 3, by - 3, 1.5, 'rgba(255,255,255,0.7)');    // wing glint
   }); } },
 ];
 
+// Lightning strength for the wizard theme: a sharp flash that decays, firing on a
+// ~7s cycle with a double-blink. Returns 0 (dark) … 1 (full flash). Render-only.
+function wizardFlash() {
+  const t = nowSec();
+  const period = 7;
+  const into = t % period;                  // seconds since last strike began
+  if (into > 0.6) return 0;                  // dark most of the cycle
+  // two quick blinks inside the first 0.6s, exponential-ish decay
+  const a = Math.max(0, 1 - into / 0.25);
+  const b = into > 0.3 ? Math.max(0, 1 - (into - 0.3) / 0.2) * 0.7 : 0;
+  return Math.max(a, b);
+}
+
 THEMES.wizard.bgLayers = [
+  // Lightning: a full-sky flash painted behind the mountains on a periodic strike.
+  { speed: 0, draw() {
+      const f = wizardFlash();
+      if (f <= 0) return;
+      ctx.fillStyle = `rgba(200,190,255,${0.55 * f})`;
+      ctx.fillRect(0, 0, C.W, C.GROUND);
+      // a jagged bolt down from the sky on the stronger blinks
+      if (f > 0.5) {
+        ctx.strokeStyle = `rgba(255,255,255,${f})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let bx = C.W * 0.62, by = 0;
+        ctx.moveTo(bx, by);
+        for (let s = 0; s < 6; s++) { bx += (s % 2 ? 26 : -22); by += 48; ctx.lineTo(bx, by); }
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+  } },
   // Jagged purple mountain range — overlapping snow-capped peaks
   { speed: 0.12, draw(o) { tileMotif(o, 420, x => {
       pixelPeak(x - 40, 300, 200, '#3a2a5a', '#d8cfe8');
       pixelPeak(x + 150, 260, 160, '#4a3a6e', '#cfc4e0');
       pixelPeak(x + 320, 220, 130, '#332551');
   }); } },
-  // A castle on the mid ridge
+  // A castle on the mid ridge — windows brighten with each lightning flash
   { speed: 0.35, draw(o) { tileMotif(o, 520, x => {
-      const bx = x + 60, by = G(), c = '#5a5566', d = '#403c4a', win = '#ffd54f';
+      const bx = x + 60, by = G(), c = '#5a5566', d = '#403c4a';
+      const f = wizardFlash();
+      const win = `rgba(255,213,79,${0.85 + 0.15 * f})`;          // base warm, flares on flash
       pxRect(bx, by - 70, 120, 70, c);                            // keep
       for (let t = 0; t < 4; t++) pxRect(bx - 10 + t * 40, by - 92, 20, 26, c); // battlement towers
       for (let t = 0; t < 4; t++) pxRect(bx - 6 + t * 40, by - 100, 12, 10, d); // tower caps
       pxRect(bx + 50, by - 40, 20, 40, d);                        // gate
-      pxRect(bx + 18, by - 56, 8, 8, win); pxRect(bx + 94, by - 56, 8, 8, win); // lit windows
+      ctx.fillStyle = win; ctx.fillRect(bx + 18, by - 56, 8, 8); ctx.fillRect(bx + 94, by - 56, 8, 8); // lit windows
   }); } },
 ];
 
 THEMES.airplane.bgLayers = [
   // Hazy data-center skyline (rows of windowed slabs)
   { speed: 0.16, draw(o) { tileMotif(o, 340, x => {
-      const slab = (sx, w, h, c) => {
+      const t = nowSec();
+      const slab = (sx, w, h, c, seed) => {
         pxRect(sx, G() - h, w, h, c);
-        ctx.fillStyle = 'rgba(180,220,255,0.5)';
+        const round = isRound();
+        // Lit office windows — most steady-warm, a few flicker as people "work late".
+        let cell = 0;
         for (let yy = G() - h + 10; yy < G() - 8; yy += 16)
-          for (let xx = sx + 8; xx < sx + w - 6; xx += 14) ctx.fillRect(xx, yy, 6, 8);
+          for (let xx = sx + 8; xx < sx + w - 6; xx += 14, cell++) {
+            const flick = (seed * 5 + cell * 11) % 7 === 0;            // ~1 in 7 flickers
+            const a = flick ? 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * 4 + cell)) : 0.5;
+            const col = `rgba(255,228,150,${a})`;                      // warm office light
+            if (round) { pixelDisc(xx + 3, yy + 4, 3, col); }
+            else { ctx.fillStyle = col; ctx.fillRect(xx, yy, 6, 8); }
+          }
       };
-      slab(x, 90, 180, '#56607a');
-      slab(x + 120, 70, 130, '#626c88');
-      slab(x + 220, 100, 220, '#4c5570');
+      slab(x, 90, 180, '#56607a', 1);
+      slab(x + 120, 70, 130, '#626c88', 2);
+      slab(x + 220, 100, 220, '#4c5570', 3);
   }); } },
   // Foreground cooling units / satellite dishes
   { speed: 0.5, draw(o) { tileMotif(o, 240, x => {
@@ -597,31 +693,59 @@ THEMES.airplane.bgLayers = [
   }); } },
 ];
 
+// Render-only wall clock (seconds) for cosmetic animation like pulsing lights.
+// Never read by physics/replay, so determinism is untouched.
+const nowSec = () => performance.now() / 1000;
+// Parse a #rrggbb string into an `rgba(r,g,b,a)` with the given alpha — lets the
+// neon window lights fade their brightness as they pulse.
+function withAlpha(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
 THEMES.robot.bgLayers = [
   // Neon circuit-city skyline — towers with antenna spires, setback crowns and a
-  // pulsing rooftop beacon, so the silhouette isn't just flat-topped rectangles.
+  // grid of pulsing window lights. Pixel mode = square lights blinking; round mode
+  // = soft glowing dots. Each window has its own phase so the grid shimmers.
   { speed: 0.16, draw(o) { tileMotif(o, 320, x => {
-      const tower = (sx, w, h, edge) => {
-        const topY = G() - h;
+      const t = nowSec();
+      const tower = (sx, w, h, edge, seed) => {
+        const topY = G() - h, round = isRound();
         pxRect(sx, topY, w, h, '#10202e');
-        ctx.fillStyle = edge;
-        // horizontal circuit/window rows
-        for (let yy = topY + 6; yy < G() - 6; yy += 14) ctx.fillRect(sx + 4, yy, w - 8, 2);
-        // a narrower setback crown block on top (breaks the flat rectangle)
+        // setback crown block on top (breaks the flat rectangle silhouette)
         const cw = Math.round(w * 0.55), cx = sx + Math.round((w - cw) / 2), ch = 16;
         pxRect(cx, topY - ch, cw, ch, '#10202e');
         ctx.fillStyle = edge;
         ctx.fillRect(cx, topY - ch, cw, 2);
         ctx.fillRect(sx, topY, w, 2);
-        // antenna mast + glowing beacon
+        // pulsing window grid — each cell pulses on its own phase (deterministic in
+        // position via seed+row+col, animated via the render clock t).
+        const cols = Math.max(2, Math.floor((w - 10) / 14));
+        const stepX = (w - 10) / cols;
+        let cell = 0;
+        for (let yy = topY + 8; yy < G() - 8; yy += 14) {
+          for (let ci = 0; ci < cols; ci++, cell++) {
+            const phase = ((seed * 7 + cell * 13) % 31) / 31 * 6.283;
+            const lit = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * 2.2 + phase));
+            const wx = sx + 6 + ci * stepX;
+            if (round) {
+              pixelDisc(Math.round(wx + 3), yy + 2, 3, withAlpha(edge, lit));
+            } else {
+              ctx.fillStyle = withAlpha(edge, lit);
+              ctx.fillRect(Math.round(wx), yy, 6, 4);
+            }
+          }
+        }
+        // antenna mast + slow-pulsing rooftop beacon
         const mx = sx + Math.round(w / 2);
         ctx.fillStyle = edge;
         ctx.fillRect(mx - 1, topY - ch - 18, 2, 18);
-        pixelDisc(mx, topY - ch - 20, 4, edge);          // round in round mode, stepped in pixel
+        const beacon = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 3 + seed));
+        pixelDisc(mx, topY - ch - 20, 4, withAlpha(edge, beacon));
       };
-      tower(x, 80, 200, '#00e5ff');
-      tower(x + 110, 60, 150, '#76ff03');
-      tower(x + 200, 90, 240, '#00e5ff');
+      tower(x, 80, 200, '#00e5ff', 1);
+      tower(x + 110, 60, 150, '#76ff03', 2);
+      tower(x + 200, 90, 240, '#00e5ff', 3);
   }); } },
 ];
 
@@ -814,6 +938,11 @@ const MAX_FRAME_MS = 250;            // clamp to avoid spiral-of-death after tab
 // renderer reads it but never mutates it — only step() does.
 let gs: GameState;
 let animId, currentPlayer, currentBest = null;
+// True only during active gameplay (loop() is driving). While false, an idle
+// animation loop redraws the menu background so time-based scenery effects (pulsing
+// lights, drifting bubbles, lightning…) animate on the preview, not just in-game.
+let gameActive = false;
+let idleAnimId = 0;
 // Wall-clock timestamp of the last flap, for the render-only 2-frame animation.
 // Deliberately NOT tied to the sim tick — purely cosmetic, never feeds replay.
 let lastFlapAt = -1e9;
@@ -853,11 +982,14 @@ function drawBackground() {
   if (t.cloudFill === 'none') {
     // No clouds at all (e.g. squid — underwater).
   } else if (t.cloudFill === null && t.sky === THEMES.rocket.sky) {
-    // Stars for space
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    // Twinkling stars for space — each star's brightness pulses on its own phase.
+    const tt = nowSec();
     for (let i = 0; i < 60; i++) {
       const sx = (i * 137 + 11) % C.W, sy = (i * 97 + 7) % C.GROUND;
-      ctx.fillRect(sx, sy, i % 3 === 0 ? 2 : 1, i % 3 === 0 ? 2 : 1);
+      const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(tt * 2.5 + i * 1.7));
+      const sz = i % 3 === 0 ? 2 : 1;
+      ctx.fillStyle = `rgba(255,255,255,${tw})`;
+      ctx.fillRect(sx, sy, sz, sz);
     }
   } else if (t.cloudFill === null) {
     // Robot: square data-packet clouds
@@ -1054,6 +1186,8 @@ function loop(now) {
 }
 
 async function startGame(playerName) {
+  stopIdle();
+  gameActive = true;
   showScreen(null);
   // Fetch the authoritative best from Supabase once, before the loop starts.
   // null ⇒ offline/unknown → HUD omits the High readout.
@@ -1093,6 +1227,8 @@ function showGameOver(msg) {
 
 async function endGame() {
   cancelAnimationFrame(animId);
+  gameActive = false;
+  startIdle();           // resume animated menu/game-over background
   AudioFX.gameOver();
 
   const prev  = currentBest;            // authoritative best, or null when offline
@@ -1271,10 +1407,21 @@ document.getElementById('btn-taste-switch').addEventListener('click', () => {
   applyGfx('round'); // they admitted it
 });
 
-// Draw a static background while on menu
+// Idle animation loop: while not actively playing, redraw the background each frame
+// so animated scenery (pulsing lights, bubbles, lightning) lives on the menu preview
+// too. Cheap — just the parallax, no physics. startGame stops it; endGame restarts.
+function idleLoop() {
+  if (gameActive) { idleAnimId = 0; return; }
+  drawBackground();
+  idleAnimId = requestAnimationFrame(idleLoop);
+}
+function startIdle() { if (!idleAnimId && !gameActive) idleAnimId = requestAnimationFrame(idleLoop); }
+function stopIdle()  { if (idleAnimId) { cancelAnimationFrame(idleAnimId); idleAnimId = 0; } }
+
 drawBackground();
 populateUserSelect();
 showScreen('menu');
+startIdle();
 
 // Canvas text uses the pixel webfont; redraw once it's loaded so the first menu
 // paint isn't stuck on the fallback monospace.
