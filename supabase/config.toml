@@ -11,3 +11,8 @@ verify_jwt = false
 # Token-only recovery. Called with the publishable anon key; resolves a raw token to
 # its account name using the service role, so token_hash stays hidden from anon SELECT.
 verify_jwt = false
+
+[functions.fortune]
+# `fortune` — returns one random real Unix fortune cookie. No auth, no DB; pure data.
+# The client wraps it in a cowsay-style balloon with the selected avatar's ASCII art.
+verify_jwt = false

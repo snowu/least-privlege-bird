@@ -130,7 +130,7 @@
     .captcha-panel h2 { font-family: var(--font-display); font-size: 0.72rem; color: #c8d6f8; text-align: center; line-height: 1.7; }
     .captcha-panel p.sub { font-family: var(--font-display); font-size: 0.62rem; color: #6b7a99; text-align: center; line-height: 1.8; }
     .captcha-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;
+      display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%;
     }
     .captcha-tile {
       background: #0d1117; border-radius: 8px;
@@ -145,6 +145,19 @@
     .captcha-error { font-family: var(--font-display); color: #ff6b6b; font-size: 0.6rem; line-height: 1.6; min-height: 1.2em; text-align: center; }
 
     .hidden { display: none !important; }
+
+    /* Fortune cow — fixed bottom-right. ALWAYS true monospace (never the pixel
+       font) so the ASCII art + speech balloon stay column-aligned. */
+    #fortune-cow {
+      position: fixed; right: 14px; bottom: 12px; z-index: 40;
+      margin: 0; padding: 10px 14px; pointer-events: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px; line-height: 1.15; white-space: pre;
+      color: #b8e0a0; text-shadow: 1px 1px 0 #000;
+      background: rgba(0,0,0,0.45); border-radius: 6px;
+      opacity: 0; transition: opacity 0.4s ease;
+    }
+    #fortune-cow.show { opacity: 0.92; }
 
     /* ── GAME OVER (retro arcade + IAM satire) ── */
     #gameover-panel {
@@ -354,6 +367,12 @@
     </div>
   </div>
 
+  <!-- ══ FORTUNE COW (avatar says a real Unix fortune; bottom-right corner) ══
+       Populated by game.js from the `fortune` edge function, wrapped cowsay-style
+       with the selected avatar's ASCII. Always true monospace so the art stays
+       aligned regardless of pixel/round style. -->
+  <pre id="fortune-cow" class="hidden" aria-hidden="true"></pre>
+
   <!-- ══ TOKEN MODAL (outside overlay, full-screen) ══ -->
   <div id="token-modal" class="hidden" style="
     position:fixed;inset:0;background:rgba(0,0,0,0.85);
@@ -407,8 +426,8 @@
 
   <script>
     // DEV_MODE: skip the friction theater (SSO/captchas) for fast gameplay iteration.
-    var DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
-    // var DEV_MODE = true;
+    // var DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
+    var DEV_MODE = false;
     // LIVE_DB: talk to the real Supabase. ALWAYS true in production. Locally it is OFF
     // by default (don't pollute prod from a laptop); flip it from the devtools console:
     //   localStorage.lpb_live = '1'   → reload to enable real reads/writes locally

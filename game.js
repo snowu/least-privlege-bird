@@ -446,6 +446,116 @@ function showScreen(name) {
   overlay.classList.remove('hidden');
   if (name) screens[name].classList.remove('hidden');
   else overlay.classList.add('hidden');
+  // Fortune cow rides the idle screens (menu, game over) — not during play.
+  if (name === 'menu' || name === 'gameover') showFortuneCow();
+  else hideFortuneCow();
+}
+
+// ─── FORTUNE COW (avatar `cowsay`) ─────────────────────────────────────────────
+// The `fortune` edge function gives us a line; here we are `cowsay -f <avatar>`:
+// wrap the line in a speech balloon and staple the selected avatar's ASCII under
+// it. ASCII cows are 7-bit art — they must be raw strings rendered in a true
+// monospace <pre> (see #fortune-cow CSS), never the pixel font.
+const COW_ART = {
+  // Tail backslashes lead the eye from the balloon down to each figure's head.
+  // The disheveled panic bird — facing left, cross-eyed, gaping beak, alarmed tuft.
+  bird: [
+    '       \\',
+    '        \\        _.--._',
+    '         \\      / `   \\\'\\.',
+    '          >--. (  o   o  )',
+    '         /    \\ \\  __  /',
+    '        <(     `"`/||\\`',
+    '          `-._   (_||_)',
+    '              `~~  ^^',
+  ].join('\n'),
+  // Bzz. Striped body, little wings, antennae.
+  bee: [
+    '       \\',
+    '        \\       _\\/_',
+    '         \\     (.o o.)',
+    '          >--.  \\ ~ /',
+    '              .-=#=#=-.',
+    '             /  =#=#=  \\',
+    '             `-.=#=#.-\'',
+    '                `~~`',
+  ].join('\n'),
+  // Pointy hat, beard, twinkle. He has Opinions about your IAM policy.
+  wizard: [
+    '       \\',
+    '        \\         /\\',
+    '         \\       /* \\',
+    '          >--.  /  * \\',
+    '               (______)',
+    '               | o  o |',
+    '               |  >   |',
+    '                \\ ww /',
+    '                /\\__/\\',
+  ].join('\n'),
+  // Tiny jet leaving a contrail straight to the speech bubble.
+  airplane: [
+    '       \\',
+    '        \\          __|__',
+    '         `-------o--( )--o-------',
+    '                    |||',
+    '             _______(_)_______',
+    '              o   o     o   o',
+  ].join('\n'),
+};
+
+const _COW_MAX = 40; // balloon inner width
+
+function _cowBalloon(text) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    if (cur === '') cur = w;
+    else if ((cur + ' ' + w).length <= _COW_MAX) cur += ' ' + w;
+    else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  if (!lines.length) lines.push('');
+  const width = Math.max(...lines.map(l => l.length));
+  const out = [' ' + '_'.repeat(width + 2)];
+  if (lines.length === 1) {
+    out.push(`< ${lines[0].padEnd(width)} >`);
+  } else {
+    lines.forEach((l, i) => {
+      const [lb, rb] = i === 0 ? ['/', '\\']
+        : i === lines.length - 1 ? ['\\', '/'] : ['|', '|'];
+      out.push(`${lb} ${l.padEnd(width)} ${rb}`);
+    });
+  }
+  out.push(' ' + '-'.repeat(width + 2));
+  return out.join('\n');
+}
+
+// `cowsay -f <currentAvatar>` <<< "<fortune>"
+function _renderCow(text) {
+  const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'bird';
+  const art = COW_ART[key] || COW_ART.bird;
+  return _cowBalloon(text) + '\n' + art;
+}
+
+const _fortuneEl = document.getElementById('fortune-cow');
+// Fetch a fresh fortune and show the avatar saying it in the corner. Safe to call
+// on every menu/loading/death screen; failures fall back to a local fortune.
+async function showFortuneCow() {
+  if (!_fortuneEl) return;
+  try {
+    const tip = await fetchFortune();
+    _fortuneEl.textContent = _renderCow(tip);
+    _fortuneEl.classList.remove('hidden');
+    requestAnimationFrame(() => _fortuneEl.classList.add('show'));
+  } catch (e) {
+    console.warn('showFortuneCow failed', e);
+  }
+}
+function hideFortuneCow() {
+  if (!_fortuneEl) return;
+  _fortuneEl.classList.remove('show');
+  _fortuneEl.classList.add('hidden');
 }
 
 // ─── CLOUDS (static decoration) ───────────────────────────────────────────────

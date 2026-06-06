@@ -113,6 +113,134 @@ const Clave = (() => {
         { text: 'Route 53 with health checks + failover',correct: true,  explain: 'Yes. DNS-level failover routes traffic away from unhealthy endpoints.' },
       ],
     },
+
+    // ── GENERAL TECH: PYTHON ────────────────────────────────────────────────
+    {
+      prompt: 'In Python, what does a <strong>mutable default argument</strong> like <code>def f(x, acc=[])</code> cause?',
+      type: 'single',
+      options: [
+        { text: 'The list is shared across all calls', correct: true,  explain: 'Correct. Default args are evaluated once at definition. The same list persists between calls — a classic footgun. Use acc=None then acc = acc or [].' },
+        { text: 'A fresh list every call',             correct: false, explain: 'Wrong. That is the intuition that bites people — the default is created once, not per call.' },
+        { text: 'A SyntaxError',                        correct: false, explain: 'Wrong. It is perfectly valid syntax, just dangerous.' },
+        { text: 'The list is garbage collected immediately', correct: false, explain: 'Wrong. It lives as long as the function object does.' },
+      ],
+    },
+    {
+      prompt: 'Which statements about the Python <strong>GIL</strong> (Global Interpreter Lock) are true?',
+      type: 'multi',
+      options: [
+        { text: 'Only one thread executes Python bytecode at a time', correct: true,  explain: 'Yes. CPython serializes bytecode execution via the GIL.' },
+        { text: 'Threads are useless for I/O-bound work',             correct: false, explain: 'Wrong. The GIL is released during I/O, so threads help I/O-bound work.' },
+        { text: 'Multiprocessing sidesteps it with separate interpreters', correct: true,  explain: 'Yes. Each process has its own GIL, enabling true parallelism.' },
+        { text: 'It makes all Python code thread-safe',               correct: false, explain: 'Wrong. The GIL does not protect your data structures from race conditions across operations.' },
+      ],
+    },
+    {
+      prompt: 'What does a Python <code>generator</code> (using <code>yield</code>) give you over returning a list?',
+      type: 'single',
+      options: [
+        { text: 'Lazy, one-at-a-time evaluation with low memory', correct: true,  explain: 'Correct. Values are produced on demand — no need to materialize the whole sequence.' },
+        { text: 'Faster random access by index',                 correct: false, explain: 'Wrong. Generators are forward-only; you cannot index them.' },
+        { text: 'Automatic multithreading',                       correct: false, explain: 'Wrong. Generators are single-threaded cooperative iteration.' },
+        { text: 'Type safety at runtime',                         correct: false, explain: 'Wrong. Generators have nothing to do with type checking.' },
+      ],
+    },
+
+    // ── GENERAL TECH: TYPESCRIPT / JS ───────────────────────────────────────
+    {
+      prompt: 'In TypeScript, what is the difference between <code>unknown</code> and <code>any</code>?',
+      type: 'single',
+      options: [
+        { text: 'unknown forces a type check/narrow before use; any disables checking', correct: true,  explain: 'Correct. unknown is the type-safe top type — you must narrow it. any opts out of the type system entirely.' },
+        { text: 'They are identical aliases',         correct: false, explain: 'Wrong. any is unsafe; unknown is safe.' },
+        { text: 'unknown only works with primitives', correct: false, explain: 'Wrong. unknown accepts any value, like any — the difference is at the use site.' },
+        { text: 'any is stricter than unknown',       correct: false, explain: 'Wrong. It is the reverse — unknown is the stricter, safer one.' },
+      ],
+    },
+    {
+      prompt: 'What does <code>await</code> actually do to an <code>async</code> function?',
+      type: 'single',
+      options: [
+        { text: 'Pauses that function and yields control back to the event loop', correct: true,  explain: 'Correct. await suspends the async function and lets other work run; it does NOT block the thread.' },
+        { text: 'Blocks the entire JS thread until the promise resolves', correct: false, explain: 'Wrong. JS is single-threaded but await is non-blocking — the event loop keeps running.' },
+        { text: 'Spawns a new OS thread',                       correct: false, explain: 'Wrong. No threads are created; it is cooperative concurrency.' },
+        { text: 'Converts the promise into a synchronous value', correct: false, explain: 'Wrong. The function still returns a promise; only the inner code reads sequentially.' },
+      ],
+    },
+    {
+      prompt: 'Which of these are real differences between <code>==</code> and <code>===</code> in JavaScript?',
+      type: 'multi',
+      options: [
+        { text: '== performs type coercion before comparing', correct: true,  explain: 'Yes. == coerces operands to a common type; === does not.' },
+        { text: '=== checks type and value with no coercion',  correct: true,  explain: 'Yes. Strict equality requires same type and same value.' },
+        { text: '== is faster at runtime in all engines',       correct: false, explain: 'Wrong. Performance is not the distinction, and coercion can be slower.' },
+        { text: '0 == "" is true',                              correct: false, explain: 'Wrong. 0 == "" is actually false in JS — coercion rules are full of traps, which is why === is preferred.' },
+      ],
+    },
+
+    // ── GENERAL TECH: ASYNC / CONCURRENCY ───────────────────────────────────
+    {
+      prompt: 'What problem does a <strong>race condition</strong> describe?',
+      type: 'single',
+      options: [
+        { text: 'Outcome depends on the non-deterministic timing/order of concurrent operations', correct: true,  explain: 'Correct. When result depends on interleaving of concurrent access to shared state, you have a race.' },
+        { text: 'A loop that runs too fast',          correct: false, explain: 'Wrong. Speed alone is not a race condition.' },
+        { text: 'Two servers competing for a domain', correct: false, explain: 'Wrong. That is not the concurrency meaning.' },
+        { text: 'A deadlock between two threads',     correct: false, explain: 'Wrong. Deadlock is a distinct problem — mutual waiting, not timing-dependent results.' },
+      ],
+    },
+    {
+      prompt: 'Which strategies help make a concurrent operation <strong>idempotent</strong>?',
+      type: 'multi',
+      options: [
+        { text: 'Use a client-supplied idempotency key', correct: true,  explain: 'Yes. The server dedupes retries by key — the standard pattern for safe retries.' },
+        { text: 'Upsert by a unique natural key',        correct: true,  explain: 'Yes. Writing by a stable key makes repeated writes converge to the same state.' },
+        { text: 'Append a new row on every request',     correct: false, explain: 'Wrong. Blind appends make retries duplicate data — the opposite of idempotent.' },
+        { text: 'Check-then-set without a transaction',  correct: false, explain: 'Wrong. The gap between check and set is itself a race; it does not guarantee idempotency.' },
+      ],
+    },
+
+    // ── GENERAL TECH: SCALABILITY / SYSTEM DESIGN ───────────────────────────
+    {
+      prompt: 'What is the core difference between <strong>horizontal</strong> and <strong>vertical</strong> scaling?',
+      type: 'single',
+      options: [
+        { text: 'Horizontal adds more machines; vertical makes one machine bigger', correct: true,  explain: 'Correct. Scale out (more nodes) vs scale up (bigger node). Horizontal scales further but needs statelessness/coordination.' },
+        { text: 'Horizontal means a faster CPU; vertical means more nodes',         correct: false, explain: 'Wrong. That is backwards.' },
+        { text: 'They are two names for the same thing',                            correct: false, explain: 'Wrong. They are fundamentally different approaches.' },
+        { text: 'Vertical scaling has no upper limit',                              correct: false, explain: 'Wrong. Vertical scaling hits a hardware ceiling; horizontal is what scales further.' },
+      ],
+    },
+    {
+      prompt: 'Per the <strong>CAP theorem</strong>, what must a distributed system give up during a network partition?',
+      type: 'single',
+      options: [
+        { text: 'Either consistency or availability', correct: true,  explain: 'Correct. Under a partition (P) you choose C or A — you cannot have both. No-partition systems can have both.' },
+        { text: 'Partition tolerance',                correct: false, explain: 'Wrong. You cannot give up partition tolerance — partitions happen whether you like it or not.' },
+        { text: 'All three at once',                  correct: false, explain: 'Wrong. The theorem says you sacrifice exactly one of C or A during a partition.' },
+        { text: 'Durability',                         correct: false, explain: 'Wrong. Durability is not one of the CAP properties.' },
+      ],
+    },
+    {
+      prompt: 'Why does adding a <strong>cache</strong> in front of a database help scalability?',
+      type: 'multi',
+      options: [
+        { text: 'It absorbs repeated reads, lowering DB load',   correct: true,  explain: 'Yes. Hot reads are served from cache, sparing the database.' },
+        { text: 'It reduces latency for cache hits',             correct: true,  explain: 'Yes. In-memory reads are far faster than disk-backed DB queries.' },
+        { text: 'It guarantees data is always fresh',            correct: false, explain: 'Wrong. Caches introduce staleness — invalidation is "one of the two hard problems".' },
+        { text: 'It removes the need for a database',            correct: false, explain: 'Wrong. The cache is a layer in front; the DB remains the source of truth.' },
+      ],
+    },
+    {
+      prompt: 'What does a <strong>message queue</strong> (like SQS/Kafka) between services primarily buy you?',
+      type: 'single',
+      options: [
+        { text: 'Decoupling + buffering so producers and consumers scale independently', correct: true,  explain: 'Correct. The queue absorbs bursts and lets each side fail/scale without taking the other down.' },
+        { text: 'Lower latency than a direct synchronous call', correct: false, explain: 'Wrong. Queues add latency — the win is resilience and decoupling, not speed.' },
+        { text: 'Strong consistency between services',          correct: false, explain: 'Wrong. Async messaging is eventually consistent by nature.' },
+        { text: 'Automatic schema validation',                  correct: false, explain: 'Wrong. A queue moves bytes; schema enforcement is your job.' },
+      ],
+    },
   ];
 
   // Pick two distinct random questions per session

@@ -101,6 +101,56 @@ async function resolveToken(token) {
   }
 }
 
+// ── FORTUNE ───────────────────────────────────────────────────────────────────
+// Fetch one random real Unix fortune cookie from the `fortune` edge function — the
+// message source for the avatar speech bubble (game.js wraps it cowsay-style with
+// the selected avatar's ASCII). Falls back to a small local set of real fortunes
+// when Supabase is off (DEV_MODE / offline) so the bubble always has something.
+const _FORTUNE_FALLBACK = [
+  "Do not overtax your powers.",
+  "Caution: breathing may be hazardous to your health.",
+  "Domestic happiness and faithful friends.",
+  "Don't look now, but the man in the moon is laughing at you.",
+  "Excellent day for putting Slinkies on an escalator.",
+  "Excellent time to become a missing person.",
+  "Exercise caution in your daily affairs.",
+  "Live in a world of your own, but always welcome visitors.",
+  "Someone is speaking well of you.",
+  "Tuesday is the Wednesday of the rest of your life.",
+  "Write yourself a threatening letter and pen a defiant reply.",
+  "You are capable of planning your future.",
+  "You have taken yourself too seriously.",
+  "You single-handedly fought your way into this hopeless mess.",
+  "You will always have good luck in your personal affairs.",
+  "You will be awarded a medal for disregarding safety in saving someone.",
+  "You will step on the night soil of many countries.",
+  "You will visit the Dung Pits of Glive soon.",
+  "Your aims are high, and you are capable of much.",
+  "Your lucky number has been disconnected.",
+  "Your object is to save the world, while still leading a pleasant life.",
+  "The early bird gets the worm, but the second mouse gets the cheese.",
+  "Today is the tomorrow you worried about yesterday.",
+  "Don't kiss an elephant on the lips today.",
+  "A conclusion is the place where you got tired of thinking.",
+];
+
+async function fetchFortune() {
+  if (_sb) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/fortune`, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+      });
+      if (res.ok) {
+        const { tip } = await res.json();
+        if (tip) return tip;
+      }
+    } catch (e) {
+      console.warn('Supabase fetchFortune failed, using local fortune', e);
+    }
+  }
+  return _FORTUNE_FALLBACK[Math.floor(Math.random() * _FORTUNE_FALLBACK.length)];
+}
+
 // Submit a run to the edge function, which replays { seed, flapTicks } through the
 // real physics and accepts the score only if it recomputes to the claimed value.
 // `replay` is { seed, flapTicks }; for registration (score 0) an empty run is used.
