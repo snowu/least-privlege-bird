@@ -302,6 +302,125 @@ const THEMES = {
   },
 };
 
+// ─── PARALLAX SCENERY (pixel-art, cosmetic, per-theme) ──────────────────────────
+// Each entry is a layer list ordered far→near. Layer.speed scales bgScroll: small =
+// drifts slowly (distant), ~1 = tracks pipes (foreground). draw(offset) tiles a
+// motif across the width via tileMotif. The ground sits at C.GROUND; motifs are
+// anchored to it so they read as standing on the same floor as the pipes.
+const G = () => C.GROUND;
+// Small reusable pixel primitives.
+function pxRect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+// A stepped pixel hill (rounded mound) anchored to the ground.
+function pixelHill(x, w, h, c) {
+  const u = Math.max(6, Math.round(w / 10));
+  for (let i = 0; i * u < w / 2; i++) {
+    const inset = i * u, hh = h - i * (h / (w / 2 / u));
+    pxRect(x + inset, G() - hh, w - inset * 2, hh, c);
+  }
+}
+// A blocky pixel disc (stepped circle) — keeps the pixel look, no anti-aliasing.
+function pixelDisc(cx, cy, r, c) {
+  ctx.fillStyle = c;
+  const u = Math.max(3, Math.round(r / 5));
+  for (let dy = -r; dy <= r; dy += u) {
+    const dw = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
+    ctx.fillRect(Math.round(cx - dw), Math.round(cy + dy), dw * 2, u);
+  }
+}
+// A conifer (stacked triangles) on a trunk.
+function pixelTree(x, scale, leaf, trunk) {
+  const s = scale, baseY = G();
+  pxRect(x - 2 * s, baseY - 4 * s, 4 * s, 4 * s, trunk);          // trunk
+  for (let tier = 0; tier < 3; tier++) {
+    const ty = baseY - (4 + tier * 5) * s, tw = (14 - tier * 3) * s;
+    for (let r = 0; r < 5; r++) pxRect(x - tw / 2 + r * s, ty - r * s, tw - r * 2 * s, s, leaf);
+  }
+}
+
+THEMES.bird.bgLayers = [
+  // Distant rolling hills
+  { speed: 0.15, draw(o) { tileMotif(o, 360, x => { pixelHill(x, 320, 120, '#6aa84f'); pixelHill(x + 180, 260, 90, '#7cb85f'); }); } },
+  // Near treeline
+  { speed: 0.5, draw(o) { tileMotif(o, 200, x => { pixelTree(x + 40, 4, '#2e7d32', '#5d4037'); pixelTree(x + 130, 3, '#388e3c', '#5d4037'); }); } },
+];
+
+THEMES.bee.bgLayers = [
+  // Soft green hills
+  { speed: 0.18, draw(o) { tileMotif(o, 300, x => { pixelHill(x, 280, 100, '#9ccc65'); pixelHill(x + 150, 220, 70, '#aed581'); }); } },
+  // Flower stalks + small trees up front
+  { speed: 0.55, draw(o) { tileMotif(o, 170, x => {
+      pixelTree(x + 30, 3, '#558b2f', '#6d4c41');
+      // a couple of flowers
+      pxRect(x + 110, G() - 26, 2, 26, '#33691e');               // stem
+      pxRect(x + 106, G() - 32, 10, 8, '#ec407a');               // bloom
+      pxRect(x + 109, G() - 30, 4, 4, '#ffeb3b');                // center
+  }); } },
+];
+
+THEMES.wizard.bgLayers = [
+  // Jagged purple mountains with a dragon silhouette drifting far away
+  { speed: 0.12, draw(o) { tileMotif(o, 420, x => {
+      pixelHill(x, 380, 200, '#3a2a5a');
+      pixelHill(x + 200, 300, 150, '#4a3a6e');
+  }); } },
+  // A castle on the mid ridge
+  { speed: 0.35, draw(o) { tileMotif(o, 520, x => {
+      const bx = x + 60, by = G(), c = '#5a5566', d = '#403c4a', win = '#ffd54f';
+      pxRect(bx, by - 70, 120, 70, c);                            // keep
+      for (let t = 0; t < 4; t++) pxRect(bx - 10 + t * 40, by - 92, 20, 26, c); // battlement towers
+      for (let t = 0; t < 4; t++) pxRect(bx - 6 + t * 40, by - 100, 12, 10, d); // tower caps
+      pxRect(bx + 50, by - 40, 20, 40, d);                        // gate
+      pxRect(bx + 18, by - 56, 8, 8, win); pxRect(bx + 94, by - 56, 8, 8, win); // lit windows
+  }); } },
+];
+
+THEMES.airplane.bgLayers = [
+  // Hazy data-center skyline (rows of windowed slabs)
+  { speed: 0.16, draw(o) { tileMotif(o, 340, x => {
+      const slab = (sx, w, h, c) => {
+        pxRect(sx, G() - h, w, h, c);
+        ctx.fillStyle = 'rgba(180,220,255,0.5)';
+        for (let yy = G() - h + 10; yy < G() - 8; yy += 16)
+          for (let xx = sx + 8; xx < sx + w - 6; xx += 14) ctx.fillRect(xx, yy, 6, 8);
+      };
+      slab(x, 90, 180, '#56607a');
+      slab(x + 120, 70, 130, '#626c88');
+      slab(x + 220, 100, 220, '#4c5570');
+  }); } },
+  // Foreground cooling units / satellite dishes
+  { speed: 0.5, draw(o) { tileMotif(o, 240, x => {
+      pxRect(x + 30, G() - 40, 60, 40, '#37474f');               // AC unit
+      pxRect(x + 38, G() - 34, 44, 12, '#263238');              // vents
+      pxRect(x + 150, G() - 30, 6, 30, '#455a64');               // dish mast
+      pxRect(x + 138, G() - 48, 30, 16, '#78909c');              // dish
+  }); } },
+];
+
+THEMES.robot.bgLayers = [
+  // Neon circuit-city skyline
+  { speed: 0.16, draw(o) { tileMotif(o, 320, x => {
+      const tower = (sx, w, h, edge) => {
+        pxRect(sx, G() - h, w, h, '#10202e');
+        ctx.fillStyle = edge;
+        for (let yy = G() - h + 6; yy < G() - 6; yy += 14) ctx.fillRect(sx + 4, yy, w - 8, 2);
+        ctx.fillRect(sx, G() - h, w, 2);
+      };
+      tower(x, 80, 200, '#00e5ff');
+      tower(x + 110, 60, 150, '#76ff03');
+      tower(x + 200, 90, 240, '#00e5ff');
+  }); } },
+];
+
+THEMES.rocket.bgLayers = [
+  // Distant planets + a moon drifting (stars are already painted in drawBackground)
+  { speed: 0.08, draw(o) { tileMotif(o, 600, x => {
+      pixelDisc(x + 120, 130, 34, '#c97b5a');                       // ringed planet
+      pxRect(x + 86, 124, 68, 6, '#a85f44');                        // band
+      pixelDisc(x + 430, 90, 18, '#cfd8dc');                        // moon
+      pixelDisc(x + 424, 86, 4, '#b0bec5');                         // crater
+  }); } },
+];
+
 // (Re)load every theme's sprite for the active art style. Pixel art wants crisp
 // scaling; round art wants smooth — flip the canvas hint to match.
 function loadSprites() {
@@ -360,6 +479,10 @@ let pipeSpeed, countdown, countdownStart;
 let tick, acc, lastFrameTime;        // fixed-timestep bookkeeping
 let lastSpeedUpTick, lastPipeTick;   // spawn/ramp timers in ticks (not wall-clock)
 let seed, rng, flapTicks;            // replay inputs
+// Parallax scroll offset — RENDER ONLY. Advanced per rendered frame by pipeSpeed,
+// never read by physics/collision/replay, so determinism is untouched. Always
+// pixel-art regardless of gfxStyle (the parallax is its own world).
+let bgScroll = 0;
 
 function initGame(playerName) {
   currentPlayer = playerName;
@@ -367,6 +490,7 @@ function initGame(playerName) {
   pipes  = [];
   score  = 0;
   pipeSpeed      = C.PIPE_SPEED;
+  bgScroll       = 0;
   countdown      = C.COUNTDOWN_SEC;
   countdownStart = performance.now();
   // fixed-timestep state
@@ -425,6 +549,12 @@ function drawBackground() {
     for (const cl of clouds) pixelCloud(cl.x, cl.y, cl.w, cl.h, t.cloudFill);
   }
 
+  // ── Parallax scenery layers (pixel-art, cosmetic) ──
+  // Each theme may define bgLayers: [{ speed, draw(offset) }]. Far layers use a
+  // small speed (drift slowly), near layers a larger one. offset is the wrapped
+  // horizontal scroll for that layer's tile width, handled by tileMotif.
+  if (t.bgLayers) for (const layer of t.bgLayers) layer.draw(bgScroll * layer.speed);
+
   // Ground / HUD bar — pixel grass lip on top of a dirt bar.
   const px = 6; // pixel block size for ground detail
   ctx.fillStyle = t.ground;
@@ -445,6 +575,15 @@ function pixelCloud(x, y, w, h, fill) {
   ctx.fillRect(x, y + u, w, h - u * 2);            // mid band (full width)
   ctx.fillRect(x + u, y, w - u * 2, h);            // tall center
   ctx.fillRect(x + u * 2, y - u, w - u * 4, u);    // top bump
+}
+
+// Repeat a pixel-art motif horizontally with seamless wraparound. `tileW` is the
+// motif's footprint; `offset` is the (positive) scroll distance. `drawOne(x)` paints
+// a single motif at the given left x. We over-draw one tile on each side so motifs
+// slide off-screen cleanly. Pure cosmetic — no game state touched.
+function tileMotif(offset, tileW, drawOne) {
+  const start = -((offset % tileW) + tileW) % tileW; // wrapped into (-tileW, 0]
+  for (let x = start; x < C.W + tileW; x += tileW) drawOne(Math.round(x));
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -573,6 +712,10 @@ function loop(now) {
   if (elapsed < (C.COUNTDOWN_SEC + 0.35) * 1000) {
     drawCountdown(0);
   }
+
+  // Advance the parallax scroll with the world. Render-only: tied to pipeSpeed so
+  // scenery tracks pipe motion, but never fed into physics/replay.
+  bgScroll += pipeSpeed;
 
   // ── Active play: fixed-timestep accumulator ──
   // Advance physics in fixed TICK_MS steps regardless of monitor refresh rate,
