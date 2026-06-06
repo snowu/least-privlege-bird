@@ -33,18 +33,6 @@ and [`supabase/README.md`](supabase/README.md) to deploy.
 
 ## Local dev
 
-Serve the folder statically, e.g.:
-
-```sh
-python3 -m http.server 8000   # then open http://localhost:8000
-```
-
-Two independent flags (in `index.html`):
-
-- **DEV_MODE** — skips the auth/captcha friction. Auto-on at `localhost`.
-- **LIVE_DB** — gates real Supabase calls. Always on in prod; off locally unless you set
-  `localStorage.lpb_live = '1'` and reload. Lets you test gameplay without DB writes, or
-  DB logic without sitting through captchas.
-
-> `lpb_live` is not a security control — the server is authoritative. It only decides
-> whether a browser bothers calling Supabase.
+Static files — no build, no deps. Open `index.html` (or serve it however you like).
+Two flags in `index.html`: `DEV_MODE` skips the auth/captcha friction, `LIVE_DB` gates
+real Supabase calls; both auto-handle localhost vs prod.
