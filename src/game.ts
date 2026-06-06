@@ -207,7 +207,7 @@ const THEMES: { [key: string]: any } = {
   squid: {
     label: 'Squid',
     sky: '#0a3d52', ground: '#06212e',
-    cloudFill: 'rgba(180,235,255,0.18)',     // faint light shafts instead of clouds
+    cloudFill: 'none',                        // underwater — no clouds at all
     anim: true,                               // 2-frame: tentacles tighten on flap
     // Kelp / coral columns: deep teal body with a glow band and rounded knobs.
     drawPipe(x, topH, gap) {
@@ -366,28 +366,113 @@ const THEMES: { [key: string]: any } = {
 // motif across the width via tileMotif. The ground sits at C.GROUND; motifs are
 // anchored to it so they read as standing on the same floor as the pipes.
 const G = () => C.GROUND;
-// Small reusable pixel primitives.
+// True when the round art style is active — the scenery primitives below branch on
+// it so the style switch flips the whole background (parallax included), not just
+// the sprites. Render-only: physics/replay never touch these, so determinism holds.
+const isRound = () => gfxStyle === 'round';
+// Small reusable scenery primitives. Each draws stepped/blocky in pixel mode and
+// smooth (real curves) in round mode.
 function pxRect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
-// A stepped pixel hill (rounded mound) anchored to the ground.
+// A hill (rounded mound) anchored to the ground: stepped in pixel mode, a smooth
+// half-dome (quadratic) in round mode.
 function pixelHill(x, w, h, c) {
+  if (isRound()) {
+    const cx = x + w / 2, baseY = G();
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.moveTo(x, baseY);
+    ctx.quadraticCurveTo(cx, baseY - h * 2, x + w, baseY);  // bulge to ~h at the apex
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
   const u = Math.max(6, Math.round(w / 10));
   for (let i = 0; i * u < w / 2; i++) {
     const inset = i * u, hh = h - i * (h / (w / 2 / u));
     pxRect(x + inset, G() - hh, w - inset * 2, hh, c);
   }
 }
-// A blocky pixel disc (stepped circle) — keeps the pixel look, no anti-aliasing.
+// A disc: stepped circle in pixel mode, a true round arc in round mode.
 function pixelDisc(cx, cy, r, c) {
   ctx.fillStyle = c;
+  if (isRound()) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   const u = Math.max(3, Math.round(r / 5));
   for (let dy = -r; dy <= r; dy += u) {
     const dw = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
     ctx.fillRect(Math.round(cx - dw), Math.round(cy + dy), dw * 2, u);
   }
 }
-// A conifer (stacked triangles) on a trunk.
+// A jagged mountain peak anchored to the ground: a triangular massif with a
+// secondary shoulder and (in pixel mode) a stepped/serrated silhouette rather than
+// a smooth mound. Round mode draws clean straight ridgelines. `snow` (optional)
+// caps the summit. Reads as a mountain, not a hill — used by the wizard theme.
+function pixelPeak(x, w, h, c, snow) {
+  const baseY = G(), apexX = x + w * 0.42, apexY = baseY - h;
+  const shoulderX = x + w * 0.72, shoulderY = baseY - h * 0.55;
+  if (isRound()) {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.moveTo(x, baseY);
+    ctx.lineTo(apexX, apexY);
+    ctx.lineTo(shoulderX, shoulderY);
+    ctx.lineTo(x + w, baseY);
+    ctx.closePath();
+    ctx.fill();
+    if (snow) {
+      ctx.fillStyle = snow;
+      ctx.beginPath();
+      ctx.moveTo(apexX, apexY);
+      ctx.lineTo(apexX - h * 0.13, apexY + h * 0.2);
+      ctx.lineTo(apexX, apexY + h * 0.14);
+      ctx.lineTo(apexX + h * 0.13, apexY + h * 0.2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return;
+  }
+  // Pixel mode: fill the triangle as horizontal scanline blocks, with the left and
+  // right edges quantized to a block grid so the slopes read as crisp stair-steps.
+  const u = Math.max(5, Math.round(w / 26));
+  for (let y = baseY; y > apexY; y -= u) {
+    const f = (baseY - y) / h;                          // 0 at base → 1 at apex
+    // left edge climbs to apex; right edge first follows the shoulder then the apex
+    const lx = x + (apexX - x) * f;
+    const rx = y > shoulderY
+      ? (x + w) + (shoulderX - (x + w)) * ((baseY - y) / (baseY - shoulderY))
+      : shoulderX + (apexX - shoulderX) * ((shoulderY - y) / (shoulderY - apexY));
+    const qlx = Math.round(lx / u) * u, qrx = Math.round(rx / u) * u;
+    pxRect(qlx, y - u, Math.max(u, qrx - qlx), u, c);
+  }
+  if (snow) {
+    // a few stepped blocks at the summit
+    pxRect(Math.round((apexX - u) / u) * u, apexY, u * 2, u, snow);
+    pxRect(Math.round(apexX / u) * u, apexY + u, u, u, snow);
+  }
+}
+// A conifer on a trunk: stacked stepped triangles in pixel mode, smooth rounded
+// tiers (filled triangles with soft corners) in round mode.
 function pixelTree(x, scale, leaf, trunk) {
   const s = scale, baseY = G();
+  if (isRound()) {
+    ctx.fillStyle = trunk;
+    ctx.fillRect(x - 2 * s, baseY - 4 * s, 4 * s, 4 * s);         // trunk (kept blocky/short)
+    ctx.fillStyle = leaf;
+    for (let tier = 0; tier < 3; tier++) {
+      const ty = baseY - (4 + tier * 5) * s, tw = (14 - tier * 3) * s, th = 7 * s;
+      ctx.beginPath();
+      ctx.moveTo(x, ty - th);                                     // apex
+      ctx.quadraticCurveTo(x - tw / 2, ty, x, ty);                // left skirt, soft
+      ctx.quadraticCurveTo(x + tw / 2, ty, x, ty - th);           // right skirt, soft
+      ctx.closePath();
+      ctx.fill();
+    }
+    return;
+  }
   pxRect(x - 2 * s, baseY - 4 * s, 4 * s, 4 * s, trunk);          // trunk
   for (let tier = 0; tier < 3; tier++) {
     const ty = baseY - (4 + tier * 5) * s, tw = (14 - tier * 3) * s;
@@ -429,6 +514,20 @@ THEMES.squid.bgLayers = [
   // Foreground: tall swaying-look algae stalks (static curve via stepped offset)
   { speed: 0.55, draw(o) { tileMotif(o, 240, x => {
       const algae = (ax, h, c) => {
+        if (isRound()) {
+          // smooth swaying kelp: a tapered quadratic ribbon leaning side to side
+          const topY = G() - h;
+          ctx.strokeStyle = c;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(ax + 3, G());
+          ctx.quadraticCurveTo(ax + 14, G() - h * 0.5, ax + 3, topY);  // single graceful S
+          ctx.lineWidth = 7;
+          ctx.stroke();
+          ctx.lineWidth = 1;
+          return;
+        }
         // stepped stalk that leans alternately — reads like kelp without RNG
         for (let i = 0, y = G(); y > G() - h; i++, y -= 10) {
           const sway = (i % 4 < 2 ? 1 : -1) * (i % 2 ? 3 : 0);
@@ -459,10 +558,11 @@ THEMES.bee.bgLayers = [
 ];
 
 THEMES.wizard.bgLayers = [
-  // Jagged purple mountains with a dragon silhouette drifting far away
+  // Jagged purple mountain range — overlapping snow-capped peaks
   { speed: 0.12, draw(o) { tileMotif(o, 420, x => {
-      pixelHill(x, 380, 200, '#3a2a5a');
-      pixelHill(x + 200, 300, 150, '#4a3a6e');
+      pixelPeak(x - 40, 300, 200, '#3a2a5a', '#d8cfe8');
+      pixelPeak(x + 150, 260, 160, '#4a3a6e', '#cfc4e0');
+      pixelPeak(x + 320, 220, 130, '#332551');
   }); } },
   // A castle on the mid ridge
   { speed: 0.35, draw(o) { tileMotif(o, 520, x => {
@@ -498,13 +598,26 @@ THEMES.airplane.bgLayers = [
 ];
 
 THEMES.robot.bgLayers = [
-  // Neon circuit-city skyline
+  // Neon circuit-city skyline — towers with antenna spires, setback crowns and a
+  // pulsing rooftop beacon, so the silhouette isn't just flat-topped rectangles.
   { speed: 0.16, draw(o) { tileMotif(o, 320, x => {
       const tower = (sx, w, h, edge) => {
-        pxRect(sx, G() - h, w, h, '#10202e');
+        const topY = G() - h;
+        pxRect(sx, topY, w, h, '#10202e');
         ctx.fillStyle = edge;
-        for (let yy = G() - h + 6; yy < G() - 6; yy += 14) ctx.fillRect(sx + 4, yy, w - 8, 2);
-        ctx.fillRect(sx, G() - h, w, 2);
+        // horizontal circuit/window rows
+        for (let yy = topY + 6; yy < G() - 6; yy += 14) ctx.fillRect(sx + 4, yy, w - 8, 2);
+        // a narrower setback crown block on top (breaks the flat rectangle)
+        const cw = Math.round(w * 0.55), cx = sx + Math.round((w - cw) / 2), ch = 16;
+        pxRect(cx, topY - ch, cw, ch, '#10202e');
+        ctx.fillStyle = edge;
+        ctx.fillRect(cx, topY - ch, cw, 2);
+        ctx.fillRect(sx, topY, w, 2);
+        // antenna mast + glowing beacon
+        const mx = sx + Math.round(w / 2);
+        ctx.fillStyle = edge;
+        ctx.fillRect(mx - 1, topY - ch - 18, 2, 18);
+        pixelDisc(mx, topY - ch - 20, 4, edge);          // round in round mode, stepped in pixel
       };
       tower(x, 80, 200, '#00e5ff');
       tower(x + 110, 60, 150, '#76ff03');
@@ -737,7 +850,9 @@ function drawBackground() {
   ctx.fillStyle = t.sky;
   ctx.fillRect(0, 0, C.W, C.GROUND);
 
-  if (t.cloudFill === null && t.sky === THEMES.rocket.sky) {
+  if (t.cloudFill === 'none') {
+    // No clouds at all (e.g. squid — underwater).
+  } else if (t.cloudFill === null && t.sky === THEMES.rocket.sky) {
     // Stars for space
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     for (let i = 0; i < 60; i++) {
@@ -778,9 +893,21 @@ function drawBackground() {
   ctx.fillRect(0, C.GROUND + px * 3, C.W, C.HUD - px * 3);
 }
 
-// Blocky pixel cloud: a stepped lozenge built from a few hard rectangles.
+// A cloud: stepped lozenge of hard rectangles in pixel mode, a puff of overlapping
+// circles in round mode.
 function pixelCloud(x, y, w, h, fill) {
   ctx.fillStyle = fill;
+  if (isRound()) {
+    const cy = y + h / 2, r = h / 2;
+    // Three overlapping lobes across the width + a taller center lobe — reads as a
+    // soft cumulus. Single fillStyle, so the overlaps don't double the alpha.
+    ctx.beginPath();
+    ctx.arc(x + r, cy, r, 0, Math.PI * 2);
+    ctx.arc(x + w / 2, cy - r * 0.4, r * 1.25, 0, Math.PI * 2);
+    ctx.arc(x + w - r, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   const u = Math.max(6, Math.round(h / 4)); // block unit
   ctx.fillRect(x, y + u, w, h - u * 2);            // mid band (full width)
   ctx.fillRect(x + u, y, w - u * 2, h);            // tall center
