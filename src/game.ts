@@ -386,10 +386,18 @@ function pixelHill(x, w, h, c) {
     ctx.fill();
     return;
   }
-  const u = Math.max(6, Math.round(w / 10));
-  for (let i = 0; i * u < w / 2; i++) {
-    const inset = i * u, hh = h - i * (h / (w / 2 / u));
-    pxRect(x + inset, G() - hh, w - inset * 2, hh, c);
+  // Pixel mode: a rounded dome built from horizontal scanline blocks whose width
+  // follows a cosine profile (wide at base, narrow at apex), quantized to a small
+  // grid so it reads as crisp pixel-art rather than the old chunky ziggurat.
+  const baseY = G(), cx = x + w / 2;
+  const u = Math.max(4, Math.round(w / 28));                 // fine step → smooth silhouette
+  for (let i = 0; i * u < h; i++) {
+    const yy = baseY - i * u;
+    const f = (i * u) / h;                                   // 0 at base → 1 at apex
+    const halfW = (w / 2) * Math.cos(f * Math.PI / 2);       // cosine taper to a round top
+    const qhw = Math.round(halfW / u) * u;
+    if (qhw <= 0) break;
+    pxRect(cx - qhw, yy - u, qhw * 2, u, c);
   }
 }
 // A disc: stepped circle in pixel mode, a true round arc in round mode.
@@ -488,19 +496,21 @@ THEMES.bird.bgLayers = [
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate((t * 0.15) % (Math.PI * 2));                    // slow rotation
+      // Rays spawn at the sun's center and all share one length; the disc is painted
+      // on top afterwards, hiding the inner segment so they read as clean spokes.
       ctx.strokeStyle = 'rgba(255,213,79,0.55)';
       ctx.lineWidth = 4; ctx.lineCap = 'round';
+      const len = r + 18 + Math.sin(t * 2) * 6;                  // all rays breathe together
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
-        const len = r + 14 + Math.sin(t * 2 + i) * 6;            // rays breathe
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * (r + 6), Math.sin(a) * (r + 6));
+        ctx.moveTo(0, 0);                                        // center of the sun
         ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
         ctx.stroke();
       }
       ctx.restore();
       ctx.lineWidth = 1;
-      pixelDisc(cx, cy, r, '#ffd54f');
+      pixelDisc(cx, cy, r, '#ffd54f');                           // disc covers ray roots
       pixelDisc(cx, cy, r - 6, '#ffe57f');
   } },
   // Distant rolling hills
@@ -518,43 +528,30 @@ THEMES.penguin.bgLayers = [
       pixelHill(x + 140, 120, 34, '#eaf6fb');                    // smaller mound
       pxRect(x + 90, G() - 6, 30, 2, '#9cd2e6');                 // floe crack
   }); } },
-  // Falling snow: flakes drift down + sideways, wrapping at the ground. Fixed grid
-  // of columns offset by the render clock — no RNG, fully deterministic in position.
+  // Falling snow — same particle engine as squid bubbles, but dir=+1 (down) and a
+  // soft-flake style. Near flakes bigger/faster/brighter (parallax depth).
   { speed: 0, draw() {
-      const t = nowSec();
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      for (let i = 0; i < 70; i++) {
-        const baseX = (i * 197 + 30) % C.W;
-        const spd = 28 + (i % 5) * 10;                           // varied fall speed
-        const y = (t * spd + i * 53) % C.GROUND;
-        const x = (baseX + Math.sin(t * 0.6 + i) * 14) % C.W;    // sideways sway
-        const s = i % 4 === 0 ? 3 : 2;                           // a few bigger flakes
-        if (isRound()) pixelDisc(x, y, s / 2 + 1, 'rgba(255,255,255,0.85)');
-        else ctx.fillRect(Math.round(x), Math.round(y), s, s);
-      }
+      particleStream(90, +1,
+        { minSpd: 22, spanSpd: 70, minSway: 8, spanSway: 22, minR: 1.5, spanR: 3, minA: 0.4, spanA: 0.55 },
+        (x, y, r, a) => {
+          const col = `rgba(255,255,255,${a})`;
+          if (isRound()) pixelDisc(x, y, r, col);
+          else { ctx.fillStyle = col; const s = Math.round(r * 2); ctx.fillRect(Math.round(x), Math.round(y), s, s); }
+        });
   } },
 ];
 
 THEMES.squid.bgLayers = [
-  // Deep layer: bubbles rising from the seabed, wobbling side to side, wrapping back
-  // to the bottom when they reach the surface. Render clock drives the rise.
-  { speed: 0.2, draw(o) { tileMotif(o, 320, x => {
-      const t = nowSec();
-      // bx,by0 = column + spawn height; r = size; spd = rise speed (px/s); ph = wobble phase
-      const bub = (bx, by0, r, spd, ph) => {
-        const range = G() - 20;                                   // travel before wrapping
-        const rise = (t * spd) % range;
-        const by = G() - 10 - ((by0 + rise) % range);             // climb + wrap
-        const wob = Math.sin(t * 1.6 + ph) * 4;                   // gentle horizontal wobble
-        pixelDisc(bx + wob, by, r, 'rgba(150,230,255,0.16)');
-        pixelDisc(bx + wob, by, Math.max(1, r - 3), 'rgba(180,240,255,0.10)'); // hollow ring
-      };
-      bub(x + 40, 40,  9,  22, 0);
-      bub(x + 110, 220, 5,  34, 1.5);
-      bub(x + 180, 120, 13, 16, 3);
-      bub(x + 250, 320, 4,  40, 4.2);
-      bub(x + 300, 180, 7,  28, 5.5);
-  }); } },
+  // Bubbles rising from the seabed — same particle engine as penguin snow, but
+  // dir=-1 (up) and a hollow-ring bubble style. Near bubbles bigger/faster (depth).
+  { speed: 0, draw() {
+      particleStream(46, -1,
+        { minSpd: 16, spanSpd: 42, minSway: 4, spanSway: 10, minR: 3, spanR: 11, minA: 0.10, spanA: 0.10 },
+        (x, y, r, a) => {
+          pixelDisc(x, y, r, `rgba(150,230,255,${a + 0.06})`);
+          pixelDisc(x, y, Math.max(1, r - 3), `rgba(180,240,255,${a})`); // hollow ring
+        });
+  } },
   // Foreground: tall swaying-look algae stalks (static curve via stepped offset)
   { speed: 0.55, draw(o) { tileMotif(o, 240, x => {
       const algae = (ax, h, c) => {
@@ -582,9 +579,7 @@ THEMES.squid.bgLayers = [
       algae(x + 70, 150, '#27a06a');
       algae(x + 150, 240, '#176e48');
       algae(x + 195, 130, '#27a06a');
-      // a couple of foreground bubbles too
-      pixelDisc(x + 110, G() - 60, 6, 'rgba(180,240,255,0.18)');
-      pixelDisc(x + 215, G() - 100, 4, 'rgba(180,240,255,0.18)');
+      // (static foreground bubbles removed — the rising-bubble layer covers this)
   }); } },
 ];
 
@@ -667,18 +662,25 @@ THEMES.airplane.bgLayers = [
   { speed: 0.16, draw(o) { tileMotif(o, 340, x => {
       const t = nowSec();
       const slab = (sx, w, h, c, seed) => {
-        pxRect(sx, G() - h, w, h, c);
+        const topY = G() - h;
+        pxRect(sx, topY, w, h, c);
         const round = isRound();
-        // Lit office windows — most steady-warm, a few flicker as people "work late".
+        // Lit office windows — brighter now, most steady-warm, a few flicker.
         let cell = 0;
-        for (let yy = G() - h + 10; yy < G() - 8; yy += 16)
+        for (let yy = topY + 10; yy < G() - 8; yy += 16)
           for (let xx = sx + 8; xx < sx + w - 6; xx += 14, cell++) {
-            const flick = (seed * 5 + cell * 11) % 7 === 0;            // ~1 in 7 flickers
-            const a = flick ? 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * 4 + cell)) : 0.5;
-            const col = `rgba(255,228,150,${a})`;                      // warm office light
-            if (round) { pixelDisc(xx + 3, yy + 4, 3, col); }
-            else { ctx.fillStyle = col; ctx.fillRect(xx, yy, 6, 8); }
+            const flick = (seed * 5 + cell * 11) % 6 === 0;            // ~1 in 6 flickers
+            const a = flick ? 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 4 + cell)) : 0.92;
+            const col = `rgba(255,224,130,${a})`;                      // brighter warm light
+            if (round) { pixelDisc(xx + 3, yy + 4, 3.5, col); }
+            else { ctx.fillStyle = col; ctx.fillRect(xx, yy, 7, 9); }
           }
+        // Rooftop antenna mast with a blinking red aviation-warning beacon.
+        const mx = sx + Math.round(w / 2);
+        ctx.fillStyle = '#2b333f';
+        ctx.fillRect(mx - 1, topY - 22, 2, 22);                        // mast
+        const blink = 0.35 + 0.65 * (Math.sin(t * 3.2 + seed) > 0 ? 1 : 0.2); // hard red blink
+        pixelDisc(mx, topY - 24, 3.5, `rgba(255,40,40,${blink})`);
       };
       slab(x, 90, 180, '#56607a', 1);
       slab(x + 120, 70, 130, '#626c88', 2);
@@ -703,6 +705,28 @@ function withAlpha(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// A field of vertically-streaming particles with parallax depth — the shared engine
+// behind penguin snow (falling) and squid bubbles (rising). Each particle gets a
+// stable pseudo-random "nearness" (near = bigger, faster, wider sway, brighter).
+// `dir` = +1 falls down, -1 rises up. `drawOne(x, y, r, alpha)` paints one.
+// Render-only + deterministic per index → animates identically everywhere.
+function particleStream(count, dir, opt, drawOne) {
+  const t = nowSec();
+  const span = C.GROUND;
+  for (let i = 0; i < count; i++) {
+    const depth = ((i * 2654435761) % 1000) / 1000;          // stable 0..1
+    const near = 0.25 + depth * 0.75;
+    const baseX = (i * 197 + 30) % C.W;
+    const spd = opt.minSpd + near * opt.spanSpd;
+    const travel = (t * spd + i * 53) % span;
+    const y = dir > 0 ? travel : (span - travel);            // down vs up + wrap
+    const x = (baseX + Math.sin(t * 0.6 + i) * (opt.minSway + near * opt.spanSway)) % C.W;
+    const r = opt.minR + near * opt.spanR;
+    const a = opt.minA + near * opt.spanA;
+    drawOne(x, y, r, a);
+  }
+}
+
 THEMES.robot.bgLayers = [
   // Neon circuit-city skyline — towers with antenna spires, setback crowns and a
   // grid of pulsing window lights. Pixel mode = square lights blinking; round mode
@@ -722,26 +746,34 @@ THEMES.robot.bgLayers = [
         // position via seed+row+col, animated via the render clock t).
         const cols = Math.max(2, Math.floor((w - 10) / 14));
         const stepX = (w - 10) / cols;
-        let cell = 0;
-        for (let yy = topY + 8; yy < G() - 8; yy += 14) {
+        const rows = Math.max(1, Math.floor((h - 16) / 14));
+        let cell = 0, row = 0;
+        for (let yy = topY + 8; yy < G() - 8; yy += 14, row++) {
           for (let ci = 0; ci < cols; ci++, cell++) {
             const phase = ((seed * 7 + cell * 13) % 31) / 31 * 6.283;
-            const lit = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * 2.2 + phase));
+            // brighter floor + full swing, plus a bright "data wave" sweeping up the
+            // building (row-based) so the whole tower visibly ripples.
+            const wave = 0.5 + 0.5 * Math.sin(t * 3 - row * 0.9 + seed);
+            const lit = Math.min(1, 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 2.6 + phase)) * (0.5 + wave));
             const wx = sx + 6 + ci * stepX;
             if (round) {
-              pixelDisc(Math.round(wx + 3), yy + 2, 3, withAlpha(edge, lit));
+              pixelDisc(Math.round(wx + 3), yy + 2, 4, withAlpha(edge, lit));
             } else {
               ctx.fillStyle = withAlpha(edge, lit);
-              ctx.fillRect(Math.round(wx), yy, 6, 4);
+              ctx.fillRect(Math.round(wx), yy, 8, 6);
             }
           }
         }
-        // antenna mast + slow-pulsing rooftop beacon
-        const mx = sx + Math.round(w / 2);
+        // antenna mast + a data-pulse packet that climbs it, topped by a sweeping
+        // magenta scanner beacon (the neon-city equivalent of an aviation light).
+        const mx = sx + Math.round(w / 2), mastTop = topY - ch - 24, mastH = 24;
         ctx.fillStyle = edge;
-        ctx.fillRect(mx - 1, topY - ch - 18, 2, 18);
-        const beacon = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 3 + seed));
-        pixelDisc(mx, topY - ch - 20, 4, withAlpha(edge, beacon));
+        ctx.fillRect(mx - 1, mastTop, 2, mastH);
+        const climb = (t * 40 + seed * 13) % mastH;               // packet rising up the mast
+        ctx.fillStyle = withAlpha(edge, 0.9);
+        ctx.fillRect(mx - 2, mastTop + mastH - climb - 3, 4, 3);
+        const beacon = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 4 + seed));
+        pixelDisc(mx, mastTop - 2, 5, `rgba(255,40,200,${beacon})`); // magenta scanner
       };
       tower(x, 80, 200, '#00e5ff', 1);
       tower(x + 110, 60, 150, '#76ff03', 2);
@@ -749,14 +781,80 @@ THEMES.robot.bgLayers = [
   }); } },
 ];
 
+// A planet with a tilted ring (Saturn-like). Round mode draws a real ellipse ring
+// behind+front of the body; pixel mode uses a flat banded ring. `c`=body, `rc`=ring.
+function ringedPlanet(cx, cy, r, c, rc) {
+  if (isRound()) {
+    const rw = r * 2.1, rh = r * 0.5;
+    // back half of the ring
+    ctx.strokeStyle = rc; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, -0.35, Math.PI, Math.PI * 2); ctx.stroke();
+    pixelDisc(cx, cy, r, c);                                     // body
+    pixelDisc(cx - r * 0.3, cy - r * 0.3, r * 0.55, withAlphaFromHex(c, 0.25, 40)); // shading hint
+    // front half of the ring
+    ctx.strokeStyle = rc; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, -0.35, 0, Math.PI); ctx.stroke();
+    ctx.lineWidth = 1;
+    return;
+  }
+  pixelDisc(cx, cy, r, c);
+  pxRect(cx - r * 2, cy - 3, r * 4, 6, rc);                      // flat band
+}
+// Lighten a #rrggbb by `add` and return at alpha `a` — soft highlight helper.
+function withAlphaFromHex(hex, a, add) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, ((n >> 16) & 255) + add);
+  const g = Math.min(255, ((n >> 8) & 255) + add);
+  const b = Math.min(255, (n & 255) + add);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 THEMES.rocket.bgLayers = [
-  // Distant planets + a moon drifting (stars are already painted in drawBackground)
-  { speed: 0.08, draw(o) { tileMotif(o, 600, x => {
-      pixelDisc(x + 120, 130, 34, '#c97b5a');                       // ringed planet
-      pxRect(x + 86, 124, 68, 6, '#a85f44');                        // band
-      pixelDisc(x + 430, 90, 18, '#cfd8dc');                        // moon
-      pixelDisc(x + 424, 86, 4, '#b0bec5');                         // crater
+  // Distant planets of varied types + a cratered moon. Slow parallax drift.
+  { speed: 0.08, draw(o) { tileMotif(o, 760, x => {
+      // 1) Saturn-type ringed gas giant
+      ringedPlanet(x + 120, 130, 34, '#c97b5a', '#e0b88a');
+      // 2) Banded gas giant (Jupiter-like) — body + two darker latitude bands
+      pixelDisc(x + 330, 200, 28, '#d9a86b');
+      ctx.save();
+      ctx.beginPath(); ctx.arc(x + 330, 200, 28, 0, Math.PI * 2); ctx.clip();
+      pxRect(x + 300, 192, 60, 5, 'rgba(140,90,50,0.55)');
+      pxRect(x + 300, 205, 60, 4, 'rgba(160,110,70,0.5)');
+      pixelDisc(x + 338, 203, 6, 'rgba(200,80,60,0.6)');         // great-red-spot-ish
+      ctx.restore();
+      // 3) Small rocky ice planet (pale blue) with a polar cap
+      pixelDisc(x + 520, 95, 16, '#8fd3e0');
+      pixelDisc(x + 520, 85, 6, '#eaffff');                      // polar cap
+      // 4) Cratered moon
+      pixelDisc(x + 650, 160, 18, '#cfd8dc');
+      pixelDisc(x + 644, 156, 4, '#b0bec5');
+      pixelDisc(x + 656, 166, 3, '#b0bec5');
   }); } },
+  // Shooting stars: streaks that periodically dart across the sky, each on its own
+  // long cycle so they appear sporadically rather than in lockstep. Render-only.
+  { speed: 0, draw() {
+      const t = nowSec();
+      const streak = (period, offset, y0, len, spd, slope) => {
+        const into = (t + offset) % period;
+        if (into > 0.9) return;                                  // visible <1s per cycle
+        const prog = into / 0.9;                                 // 0→1 across the screen
+        const hx = prog * (C.W + 200) - 100;                     // head x
+        const hy = y0 + prog * slope;                            // head y (slight diagonal)
+        const fade = Math.sin(prog * Math.PI);                   // fade in+out at the ends
+        const grad = ctx.createLinearGradient(hx, hy, hx - len, hy - len * (slope / C.W) - len * 0.2);
+        grad.addColorStop(0, `rgba(255,255,255,${0.9 * fade})`);
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx - len, hy - len * 0.25);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      };
+      streak(6.0, 0,   90,  120, 1, 60);
+      streak(9.0, 3.5, 220, 90,  1, 40);
+      streak(13.0, 7,  150, 150, 1, 80);
+  } },
 ];
 
 // (Re)load every theme's sprite for the active art style. Pixel art wants crisp
