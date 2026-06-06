@@ -40,8 +40,8 @@ const sndGameOver = new Audio('assets/game_over.wav');
 function makeImg(src) { const i = new Image(); i.src = src; return i; }
 
 const THEMES = {
-  ghost: {
-    label: 'Ghost', img: makeImg('assets/ghosty.png'),
+  bird: {
+    label: 'Bird', img: makeImg('assets/bird.svg'),
     sky: '#7ec8e3', ground: '#2b2b3b',
     cloudFill: 'rgba(255,255,255,0.82)',
     drawPipe(x, topH, gap) {
@@ -143,7 +143,7 @@ const THEMES = {
   },
 };
 
-let currentTheme = THEMES.ghost;
+let currentTheme = THEMES.bird;
 
 // ─── HIGH SCORES — provided by scores.js ──────────────────────────────────────
 
@@ -252,14 +252,7 @@ function drawBackground() {
       ctx.fillRect(cl.x, cl.y, cl.w, cl.h * 0.7);
     }
   } else {
-    // Sketch lines (day themes)
-    if (t === THEMES.ghost) {
-      ctx.strokeStyle = 'rgba(80,130,160,0.18)'; ctx.lineWidth = 1.5;
-      for (let i = 0; i < 30; i++) {
-        const x = (i * 83) % C.W;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - 20, C.GROUND); ctx.stroke();
-      }
-    }
+    // Day themes: just sky + soft clouds.
     ctx.fillStyle = t.cloudFill;
     for (const cl of clouds) {
       roundRect(ctx, cl.x, cl.y, cl.w, cl.h, 20);
@@ -542,7 +535,7 @@ document.getElementById('btn-menu').addEventListener('click', () => { populateUs
 const avatarPicker = document.getElementById('avatar-picker');
 Object.entries(THEMES).forEach(([key, theme]) => {
   const div = document.createElement('div');
-  div.className = 'avatar-opt' + (key === 'ghost' ? ' selected' : '');
+  div.className = 'avatar-opt' + (key === 'bird' ? ' selected' : '');
   div.dataset.key = key;
   div.innerHTML = `<img src="${theme.img.src}" alt="${theme.label}"><span>${theme.label}</span>`;
   div.addEventListener('click', () => {
