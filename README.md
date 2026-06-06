@@ -25,7 +25,8 @@ Built for an AWS workshop, now a (cursed) internal fun tool. Vanilla JS, no buil
 
 ### [▶ PLAY NOW](https://snowu.github.io/least-privlege-bird/)
 
-![UI](img/ui.png)
+![Pixel](img/ui_pixel.png)
+![Round](img/ui_round.png)
 
 </div>
 
