@@ -168,9 +168,29 @@ const clouds = Array.from({ length: C.CLOUD_COUNT }, () => ({
   h: 40 + Math.random() * 30,
 }));
 
+// ─── DETERMINISM ──────────────────────────────────────────────────────────────
+// Fixed-timestep physics + seeded RNG so a run is reproducible from {seed, flapTicks}.
+// This is the foundation for server-side replay validation (Supabase edge function).
+const TICK_MS = 1000 / 60;                       // fixed physics step
+const SPEED_UP_TICKS = C.SPEED_UP_INTERVAL / TICK_MS;     // ticks between speed bumps
+const MAX_FRAME_MS = 250;                        // clamp to avoid spiral-of-death after tab stalls
+
+// mulberry32 — tiny deterministic PRNG. Same seed → same sequence in JS and TS.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ─── GAME STATE ───────────────────────────────────────────────────────────────
-let player, pipes, score, lastPipeTime, animId, currentPlayer;
-let pipeSpeed, lastSpeedUp, countdown, countdownStart;
+let player, pipes, score, animId, currentPlayer;
+let pipeSpeed, countdown, countdownStart;
+let tick, acc, lastFrameTime;        // fixed-timestep bookkeeping
+let lastSpeedUpTick, lastPipeTick;   // spawn/ramp timers in ticks (not wall-clock)
+let seed, rng, flapTicks;            // replay inputs
 
 function initGame(playerName) {
   currentPlayer = playerName;
@@ -180,8 +200,16 @@ function initGame(playerName) {
   pipeSpeed      = C.PIPE_SPEED;
   countdown      = C.COUNTDOWN_SEC;
   countdownStart = performance.now();
-  lastSpeedUp    = null; // starts after countdown ends
-  lastPipeTime   = null;
+  // fixed-timestep state
+  tick          = 0;
+  acc           = 0;
+  lastFrameTime = null;
+  lastSpeedUpTick = null; // starts on first active tick
+  lastPipeTick    = null;
+  // replay state — seed drives all gameplay-affecting randomness
+  seed     = crypto.getRandomValues(new Uint32Array(1))[0];
+  rng      = mulberry32(seed);
+  flapTicks = [];
 }
 
 function speedLevel() {
@@ -194,13 +222,13 @@ function currentInterval() {
   return Math.max(C.PIPE_INTERVAL_MIN, C.PIPE_INTERVAL_MAX - speedLevel() * C.PIPE_INTERVAL_STEP);
 }
 
-function spawnPipe(now) {
+function spawnPipe() {
   const gap    = currentGap();
   const minTop = 60;
   const maxTop = C.GROUND - gap - 60;
-  const topH   = minTop + Math.random() * (maxTop - minTop);
+  const topH   = minTop + rng() * (maxTop - minTop); // seeded → reproducible
   pipes.push({ x: C.W, topH, gap, scored: false });
-  lastPipeTime = now;
+  lastPipeTick = tick;
 }
 
 // ─── DRAWING ──────────────────────────────────────────────────────────────────
@@ -306,40 +334,25 @@ function collides() {
 }
 
 // ─── GAME LOOP ────────────────────────────────────────────────────────────────
-function loop(now) {
-  ctx.clearRect(0, 0, C.W, C.H);
-  drawBackground();
-  for (const p of pipes) drawPipe(p.x, p.topH, p.gap);
-  drawPlayer();
-  drawHUD();
-
-  // ── Countdown phase: freeze physics, show number ──
-  const elapsed = now - countdownStart;
-  const remaining = Math.ceil(C.COUNTDOWN_SEC - elapsed / 1000);
-
-  if (remaining > 0) {
-    drawCountdown(remaining);
-    animId = requestAnimationFrame(loop);
-    return;
+// Advance physics exactly one fixed tick. Deterministic: depends only on
+// tick count + seeded rng + logged flaps — never on wall-clock or frame rate.
+// Returns true if the player died this tick.
+function stepPhysics() {
+  // Initialize spawn/ramp timers + first pipe on the first active tick
+  if (lastSpeedUpTick === null) {
+    lastSpeedUpTick = tick;
+    lastPipeTick    = tick;
+    spawnPipe();
   }
 
-  // One-frame "GO!" flash (remaining === 0, elapsed just crossed the threshold)
-  if (elapsed < (C.COUNTDOWN_SEC + 0.35) * 1000) {
-    drawCountdown(0);
-  }
-
-  // ── Active play ──
-  // Initialize speed timer on first active frame
-  if (lastSpeedUp === null) { lastSpeedUp = now; lastPipeTime = now; spawnPipe(now); }
-
-  // Speed ramp
-  if (now - lastSpeedUp > C.SPEED_UP_INTERVAL) {
+  // Speed ramp (every SPEED_UP_TICKS ticks)
+  if (tick - lastSpeedUpTick >= SPEED_UP_TICKS) {
     pipeSpeed += C.SPEED_UP_AMOUNT;
-    lastSpeedUp = now;
+    lastSpeedUpTick = tick;
   }
 
-  // Spawn pipes
-  if (now - lastPipeTime > currentInterval()) spawnPipe(now);
+  // Spawn pipes (interval in ms → ticks)
+  if ((tick - lastPipeTick) * TICK_MS >= currentInterval()) spawnPipe();
 
   // Update pipes
   for (const p of pipes) {
@@ -352,7 +365,46 @@ function loop(now) {
   player.vy += C.GRAVITY;
   player.y  += player.vy;
 
-  if (collides()) { endGame(); return; }
+  tick++;
+  return collides();
+}
+
+function loop(now) {
+  ctx.clearRect(0, 0, C.W, C.H);
+  drawBackground();
+  for (const p of pipes) drawPipe(p.x, p.topH, p.gap);
+  drawPlayer();
+  drawHUD();
+
+  // ── Countdown phase: freeze physics, show number ──
+  // Countdown is purely cosmetic, so wall-clock timing is fine here.
+  const elapsed = now - countdownStart;
+  const remaining = Math.ceil(C.COUNTDOWN_SEC - elapsed / 1000);
+
+  if (remaining > 0) {
+    drawCountdown(remaining);
+    lastFrameTime = now; // don't accumulate time spent in countdown
+    animId = requestAnimationFrame(loop);
+    return;
+  }
+
+  // One-frame "GO!" flash (remaining === 0, elapsed just crossed the threshold)
+  if (elapsed < (C.COUNTDOWN_SEC + 0.35) * 1000) {
+    drawCountdown(0);
+  }
+
+  // ── Active play: fixed-timestep accumulator ──
+  // Advance physics in fixed TICK_MS steps regardless of monitor refresh rate,
+  // so a 60Hz and a 144Hz machine produce identical runs.
+  if (lastFrameTime === null) lastFrameTime = now;
+  acc += Math.min(now - lastFrameTime, MAX_FRAME_MS); // clamp after tab stalls
+  lastFrameTime = now;
+
+  while (acc >= TICK_MS) {
+    if (stepPhysics()) { endGame(); return; }
+    acc -= TICK_MS;
+  }
+
   animId = requestAnimationFrame(loop);
 }
 
@@ -392,6 +444,7 @@ function endGame() {
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 function flap() {
   player.vy = C.FLAP;
+  if (flapTicks) flapTicks.push(tick); // log input tick for server-side replay
   sndJump.currentTime = 0;
   sndJump.play().catch(() => {});
 }
