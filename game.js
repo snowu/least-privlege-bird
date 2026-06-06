@@ -457,49 +457,43 @@ function showScreen(name) {
 // it. ASCII cows are 7-bit art — they must be raw strings rendered in a true
 // monospace <pre> (see #fortune-cow CSS), never the pixel font.
 const COW_ART = {
-  // Tail backslashes lead the eye from the balloon down to each figure's head.
-  // The disheveled panic bird — facing left, cross-eyed, gaping beak, alarmed tuft.
+  // Minimal cowsay-style line art: the classic `\  ^__^ \ (oo)` two-line tail
+  // leading into a small, sparse figure. Sparse on purpose — reads cleanly at 11px.
   bird: [
-    '       \\',
-    '        \\        _.--._',
-    '         \\      / `   \\\'\\.',
-    '          >--. (  o   o  )',
-    '         /    \\ \\  __  /',
-    '        <(     `"`/||\\`',
-    '          `-._   (_||_)',
-    '              `~~  ^^',
+    '        \\   v',
+    '         \\ (o>',
+    '           //\\',
+    '           V_/_',
   ].join('\n'),
-  // Bzz. Striped body, little wings, antennae.
   bee: [
-    '       \\',
-    '        \\       _\\/_',
-    '         \\     (.o o.)',
-    '          >--.  \\ ~ /',
-    '              .-=#=#=-.',
-    '             /  =#=#=  \\',
-    '             `-.=#=#.-\'',
-    '                `~~`',
+    '        \\   \\|/',
+    '         \\ (oo)',
+    '           /##\\',
+    '           ^  ^',
   ].join('\n'),
-  // Pointy hat, beard, twinkle. He has Opinions about your IAM policy.
   wizard: [
-    '       \\',
-    '        \\         /\\',
-    '         \\       /* \\',
-    '          >--.  /  * \\',
-    '               (______)',
-    '               | o  o |',
-    '               |  >   |',
-    '                \\ ww /',
-    '                /\\__/\\',
+    '        \\    n',
+    '         \\  /*\\',
+    '           (o.o)',
+    '            \\=/',
   ].join('\n'),
-  // Tiny jet leaving a contrail straight to the speech bubble.
   airplane: [
-    '       \\',
-    '        \\          __|__',
-    '         `-------o--( )--o-------',
-    '                    |||',
-    '             _______(_)_______',
-    '              o   o     o   o',
+    '        \\',
+    '         \\  __|__',
+    '        --@--+--@--',
+    '            ` `',
+  ].join('\n'),
+  rocket: [
+    '        \\    /\\',
+    '         \\  |oo|',
+    '           /|  |\\',
+    '            vvvv',
+  ].join('\n'),
+  robot: [
+    '        \\    _',
+    '         \\ [o o]',
+    '           |_-_|',
+    '           |   |',
   ].join('\n'),
 };
 
@@ -539,18 +533,25 @@ function _renderCow(text) {
 }
 
 const _fortuneEl = document.getElementById('fortune-cow');
+let _currentFortune = null; // last fetched line — reused when only the avatar changes
 // Fetch a fresh fortune and show the avatar saying it in the corner. Safe to call
 // on every menu/loading/death screen; failures fall back to a local fortune.
 async function showFortuneCow() {
   if (!_fortuneEl) return;
   try {
-    const tip = await fetchFortune();
-    _fortuneEl.textContent = _renderCow(tip);
+    _currentFortune = await fetchFortune();
+    _fortuneEl.textContent = _renderCow(_currentFortune);
     _fortuneEl.classList.remove('hidden');
     requestAnimationFrame(() => _fortuneEl.classList.add('show'));
   } catch (e) {
     console.warn('showFortuneCow failed', e);
   }
+}
+// Re-skin the cow with the current avatar WITHOUT refetching — pure client render,
+// zero Supabase egress. No-op if the cow isn't currently shown.
+function reskinFortuneCow() {
+  if (!_fortuneEl || _currentFortune == null || _fortuneEl.classList.contains('hidden')) return;
+  _fortuneEl.textContent = _renderCow(_currentFortune);
 }
 function hideFortuneCow() {
   if (!_fortuneEl) return;
@@ -1011,7 +1012,8 @@ function buildAvatarPicker() {
       document.querySelectorAll('.avatar-opt').forEach(d => d.classList.remove('selected'));
       div.classList.add('selected');
       currentTheme = THEMES[key];
-      drawBackground(); // preview on menu
+      drawBackground();      // preview on menu
+      reskinFortuneCow();    // swap the corner cow to the new avatar (no refetch)
     });
     avatarPicker.appendChild(div);
   });
