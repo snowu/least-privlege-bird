@@ -111,12 +111,6 @@ function showTokenModal(name, token) {
       modal.classList.add('hidden');
       resolve(token);
     };
-
-    document.getElementById('btn-show-recover').onclick = e => {
-      e.preventDefault();
-      modal.classList.add('hidden');
-      showRecoverModal(name).then(resolve);
-    };
   });
 }
 
