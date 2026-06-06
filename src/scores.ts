@@ -1,4 +1,10 @@
 // ── SCORES + TOKEN SYSTEM ─────────────────────────────────────────────────────
+// Friction-theater + live-DB flags are set on `window` by an inline <script> in
+// index.html (runs before this bundle). Declared here so TS knows their shape.
+declare global {
+  interface Window { DEV_MODE: boolean; LIVE_DB: boolean; }
+}
+
 // Supabase config — fill in when ready, stubs work offline via localStorage
 const SUPABASE_URL = 'https://yozllinwvvprtguinflm.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_FqTiUUOrvfWv6zmwobkcgg_9_d9iyvU';
@@ -6,13 +12,13 @@ const SUPABASE_KEY = 'sb_publishable_FqTiUUOrvfWv6zmwobkcgg_9_d9iyvU';
 const LS_KEY = 'lpb_players'; // { [name]: token }
 
 // ── LOCAL STORAGE ─────────────────────────────────────────────────────────────
-function _loadLocal() {
+export function _loadLocal() {
   try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
 }
 function _saveLocal(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 
-function getLocalToken(name)      { const v = _loadLocal()[name]; return v?.token || v || null; }
-function setLocalToken(name, tok) { const d = _loadLocal(); d[name] = tok; _saveLocal(d); } // always a string
+export function getLocalToken(name)      { const v = _loadLocal()[name]; return v?.token || v || null; }
+export function setLocalToken(name, tok) { const d = _loadLocal(); d[name] = tok; _saveLocal(d); } // always a string
 
 // Strip-on-read migration: normalize legacy { token, score } entries to bare token
 // strings, dropping the (untrustworthy) cached score. Runs once at load.
@@ -39,7 +45,7 @@ async function sha256hex(str) {
 // ── SUPABASE CALLS ────────────────────────────────────────────────────────────
 // LIVE_DB (set in index.html) decides whether we touch Supabase — always true in prod,
 // manually toggleable locally via localStorage.lpb_live. Decoupled from DEV_MODE.
-const _sb = SUPABASE_URL && SUPABASE_KEY && (typeof LIVE_DB !== 'undefined' ? LIVE_DB : false);
+const _sb = SUPABASE_URL && SUPABASE_KEY && (typeof window !== 'undefined' && window.LIVE_DB);
 
 async function _sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -64,7 +70,7 @@ async function sbLoadScores() {
 
 // Authoritative best score for a player — read from Supabase, never localStorage.
 // Returns the score, or null when Supabase is unavailable / the fetch fails.
-async function fetchBest(name) {
+export async function fetchBest(name) {
   if (!_sb) return null;
   try {
     const res = await _sbFetch(`/scores?name=eq.${encodeURIComponent(name)}&select=score`);
@@ -134,7 +140,7 @@ const _FORTUNE_FALLBACK = [
   "A conclusion is the place where you got tired of thinking.",
 ];
 
-async function fetchFortune() {
+export async function fetchFortune() {
   if (_sb) {
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/fortune`, {
@@ -154,7 +160,7 @@ async function fetchFortune() {
 // Submit a run to the edge function, which replays { seed, flapTicks } through the
 // real physics and accepts the score only if it recomputes to the claimed value.
 // `replay` is { seed, flapTicks }; for registration (score 0) an empty run is used.
-async function sbSubmitScore(name, token, score, replay) {
+async function sbSubmitScore(name, token, score, replay?) {
   if (!_sb) return;
   const { seed, flapTicks } = replay || { seed: 0, flapTicks: [] };
   const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-score`, {
@@ -192,7 +198,7 @@ function showTokenModal(name, token) {
 // Token-only recovery: the user pastes a token, we resolve it to its account
 // name server-side and rebind this browser to it. No name entry — the token IS
 // the identity. Resolves to the recovered name, or null if cancelled.
-function showRecoverModal() {
+export function showRecoverModal() {
   return new Promise(resolve => {
     const modal = document.getElementById('recover-modal');
     const input = document.getElementById('recover-token-input');
@@ -227,7 +233,7 @@ function showRecoverModal() {
 // Call before starting a game. Returns the player's token (existing or new).
 // No-op when the DB is off (LIVE_DB) — a token only matters for writing scores,
 // and we don't want the modal interrupting pure gameplay testing.
-async function ensurePlayerToken(name) {
+export async function ensurePlayerToken(name) {
   if (!_sb) return null;
   const existing = getLocalToken(name);
   if (existing) return existing;
@@ -242,7 +248,7 @@ async function ensurePlayerToken(name) {
 }
 
 // Load all scores: Supabase if configured, else localStorage fallback
-async function loadScores() {
+export async function loadScores() {
   if (_sb) {
     try {
       const rows = await sbLoadScores();
@@ -258,7 +264,7 @@ async function loadScores() {
 // number is trivially editable, so the leaderboard must stay server-authoritative.
 // `replay` is { seed, flapTicks } from the run — the edge function replays it to
 // verify the score is genuine before writing.
-async function saveScore(name, score, replay) {
+export async function saveScore(name, score, replay) {
   if (!_sb) return; // _sb already encodes LIVE_DB — no separate localhost check needed
   const tok = getLocalToken(name);
   if (!tok) return;

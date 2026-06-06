@@ -3,3 +3,7 @@ supabase/.temp/
 supabase/.branches/
 
 bird.txt
+
+# Build output (produced by esbuild; CI rebuilds for Pages)
+dist/
+node_modules/

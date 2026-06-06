@@ -3,7 +3,10 @@
 // rejects any claim that doesn't match, then does the token-hash + max-only write
 // with the service role (bypasses RLS — anon cannot write the table directly).
 
-import { simulate } from "./sim.ts";
+// Authoritative replay runs the SAME physics the browser does — the shared core
+// in src/physics-core.ts. No local sim copy to drift; the golden tests + the
+// browser game both exercise this exact module.
+import { simulate } from "../../../src/physics-core.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

@@ -1,0 +1,61 @@
+name: Deploy to GitHub Pages
+
+# Builds the static site and publishes it via the official GitHub Pages Actions
+# pipeline (no gh-pages branch). Runs on every push to main.
+#
+# Pages "Source" must be set to "GitHub Actions".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Guard the anti-cheat determinism invariant before shipping.
+      - name: Replay goldens
+        run: npm test
+
+      - name: Build bundle
+        run: npm run build
+
+      # Stage only the static site (HTML + built bundle + assets).
+      - name: Assemble site
+        run: |
+          mkdir -p _site/dist
+          cp index.html _site/
+          cp dist/bundle.js _site/dist/
+          cp -r assets _site/assets
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

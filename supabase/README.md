@@ -11,15 +11,16 @@ Supabase's servers and stores only a score it independently reproduces.
 BROWSER (untrusted)                      SUPABASE (trusted)
   game.js records { seed, flapTicks }      submit-score/index.ts
   on death → POST  ──────────────────────► validates input
-  { name, token, seed,                     replays via sim.ts
+  { name, token, seed,                     replays via physics-core
     flapTicks, claimedScore }              if recomputed === claimed:
                                              token-hash verify
                                              max-only write (service role)
 ```
 
-- `sim.ts` is a **byte-for-byte mirror** of the physics in `game.js` (same constants,
-  same `mulberry32` PRNG, same fixed-timestep step loop, same input-before-physics
-  ordering). A run is fully reproducible from `{ seed, flapTicks }`.
+- Both the browser game and this function import the **same** physics module,
+  `src/physics-core.ts` (constants, `mulberry32` PRNG, fixed-timestep step loop,
+  input-before-physics ordering). There is no second copy to drift — `game.ts` and
+  `submit-score` run identical code. A run is fully reproducible from `{ seed, flapTicks }`.
 - The function **ignores `claimedScore` as truth** — it recomputes the score from the
   inputs. The only way to land score N is to submit inputs that genuinely survive N
   pipes. Forging a number is impossible; the number is thrown away and recomputed.
@@ -31,7 +32,7 @@ BROWSER (untrusted)                      SUPABASE (trusted)
 
 1. **RLS**: `anon` has no INSERT/UPDATE/DELETE on `scores` → can't skip the function.
 2. **Server-side code**: the function runs on Supabase, not the browser → attacker
-   can't alter its logic (reading the client's `sim.ts` copy doesn't help — knowing
+   can't alter its logic (the physics core is shipped to the browser too, but knowing
    the rules ≠ being able to fake inputs).
 3. **Replay**: claimed score is recomputed from inputs → a forged number is rejected.
 4. **Service-role secrecy**: the write key lives only in the function's env → an
@@ -46,8 +47,8 @@ heuristics) is out of scope for this project.
 | File | Purpose |
 |------|---------|
 | `config.toml` | Project ref + `submit-score` declared with `verify_jwt = false` (the game calls it with the publishable anon key; the function does its own auth). |
-| `functions/submit-score/index.ts` | HTTP handler: validate → replay → token verify → write. |
-| `functions/submit-score/sim.ts` | Authoritative physics. **Keep in lockstep with `game.js`** — any change to constants/physics/PRNG must be mirrored here or honest runs will be rejected. |
+| `functions/submit-score/index.ts` | HTTP handler: validate → replay → token verify → write. Imports `../../../src/physics-core.ts` (bundled & uploaded by the deploy). |
+| `src/physics-core.ts` (repo root) | **The** authoritative physics, shared by browser + server. Single source of truth — no mirror to keep in sync. Guarded by `scripts/test-replay.ts` golden replays (run on pre-commit when physics changes). |
 | `functions/recover-account/index.ts` | Token-only recovery: hashes a raw token (service role) and returns its account name. Lets `token_hash` stay hidden from anon. |
 
 ## Deploy
@@ -114,6 +115,9 @@ limit per call). A replay runs in milliseconds, so this fits comfortably.
 
 ## Parity guarantee
 
-`sim.ts` was verified to produce identical scores to `game.js` across multiple seeds,
-and to reject forged scores, tampered inputs, and malformed payloads. **If you ever
-change game physics, re-verify parity** — divergence silently rejects legitimate runs.
+The browser game and the server replay import the **same** `src/physics-core.ts`, so
+parity is structural — there's no second copy to diverge. `scripts/test-replay.ts`
+freezes known `{ seed, flapTicks } → score` runs and fails the pre-commit if the core's
+behaviour drifts. **If you change game physics, regenerate the goldens deliberately
+(`scripts/gen-goldens.ts`) and review the score diff**, then redeploy submit-score so the
+server runs the new core.
