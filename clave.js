@@ -241,14 +241,185 @@ const Clave = (() => {
         { text: 'Automatic schema validation',                  correct: false, explain: 'Wrong. A queue moves bytes; schema enforcement is your job.' },
       ],
     },
+
+    // ── NETWORKING / HTTP ───────────────────────────────────────────────────
+    {
+      prompt: 'What does an HTTP <code>301</code> tell the client, vs a <code>302</code>?',
+      type: 'single',
+      options: [
+        { text: '301 = permanent redirect (cacheable); 302 = temporary', correct: true,  explain: 'Correct. 301 invites clients/proxies to cache and update bookmarks; 302 says "just this once".' },
+        { text: 'They are interchangeable',                  correct: false, explain: 'Wrong. Caching behaviour differs — a wrong 301 is sticky and painful to undo.' },
+        { text: '301 means server error',                    correct: false, explain: 'Wrong. 3xx is redirection; 5xx is server error.' },
+        { text: '302 forces HTTPS',                          correct: false, explain: 'Wrong. Redirect status has nothing to do with the scheme by itself.' },
+      ],
+    },
+    {
+      prompt: 'Which are true of <strong>TCP</strong> vs <strong>UDP</strong>?',
+      type: 'multi',
+      options: [
+        { text: 'TCP guarantees ordered, reliable delivery', correct: true,  explain: 'Yes. Sequencing + retransmission give ordered, reliable bytes.' },
+        { text: 'UDP has lower overhead and no handshake',   correct: true,  explain: 'Yes. Fire-and-forget — great for video/games/DNS.' },
+        { text: 'UDP guarantees delivery order',             correct: false, explain: 'Wrong. UDP makes no ordering or delivery guarantees.' },
+        { text: 'TCP is connectionless',                     correct: false, explain: 'Wrong. TCP is connection-oriented; UDP is connectionless.' },
+      ],
+    },
+    {
+      prompt: 'A DNS record\'s <strong>TTL</strong> controls what?',
+      type: 'single',
+      options: [
+        { text: 'How long resolvers may cache the record before re-querying', correct: true,  explain: 'Correct. Low TTL = faster propagation but more queries; high TTL = the opposite.' },
+        { text: 'The maximum hops a packet can take',        correct: false, explain: 'Wrong — that is the IP-packet TTL, a different field entirely.' },
+        { text: 'How long the domain registration lasts',    correct: false, explain: 'Wrong. Registration term is unrelated to record TTL.' },
+        { text: 'The DNSSEC signature validity',             correct: false, explain: 'Wrong. Signature lifetimes are separate from record TTL.' },
+      ],
+    },
+
+    // ── GIT / TOOLING ───────────────────────────────────────────────────────
+    {
+      prompt: 'What is the difference between <code>git merge</code> and <code>git rebase</code>?',
+      type: 'single',
+      options: [
+        { text: 'Merge preserves history with a merge commit; rebase rewrites commits onto a new base', correct: true,  explain: 'Correct. Rebase gives linear history but rewrites SHAs — never rebase shared/pushed branches.' },
+        { text: 'They produce identical history',            correct: false, explain: 'Wrong. Merge keeps the branch topology; rebase linearizes it.' },
+        { text: 'Rebase deletes the remote branch',          correct: false, explain: 'Wrong. Rebase only re-applies commits locally.' },
+        { text: 'Merge cannot cause conflicts',              correct: false, explain: 'Wrong. Both can conflict — they touch the same lines.' },
+      ],
+    },
+    {
+      prompt: 'Which <code>git reset</code> modes leave your <strong>working tree changes intact</strong>?',
+      type: 'multi',
+      options: [
+        { text: '--soft (moves HEAD, keeps index + tree)',  correct: true,  explain: 'Yes. Soft only moves the branch pointer; staged changes stay staged.' },
+        { text: '--mixed (default; keeps tree, unstages)',   correct: true,  explain: 'Yes. Mixed resets the index but leaves the working tree.' },
+        { text: '--hard (discards index + tree)',            correct: false, explain: 'Wrong. Hard throws away working-tree changes — the dangerous one.' },
+        { text: '--keep on a dirty conflicting file',        correct: false, explain: 'Wrong. --keep aborts rather than clobbering, but does not preserve conflicting local edits.' },
+      ],
+    },
+
+    // ── DATA STRUCTURES / COMPLEXITY ────────────────────────────────────────
+    {
+      prompt: 'Average-case lookup complexity of a well-distributed <strong>hash table</strong>?',
+      type: 'single',
+      options: [
+        { text: 'O(1)',       correct: true,  explain: 'Correct. Constant on average; worst case O(n) under pathological collisions.' },
+        { text: 'O(log n)',   correct: false, explain: 'Wrong. That is a balanced BST. Hash tables are O(1) average.' },
+        { text: 'O(n)',       correct: false, explain: 'Wrong — that is the degenerate worst case, not the average.' },
+        { text: 'O(n log n)', correct: false, explain: 'Wrong. That is comparison sorting, not a lookup.' },
+      ],
+    },
+    {
+      prompt: 'Which operations are <strong>O(1)</strong> on a typical dynamic array (vector/list)?',
+      type: 'multi',
+      options: [
+        { text: 'Index access by position',                  correct: true,  explain: 'Yes. Random access is constant time — contiguous memory.' },
+        { text: 'Amortized append to the end',               correct: true,  explain: 'Yes. Amortized O(1) thanks to geometric growth, despite occasional resize.' },
+        { text: 'Insert at the front',                        correct: false, explain: 'Wrong. Front insert shifts every element — O(n).' },
+        { text: 'Search for an arbitrary value',              correct: false, explain: 'Wrong. Unsorted linear search is O(n).' },
+      ],
+    },
+
+    // ── DATABASES ───────────────────────────────────────────────────────────
+    {
+      prompt: 'A database <strong>B-tree index</strong> on a column primarily speeds up what?',
+      type: 'single',
+      options: [
+        { text: 'Lookups, range scans and ordered reads on that column', correct: true,  explain: 'Correct. B-trees keep keys sorted, so equality, ranges and ORDER BY all benefit.' },
+        { text: 'Writes and bulk inserts',                  correct: false, explain: 'Wrong. Indexes slow writes — every insert must maintain the tree.' },
+        { text: 'Random unindexed full-table scans',         correct: false, explain: 'Wrong. A full scan ignores the index entirely.' },
+        { text: 'Hash equality only, never ranges',          correct: false, explain: 'Wrong — that describes a hash index; B-trees do ranges too.' },
+      ],
+    },
+    {
+      prompt: 'Which guarantees do the <strong>ACID</strong> properties cover?',
+      type: 'multi',
+      options: [
+        { text: 'Atomicity — all-or-nothing transactions',  correct: true,  explain: 'Yes. A transaction either fully commits or fully rolls back.' },
+        { text: 'Isolation — concurrent txns do not corrupt each other', correct: true,  explain: 'Yes. Isolation levels control visibility of in-flight changes.' },
+        { text: 'Durability — committed data survives crashes', correct: true,  explain: 'Yes. Once committed, it is on stable storage (WAL/fsync).' },
+        { text: 'Availability — the DB is always reachable', correct: false, explain: 'Wrong. Availability is a CAP property, not the A in ACID.' },
+      ],
+    },
+    {
+      prompt: 'What does a <code>LEFT JOIN</code> return that an <code>INNER JOIN</code> does not?',
+      type: 'single',
+      options: [
+        { text: 'Rows from the left table with no match on the right (filled with NULLs)', correct: true,  explain: 'Correct. LEFT keeps every left row; unmatched right columns become NULL.' },
+        { text: 'Only rows present in both tables',          correct: false, explain: 'Wrong — that is exactly what INNER JOIN does.' },
+        { text: 'The cartesian product of both tables',      correct: false, explain: 'Wrong — that is a CROSS JOIN.' },
+        { text: 'Rows from the right table only',            correct: false, explain: 'Wrong — that would be a RIGHT JOIN, and even then it keeps the right side.' },
+      ],
+    },
+
+    // ── OS / SYSTEMS ────────────────────────────────────────────────────────
+    {
+      prompt: 'What is the core difference between a <strong>process</strong> and a <strong>thread</strong>?',
+      type: 'single',
+      options: [
+        { text: 'Threads share the process address space; processes have isolated memory', correct: true,  explain: 'Correct. Threads share heap/globals (cheap, but needs synchronization); processes are isolated.' },
+        { text: 'Threads are always slower than processes',  correct: false, explain: 'Wrong. Threads are lighter to create and context-switch.' },
+        { text: 'A process can only ever have one thread',    correct: false, explain: 'Wrong. A process can host many threads.' },
+        { text: 'Processes share memory by default',          correct: false, explain: 'Wrong — that is threads; processes need explicit IPC/shared memory.' },
+      ],
+    },
+    {
+      prompt: 'Which conditions are required for a classic <strong>deadlock</strong>?',
+      type: 'multi',
+      options: [
+        { text: 'Mutual exclusion on resources',             correct: true,  explain: 'Yes. Resources held in a non-shareable mode.' },
+        { text: 'Hold-and-wait',                             correct: true,  explain: 'Yes. A thread holds one resource while waiting for another.' },
+        { text: 'Circular wait',                             correct: true,  explain: 'Yes. A cycle in the wait-for graph closes the trap.' },
+        { text: 'Preemptible resource allocation',           correct: false, explain: 'Wrong. Deadlock needs NO preemption — preemption actually breaks it.' },
+      ],
+    },
+
+    // ── CONTAINERS ──────────────────────────────────────────────────────────
+    {
+      prompt: 'How do <strong>containers</strong> differ from <strong>virtual machines</strong>?',
+      type: 'single',
+      options: [
+        { text: 'Containers share the host kernel; VMs run a full guest OS', correct: true,  explain: 'Correct. Containers isolate via namespaces/cgroups — lighter, faster boot, no separate kernel.' },
+        { text: 'Containers each run their own kernel',       correct: false, explain: 'Wrong — that is a VM. Containers share the host kernel.' },
+        { text: 'VMs are always smaller than containers',     correct: false, explain: 'Wrong. VM images carry a full OS — usually much larger.' },
+        { text: 'Containers cannot be resource-limited',      correct: false, explain: 'Wrong. cgroups cap CPU/memory per container.' },
+      ],
+    },
+
+    // ── SECURITY / CRYPTO ───────────────────────────────────────────────────
+    {
+      prompt: 'Why should passwords be stored with a <strong>salted hash</strong> (bcrypt/argon2), not encrypted?',
+      type: 'single',
+      options: [
+        { text: 'Hashing is one-way + salt defeats rainbow tables; encryption is reversible if the key leaks', correct: true,  explain: 'Correct. You never need the plaintext back, and a slow salted hash resists precomputation and cracking.' },
+        { text: 'Encryption is too slow to compute',          correct: false, explain: 'Wrong. The point is reversibility, not speed — and slow KDFs are intentional.' },
+        { text: 'Hashes take less storage',                   correct: false, explain: 'Wrong. Storage size is not the reason.' },
+        { text: 'Salts make the hash reversible',             correct: false, explain: 'Wrong. Salts add uniqueness; they do not make hashing reversible.' },
+      ],
+    },
+    {
+      prompt: 'Which are properties of <strong>asymmetric (public-key)</strong> cryptography?',
+      type: 'multi',
+      options: [
+        { text: 'A public key encrypts; the private key decrypts', correct: true,  explain: 'Yes. Anyone can encrypt to you; only your private key reads it.' },
+        { text: 'A private key signs; the public key verifies', correct: true,  explain: 'Yes. Signatures prove origin/integrity without sharing the secret.' },
+        { text: 'Both parties must share the same secret key', correct: false, explain: 'Wrong — that is symmetric crypto.' },
+        { text: 'It is typically faster than symmetric crypto', correct: false, explain: 'Wrong. Asymmetric is slower; TLS uses it only to exchange a symmetric key.' },
+      ],
+    },
   ];
 
-  // Pick two distinct random questions per session
-  const _picks = (() => {
+  // Pick two distinct random questions, fresh every login (not once per page load).
+  // Bag-shuffle the full index list and take the first two so the pre-login and
+  // post-game captchas never repeat the same question within one session, and the
+  // pair varies run-to-run.
+  let _picks = [0, 1];
+  function _rollPicks() {
     const idx = Array.from({length: QUESTIONS.length}, (_, i) => i);
-    idx.sort(() => Math.random() - 0.5);
-    return [idx[0], idx[1]];
-  })();
+    for (let i = idx.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [idx[i], idx[j]] = [idx[j], idx[i]];
+    }
+    _picks = [idx[0], idx[1]];
+  }
 
   // ── CAPTCHA (QUIZ) BUILDER ──────────────────────────────────────────────────
   function buildCaptcha(containerId, questionIdx, onSuccess) {
@@ -487,7 +658,7 @@ const Clave = (() => {
     // Fresh challenge + excuse each time (display only — never validated).
     const promptEl = document.getElementById('mfa-prompt');
     if (promptEl) {
-      promptEl.innerHTML = 'Security policy requires cryptographic proof of identity.<br/>' + _pick(MFA_CHALLENGES);
+      promptEl.innerHTML = _pick(MFA_CHALLENGES);
     }
     const excuse = _pick(MFA_EXCUSES);
     let mfaAttempts = 0;
@@ -560,6 +731,7 @@ const Clave = (() => {
 
   // ── MAIN LOGIN FLOW ─────────────────────────────────────────────────────────
   async function startLogin(playerName, onSuccess) {
+    _rollPicks();   // fresh question pair every login
     show('clave-screen');
 
     // Step 1 — CAPTCHA pre-login

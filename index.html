@@ -95,9 +95,9 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* MFA input */
-    #mfa-input {
-      font-size: 1.4rem; letter-spacing: 6px; text-align: center;
-      width: 200px; padding: 10px; border-radius: 8px; border: 2px solid #2e3a55;
+    #overlay #mfa-input {
+      font-size: 0.85rem; letter-spacing: 4px; text-align: center;
+      width: 250px; padding: 8px; border-radius: var(--radius); border: 2px solid #2e3a55;
       background: #0d1117; color: #fff;
     }
     #mfa-input.shake {
@@ -119,7 +119,7 @@
     }
 
     /* remember checkbox */
-    .clave-check { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #6b7a99; cursor: pointer; }
+    .clave-check { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #aebbd9; cursor: pointer; }
     .clave-check input { width: auto; cursor: pointer; }
 
     /* ── CAPTCHA ── */
@@ -156,11 +156,14 @@
       margin: 0; padding: 10px 14px; pointer-events: none;
       font-family: 'Courier New', Courier, monospace;
       font-size: 11px; line-height: 1.15; white-space: pre;
-      color: #b8e0a0; text-shadow: 1px 1px 0 #000;
-      background: rgba(0,0,0,0.45); border-radius: 6px;
+      color: #c2eaa8;
+      /* full outline on the glyphs so the cow reads on any background */
+      text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+      background: rgba(8,12,10,0.88); border: 1px solid rgba(120,160,120,0.25);
+      border-radius: 6px;
       opacity: 0; transition: opacity 0.4s ease;
     }
-    #fortune-cow.show { opacity: 0.92; }
+    #fortune-cow.show { opacity: 1; }
 
     /* ── GAME OVER (retro arcade + IAM satire) ── */
     #gameover-panel {
@@ -276,7 +279,7 @@
       <!-- Step 4: MFA -->
       <div id="clave-step-mfa" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
         <h2>🔐 Multi-Factor Authentication</h2>
-        <p class="sub" id="mfa-prompt">Security policy requires cryptographic proof of identity.<br/>Please enter the first 10 digits of π.</p>
+        <p class="sub" id="mfa-prompt"></p>
         <input id="mfa-input" type="text" maxlength="32" autocomplete="off" />
         <label class="clave-check"><input type="checkbox" id="remember-device" style="width:auto;" /> Remember this device for 8 hours</label>
         <p class="error-msg" id="mfa-error"></p>
@@ -369,7 +372,7 @@
     <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;padding:32px 36px;max-width:440px;display:flex;flex-direction:column;gap:18px;align-items:center;text-align:center;">
       <p style="font-size:2.5rem">😔</p>
       <h2 style="font-family:var(--font-display);font-size:1rem;line-height:1.6;color:#c8d6f8;">Oh.<br/>I thought you had taste.<br/>Pity.</h2>
-      <p style="font-family:var(--font-display);font-size:0.55rem;line-height:1.9;color:#6b7a99;">Pixel art is objectively superior. This is not an opinion.<br/>You are about to make a documented mistake.</p>
+      <p style="font-family:var(--font-display);font-size:0.55rem;line-height:1.9;color:#aebbd9;">Pixel art is objectively superior. This is not an opinion.<br/>You are about to make a documented mistake.</p>
       <div style="display:flex;flex-direction:column;gap:10px;width:100%;">
         <button id="btn-taste-keep" style="font-family:var(--font-display);font-size:0.62rem;line-height:1.5;padding:12px 16px;border-radius:var(--radius);border:none;background:#4caf50;color:#fff;cursor:pointer;">I have impeccable taste</button>
         <button id="btn-taste-switch" style="font-family:var(--font-display);font-size:0.62rem;line-height:1.5;padding:12px 16px;border-radius:var(--radius);border:none;background:#5a6270;color:#dfe4ec;cursor:pointer;">I don't have taste.</button>
@@ -385,7 +388,7 @@
     <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;padding:32px 36px;max-width:460px;display:flex;flex-direction:column;gap:14px;align-items:center;">
       <p style="font-size:2rem">🔑</p>
       <h2 style="color:#c8d6f8;text-align:center;">Save your access token</h2>
-      <p style="font-size:0.85rem;color:#6b7a99;text-align:center;line-height:1.6;">
+      <p style="font-size:0.85rem;color:#aebbd9;text-align:center;line-height:1.6;">
         This token identifies you as <strong id="token-modal-name" style="color:#fff;"></strong>.<br/>
         Store it somewhere safe — like a GitHub PAT.<br/>
         You'll need it to recover your session on a new device.
@@ -416,15 +419,15 @@
   <div id="recover-modal" class="hidden" style="
     position:fixed;inset:0;background:rgba(0,0,0,0.85);
     display:flex;align-items:center;justify-content:center;
-    z-index:999;font-family:'Segoe UI',sans-serif;color:#fff;">
-    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;padding:32px 36px;max-width:400px;display:flex;flex-direction:column;gap:14px;align-items:center;">
-      <h2 style="color:#c8d6f8;">Recover Session</h2>
-      <p style="font-size:0.85rem;color:#6b7a99;text-align:center;">Paste your saved token — we'll restore your account from it.</p>
+    z-index:999;font-family:var(--font-body);color:#fff;">
+    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:var(--radius);padding:32px 36px;max-width:440px;display:flex;flex-direction:column;gap:14px;align-items:center;">
+      <h2 style="font-family:var(--font-display);font-size:0.9rem;line-height:1.6;color:#c8d6f8;text-align:center;">Recover Session</h2>
+      <p style="font-family:var(--font-body);font-size:0.6rem;line-height:1.8;color:#aebbd9;text-align:center;">Paste your saved token — we'll restore your account from it.</p>
       <input id="recover-token-input" type="text" placeholder="Paste token here"
-        style="width:100%;background:#0d1117;border:1px solid #2e3a55;border-radius:8px;padding:10px 12px;font-family:monospace;font-size:0.8rem;color:#fff;" />
-      <p id="recover-error" style="color:#ff6b6b;font-size:0.82rem;min-height:1em;"></p>
-      <button id="btn-recover-confirm" style="padding:10px 28px;border-radius:10px;border:none;background:#4caf50;color:#fff;font-size:1rem;cursor:pointer;">Restore</button>
-      <button id="btn-recover-cancel" style="background:none;border:none;color:#6b7a99;cursor:pointer;font-size:0.85rem;">Cancel</button>
+        style="width:100%;background:#0d1117;border:1px solid #2e3a55;border-radius:var(--radius);padding:10px 12px;font-family:var(--font-mono);font-size:0.6rem;color:#fff;text-align:center;" />
+      <p id="recover-error" style="font-family:var(--font-body);color:#ff6b6b;font-size:0.6rem;line-height:1.7;min-height:1.2em;text-align:center;"></p>
+      <button id="btn-recover-confirm" style="font-family:var(--font-display);padding:12px 20px;border-radius:var(--radius);border:none;background:#4caf50;color:#fff;font-size:0.7rem;line-height:1.4;cursor:pointer;">Restore</button>
+      <button id="btn-recover-cancel" style="font-family:var(--font-body);background:none;border:none;color:#aebbd9;cursor:pointer;font-size:0.55rem;">Cancel</button>
     </div>
   </div>
 

@@ -813,6 +813,10 @@ function drawBackground() {
   for (let gx = 0; gx < C.W; gx += px * 2) ctx.fillRect(gx, C.GROUND, px, px); // dither highlights
   ctx.fillStyle = '#3a6e1a';
   ctx.fillRect(0, C.GROUND + px * 2, C.W, px); // shadow seam under grass
+  // Dark wash over the HUD bar (below the grass lip) so the white HUD readout stays
+  // legible regardless of the avatar's ground color (e.g. penguin's near-white ice).
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, C.GROUND + px * 3, C.W, C.HUD - px * 3);
 }
 
 // Blocky pixel cloud: a stepped lozenge built from a few hard rectangles.
@@ -849,14 +853,26 @@ function roundRect(ctx, x, y, w, h, r) {
 
 function drawPipe(x, topH, gap) { currentTheme.drawPipe(x, topH, gap); }
 
+// White text with a black outline so it stays legible on ANY background (e.g. the
+// penguin's near-white sky/ground, where plain white vanishes). lineWidth scales
+// with font size; outline is painted under the fill.
+function strokedText(text, x, y, lineWidth = 4) {
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.lineWidth = lineWidth;
+  ctx.strokeStyle = '#000';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, x, y);
+}
+
 function drawCountdown(n) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(0, 0, C.W, C.GROUND);
-  ctx.fillStyle = '#fff';
   ctx.font = `${C.H * 0.16}px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(n > 0 ? n : 'GO!', C.W / 2, C.GROUND / 2);
+  strokedText(n > 0 ? n : 'GO!', C.W / 2, C.GROUND / 2, 8);
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -878,16 +894,15 @@ function drawPlayer() {
 }
 
 function drawHUD() {
-  ctx.fillStyle = '#fff';
   ctx.font = `14px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'center';
   const sl = speedLevel() + 1;
   // High is shown only when we have an authoritative value from Supabase.
   // currentBest === null means offline/unknown → omit it rather than show a stale number.
   const high = currentBest == null ? '' : `High: ${Math.max(score, currentBest)}  |  `;
-  ctx.fillText(
+  strokedText(
     `Score: ${score}  |  ${high}${currentPlayer}  |  Spd ${sl}`,
-    C.W / 2, C.GROUND + 32
+    C.W / 2, C.GROUND + 32, 4
   );
 }
 
