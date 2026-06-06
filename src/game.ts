@@ -787,11 +787,11 @@ THEMES.airplane.bgLayers = [
         }
         // Backlit ad board on the slab face — most tall-enough slabs carry one.
         if (h > 100 && hash01(seed * 19) > 0.25) {
-          const bw = Math.min(w - 16, 60 + Math.floor(hash01(seed * 23) * 30));
-          const bh = 30 + Math.floor(hash01(seed * 29) * 12);
+          const bw = Math.min(w - 12, 90 + Math.floor(hash01(seed * 23) * 36));
+          const bh = 44 + Math.floor(hash01(seed * 29) * 16);
           const warm = hash01(seed * 31) > 0.5;
           adBillboard(sx + Math.round((w - bw) / 2), topY + 18, bw, bh,
-            warm ? '255,196,90' : '120,200,255', AD_SLOGANS, seed);
+            warm ? '255,196,90' : '120,200,255', AD_AIRPLANE, seed);
         }
       };
       // three slabs per tile, each with procedural width/height keyed to its stable id.
@@ -971,7 +971,7 @@ THEMES.robot.bgLayers = [
   // MAIN neon circuit-city skyline — towers with antenna spires, setback crowns and a
   // grid of pulsing window lights. Pixel mode = square lights blinking; round mode
   // = soft glowing dots. Each window has its own phase so the grid shimmers.
-  { speed: 0.16, draw(o) { tileMotif(o, 320, (x, tile) => {
+  { speed: 0.16, draw(o) { tileMotif(o, 380, (x, tile) => {
       const t = nowSec();
       const tower = (sx, w, h, edge, seed) => {
         const topY = G() - h, round = isRound();
@@ -1015,18 +1015,24 @@ THEMES.robot.bgLayers = [
         const beacon = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 4 + seed));
         pixelDisc(mx, mastTop - 2, 5, `rgba(255,40,200,${beacon})`); // magenta scanner
       };
-      tower(x, 80, 200, '#00e5ff', 1);
-      tower(x + 110, 60, 150, '#76ff03', 2);
-      tower(x + 200, 90, 240, '#00e5ff', 3);
-      // One neon ad board per tile, centered on a tower face (width clamped inside the
-      // tower so it never clips the edges). Seed off the tile index so each tile cycles
-      // a different slogan, desynced from its neighbours. Alternate which tower hosts it.
-      const onTall = tile % 2 === 0;
-      const bw = onTall ? 74 : 64, bh = 40;
-      const tsx = onTall ? x + 200 : x, tw = onTall ? 90 : 80;          // host tower face
-      const bsx = tsx + Math.round((tw - bw) / 2);                      // centered on tower
-      const by = onTall ? G() - 205 : G() - 150;
-      adBillboard(bsx, by, bw, bh, onTall ? '0,229,255' : '255,40,200', AD_SLOGANS, tile);
+      // Two wide towers per tile (fewer, bigger than before). The taller one carries a
+      // large billboard; alternate which side it sits on per tile so the skyline reads
+      // varied as it scrolls.
+      const tallLeft = tile % 2 === 0;
+      const tallX = tallLeft ? x : x + 160, tallW = 150, tallH = 250;
+      // Foreground tower overlaps the tall tower's near edge so it partly occludes the
+      // billboard — same depth-layering the airplane skyline gets from its packed slabs.
+      const shortX = tallLeft ? x + 120 : x + 50, shortW = 130, shortH = 180;
+      // Draw the billboard tower FIRST (it's behind), then the foreground tower over it.
+      tower(tallX, tallW, tallH, '#00e5ff', 3);
+      // One large neon ad board, centered on the tall tower face. Width clamped inside
+      // the tower so it never clips; seeded off the tile index so each tile cycles a
+      // different slogan, desynced from its neighbours.
+      const bw = 120, bh = 56;
+      const bsx = tallX + Math.round((tallW - bw) / 2);
+      adBillboard(bsx, G() - 215, bw, bh, '0,229,255', AD_ROBOT, tile);
+      // Foreground tower last → overlaps and partly hides the board behind it.
+      tower(shortX, shortW, shortH, '#76ff03', 2);
   }); } },
   // Neon perspective grid on the ground bar + a periodic scanline sweep over all.
   { speed: 0, draw() {
@@ -1511,12 +1517,24 @@ function hash01(n) {
 // a list of cloud-corp satire slogans, one at a time, with a slow swap + occasional
 // power-flicker. `col` is "r,g,b". Deterministic-in-time (nowSec only) → no physics
 // touch. Text uses the game's pixel font (Press Start 2P) so it reads as a real ad.
+const EGG_RARITY = 14;   // ~1 in N slogan-cycles, a board glitches to an IT-error egg
+// Per-page-load random offset so each visit/run starts on different slogans (procedural
+// freshness). Render-only — billboards never touch physics/replay, so Math.random here
+// is safe and cannot affect determinism.
+const AD_LOAD_SEED = Math.floor(Math.random() * 9973);
 function adBillboard(sx, sy, w, h, col, slogans, seed) {
   const t = nowSec();
   const period = 9;                                     // seconds per slogan (slow)
   // stride the start index by a coprime of the list length so neighbouring boards
   // (seed 0,1,2,3) show well-separated slogans, not adjacent ones.
-  const idx = (Math.floor(t / period) + seed * 5) % slogans.length;
+  const cycle = Math.floor(t / period);
+  // Easter egg: rarely (deterministic per board+cycle) the board glitches to an IT/auth
+  // error instead of its themed ad. ~1 in EGG_RARITY cycles, so it's a catch-it-if-you-care
+  // surprise, not a constant. hash01 keyed on cycle+seed → stable for the whole cycle.
+  const eggRoll = hash01(cycle * 31 + seed * 7 + AD_LOAD_SEED);
+  const isEgg = eggRoll < 1 / EGG_RARITY;
+  const pool = isEgg ? AD_EGGS : slogans;
+  const idx = (cycle + seed * 5 + AD_LOAD_SEED) % pool.length;
   const phase = (t / period + seed * 0.37) % 1;         // 0..1, desynced per board
   // fade in at the start, hold, fade out at the end (swap transition)
   const fade = Math.min(1, phase * 8) * Math.min(1, (1 - phase) * 8);
@@ -1528,7 +1546,7 @@ function adBillboard(sx, sy, w, h, col, slogans, seed) {
   ctx.strokeStyle = `rgba(${col},${0.85 * lit})`; ctx.lineWidth = 2;
   ctx.strokeRect(sx + 1, sy + 1, w - 2, h - 2);
   // text — shrink font until the wrapped block fits inside the panel (w & h).
-  const text = slogans[idx];
+  const text = pool[idx];
   const words = text.split(' ');
   const padX = 8, padY = 6;
   let fontPx = 12, lines = [];
@@ -1559,25 +1577,51 @@ function adBillboard(sx, sy, w, h, col, slogans, seed) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.lineWidth = 1;
 }
 
-// Slogans for the building ad boards — dystopian cloud-corp / IAM satire, the same
-// absurdist tone as the rest of the game. A big, varied pool so neighbouring boards
-// and successive cycles rarely repeat. Kept short so they wrap cleanly on a panel.
-const AD_SLOGANS = [
-  // access / auth bureaucracy
-  'ACCESS DENIED', 'POLICY: DENY', 'RECONFIRM IDENTITY', 'ZERO TRUST',
-  'NOW WITH MORE MFA', 'SUDO AS A SERVICE', 'ROOT NOT INCLUDED',
-  'PROVE YOU ARE REAL', 'CAPTCHA REQUIRED', 'SESSION EXPIRED', 'PLEASE RE-AUTH',
-  'PERMISSION PENDING', 'AWAIT APPROVAL', 'TICKET #44291 OPEN',
-  // billing dystopia
-  '99.99% UPTIME*', 'EGRESS FEES APPLY', 'PER-MS BILLING', 'TERMS APPLY*',
-  'BILLED PER BREATH', 'FREE* TIER', 'SURGE PRICING ON', 'YOUR BILL: PENDING',
-  'INVOICE INBOUND', 'COSTS MAY VARY', 'PRICED PER REGRET',
-  // scale / corporate nonsense
-  'SCALE INFINITELY', 'SYNERGIZE NOW', 'DISRUPT YOURSELF', 'TRUST THE CLOUD',
-  'OBEY THE SLA', 'COMPLIANCE = JOY', 'WE OWN YOUR LOGS', 'DATA IS LOVE',
-  'SMILE: AUDITED', 'PRODUCTIVITY ↑', 'CONSUME COMPUTE', 'EMBRACE LATENCY',
-  'THE QUEUE IS LIFE', 'RESISTANCE = 503', 'UPGRADE OR PERISH',
-  'YOUR REGION: GONE', 'BLAME THE INTERN', 'IT WORKS ON PROD',
+// Building ad boards carry silly in-world ads, themed per setting (the airplane
+// skyline = present-day consumer-ad satire; the robot city = sci-fi satire). A rare
+// IT/auth error slips in as an easter egg via adBillboard's egg pool. Kept short so
+// they wrap cleanly on a panel.
+
+// Airplane theme: a hazy modern city — billboards for absurd present-day products,
+// influencer/wellness/finance nonsense, the ads you actually scroll past.
+const AD_AIRPLANE = [
+  'BUY ONE GET ONE', 'NOW 30% LESS!', 'AS SEEN ON TV', 'LIMITED TIME ONLY',
+  'NEW & IMPROVED', 'DOCTORS HATE IT', 'SUBSCRIBE TODAY', 'SMOOTHIE = SELFCARE',
+  'CRYPTO TO THE MOON', 'INVEST IN VIBES', 'HUSTLE HARDER', 'LIVE LAUGH LEVERAGE',
+  'GLUTEN-FREE AIR', 'ARTISANAL WATER', 'COLD BREW EVERYTHING', 'OAT MILK NATION',
+  'INFLUENCE RESPONSIBLY', 'LIKE & SUBSCRIBE', 'GOING VIRAL SOON', 'TRUST ME BRO',
+  'ELECTRIC & PROUD', 'CARBON-NEUTRAL*', 'WELLNESS JOURNEY', 'MANIFEST WEALTH',
+  'BIGGER PHONE 16', 'NOW FOLDS TWICE', 'SMART FRIDGE 9000', 'IT HAS AN APP NOW',
+  'PUMPKIN SPICE SZN', 'SKIP AD IN 5', 'BUY THE DIP', 'NFT YOUR DOG',
+];
+
+// Robot theme: a neon sci-fi megacity — billboards for cyberpunk consumer goods,
+// off-world living, synthetic everything. Silly, dystopian-bright.
+const AD_ROBOT = [
+  'UPLOAD YOUR MIND', 'CLONE TODAY!', 'RENT A SKYCAR', 'MARS: NOW LEASING',
+  'SYNTH-NOODLES 4U', 'NEURAL ADS LITE', 'BUY MORE OXYGEN', 'REPLACE YOUR ARM',
+  'CHROME IS IN', 'JACK IN & CHILL', 'HOLO-PETS ON SALE', 'GROW A NEW LIVER',
+  'MEMORY UPGRADES', 'FEELINGS DLC', 'DREAMS NOW ADFREE*', 'LIVE TO 200!',
+  'ANTIGRAV MATTRESS', 'PROTEIN PASTE PRO', 'ROBO-NANNY 3000', 'DELETE YOUR FEARS',
+  'OFFWORLD VISA OPEN', 'ANDROID DATING APP', 'LASER TEETH WHITEN', 'SLEEP IS OPTIONAL',
+  'RENT-A-EMOTION', 'GENE-MOD MONDAYS', 'CITIZENSHIP TIER 3', 'BREATHE: PREMIUM',
+  'TELEPORT RESPONSIBLY', 'YOUR CLONE MISSES U', 'HOVER OR DIE', 'NEON IS MANDATORY',
+  // sci-fi deep cuts: Futurama
+  'SLURM: ITS HIGHLY ADDICTIVE', 'DRINK BENDERS BREW', 'BLERNSBALL TONIGHT',
+  'MOMCORP: WE OWN YOU', 'BACHELOR CHOW', 'SUICIDE BOOTH 25¢', 'WHY NOT ZOIDBERG?',
+  'PLANET EXPRESS DELIVERS', 'AWAIT MOMS LOVE',
+  // sci-fi deep cuts: Firefly
+  'FRESH BLUE SUN GOODS', 'CANT STOP THE SIGNAL', 'SHINY! BUY NOW',
+  'FRUITY OATY BARS', 'JAYNES HAT 9.99', 'ALLIANCE-APPROVED',
+  'GORRAM GOOD DEALS', 'I AIM TO MISBEHAVE',
+];
+
+// Easter-egg pool: the only IT/auth-error slogans left. adBillboard surfaces one of
+// these rarely (~1 in EGG_RARITY cycles per board) so a sharp-eyed player catches the
+// game breaking character. Everything else stays in-world silly.
+const AD_EGGS = [
+  'ACCESS DENIED', 'POLICY: DENY', 'SESSION EXPIRED', '403 FORBIDDEN',
+  '99.99% UPTIME*', 'EGRESS FEES APPLY', 'RECONFIRM IDENTITY', 'IT WORKS ON PROD',
 ];
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -1876,10 +1920,14 @@ document.getElementById('btn-menu').addEventListener('click', () => { populateUs
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // Build avatar picker (rebuildable so the art-style toggle can refresh thumbnails)
 const avatarPicker = document.getElementById('avatar-picker');
-function buildAvatarPicker() {
+const avatarPickerGo = document.getElementById('avatar-picker-go');
+// Build the avatar picker into a container. Used for the menu picker AND the game-over
+// picker (the latter lets players switch avatar and retry without redoing the login
+// theater — retry skips auth). Selecting in one syncs the highlight in the other.
+function buildAvatarPickerInto(container) {
   const selectedKey = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
-  avatarPicker.innerHTML = '';
-  avatarPicker.classList.toggle('round-gfx', gfxStyle === 'round');
+  container.innerHTML = '';
+  container.classList.toggle('round-gfx', gfxStyle === 'round');
   // Penguin leads (it's the mascot); the rest follow in THEMES order.
   const ordered = ['penguin', ...Object.keys(THEMES).filter(k => k !== 'penguin')];
   ordered.forEach((key) => {
@@ -1888,15 +1936,21 @@ function buildAvatarPicker() {
     div.className = 'avatar-opt' + (key === selectedKey ? ' selected' : '');
     div.dataset.key = key;
     div.innerHTML = `<img src="${theme.img.src}" alt="${theme.label}"><span>${theme.label}</span>`;
-    div.addEventListener('click', () => {
-      document.querySelectorAll('.avatar-opt').forEach(d => d.classList.remove('selected'));
-      div.classList.add('selected');
-      currentTheme = THEMES[key];
-      drawBackground();      // preview on menu
-      reskinFortuneCow();    // swap the corner cow to the new avatar (no refetch)
-    });
-    avatarPicker.appendChild(div);
+    div.addEventListener('click', () => selectAvatar(key));
+    container.appendChild(div);
   });
+}
+// Apply an avatar choice and reflect it in every picker (menu + game-over).
+function selectAvatar(key) {
+  currentTheme = THEMES[key];
+  document.querySelectorAll('.avatar-opt').forEach(d =>
+    d.classList.toggle('selected', d.dataset.key === key));
+  drawBackground();      // live preview (menu or game-over background)
+  reskinFortuneCow();    // swap the corner cow to the new avatar (no refetch)
+}
+function buildAvatarPicker() {
+  buildAvatarPickerInto(avatarPicker);
+  buildAvatarPickerInto(avatarPickerGo);
 }
 buildAvatarPicker();
 
