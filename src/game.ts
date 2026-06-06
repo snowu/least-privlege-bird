@@ -277,7 +277,7 @@ const THEMES: { [key: string]: any } = {
   wizard: {
     label: 'Wizard',
     sky: '#1a0533', ground: '#4a4453',
-    cloudFill: 'rgba(180,100,255,0.25)',
+    cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
     drawPipe(x, topH, gap) {
       // Stone brick towers
       const capH = 24, capW = C.PIPE_W + 10, capX = x - 5;
@@ -502,6 +502,32 @@ THEMES.bird.bgLayers = [
   } },
   // Distant rolling hills
   { speed: 0.15, draw(o) { tileMotif(o, 360, x => { pixelHill(x, 320, 120, '#6aa84f'); pixelHill(x + 180, 260, 90, '#7cb85f'); }); } },
+  // Distant birds gliding across the sky (shared wanderers engine) — little "M"
+  // silhouettes whose wings beat via the flap phase. Slow flap → distant soaring.
+  { speed: 0, draw() {
+      wanderers(
+        [
+          { drift: 26,  baseY: 150, yAmp: 30, wy: 0.5, sy: 1.1, bank: 0.25, flapHz: 3.5 },
+          { drift: 22,  baseY: 200, yAmp: 26, wy: 0.7, sy: 1.4, bank: 0.25, flapHz: 4.0 },
+          { drift: 30,  baseY: 110, yAmp: 22, wy: 0.4, sy: 0.9, bank: 0.25, flapHz: 3.0 },
+        ],
+        (i, t, flap) => {
+          // an "M" gull silhouette; wing tips rise on the flap, dip between beats
+          const up = flap ? 5 : 2;
+          ctx.strokeStyle = 'rgba(40,50,60,0.7)';
+          ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-7, 0);
+          ctx.lineTo(-2, -up);
+          ctx.lineTo(0, -1);                                     // small body dip
+          ctx.lineTo(2, -up);
+          ctx.lineTo(7, 0);
+          ctx.stroke();
+          ctx.lineWidth = 1;
+        });
+  } },
+  // Distant rolling hills
+  { speed: 0.15, draw(o) { tileMotif(o, 360, x => { pixelHill(x, 320, 120, '#6aa84f'); pixelHill(x + 180, 260, 90, '#7cb85f'); }); } },
   // Near treeline
   { speed: 0.5, draw(o) { tileMotif(o, 200, x => { pixelTree(x + 40, 4, '#2e7d32', '#5d4037'); pixelTree(x + 130, 3, '#388e3c', '#5d4037'); }); } },
 ];
@@ -583,45 +609,32 @@ THEMES.bee.bgLayers = [
       pxRect(x + 106 + sway, G() - 32, 10, 8, '#ec407a');        // bloom (sways)
       pxRect(x + 109 + sway, G() - 30, 4, 4, '#ffeb3b');         // center
   }); } },
-  // A few free-roaming bees on distinct wandering paths across the whole screen —
-  // NOT tiled, so they never read as synchronized clones. Each bee meanders via two
-  // out-of-phase sines (Lissajous), drifts steadily, wraps, and faces its heading.
+  // A few free-roaming bees on distinct wandering paths (shared wanderers engine).
   { speed: 0, draw() {
-      const t = nowSec();
-      const drawBee = (i, driftSpd, yBand, yAmp, wx, wy, sx, sy) => {
-        // position: steady horizontal drift + 2D Lissajous wander
-        const px = (((t * driftSpd + i * 311) % (C.W + 80)) - 40);
-        const py = yBand + Math.sin(t * wy + i) * yAmp + Math.sin(t * sy + i * 2) * 6;
-        // heading from the velocity (derivative-ish: sample a hair ahead)
-        const px2 = px + driftSpd * 0.05 + Math.cos(t * wx + i) * 0.5;
-        const py2 = (yBand + Math.sin((t + 0.05) * wy + i) * yAmp + Math.sin((t + 0.05) * sy + i * 2) * 6);
-        const ang = Math.atan2(py2 - py, px2 - px);
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(ang * 0.4);                                   // subtle banking, not full
-        // flutter wings (alternate up/down quickly)
-        const wf = Math.sin(t * 30 + i) > 0 ? -2 : -3;
-        ctx.fillStyle = 'rgba(255,255,255,0.75)';
-        pixelDisc(-1, wf, 2, 'rgba(255,255,255,0.75)');          // wing
-        pixelDisc(2, wf, 2, 'rgba(255,255,255,0.75)');           // wing
-        pixelDisc(0, 0, 3.2, '#ffca28');                         // body
-        ctx.fillStyle = '#3a2a10';
-        ctx.fillRect(-2, -1, 1, 3);                              // stripe
-        ctx.fillRect(1, -1, 1, 3);                               // stripe
-        ctx.restore();
-      };
-      // (index, driftSpeed, baseY, vertAmp, wanderX, wanderY, swayX, swayY)
-      drawBee(0, 38, G() - 110, 40, 1.1, 0.8, 2.3, 1.7);
-      drawBee(1, -27, G() - 180, 55, 0.9, 1.2, 1.9, 2.5);
-      drawBee(2, 31, G() - 240, 35, 1.4, 0.6, 2.7, 1.3);
+      wanderers(
+        [
+          { drift: 38,  baseY: G() - 110, yAmp: 40, wy: 0.8, sy: 1.7, flapHz: 30 },
+          { drift: -27, baseY: G() - 180, yAmp: 55, wy: 1.2, sy: 2.5, flapHz: 33 },
+          { drift: 31,  baseY: G() - 240, yAmp: 35, wy: 0.6, sy: 1.3, flapHz: 28 },
+        ],
+        (i, t, flap) => {
+          const wf = flap ? -2 : -3;                             // wing flutter
+          pixelDisc(-1, wf, 2, 'rgba(255,255,255,0.75)');        // wing
+          pixelDisc(2, wf, 2, 'rgba(255,255,255,0.75)');         // wing
+          pixelDisc(0, 0, 3.2, '#ffca28');                       // body
+          ctx.fillStyle = '#3a2a10';
+          ctx.fillRect(-2, -1, 1, 3);                            // stripe
+          ctx.fillRect(1, -1, 1, 3);                             // stripe
+        });
   } },
 ];
 
-// Lightning strength for the wizard theme: a sharp flash that decays, firing on a
-// ~7s cycle with a double-blink. Returns 0 (dark) … 1 (full flash). Render-only.
+// Lightning strength for the wizard theme: a sharp flash that decays, firing every
+// ~3.5s with a double-blink. Returns 0 (dark) … 1 (full flash). Render-only. Short
+// period so a strike is always near — no long wait to see one after switching.
 function wizardFlash() {
   const t = nowSec();
-  const period = 7;
+  const period = 3.5;
   const into = t % period;                  // seconds since last strike began
   if (into > 0.6) return 0;                  // dark most of the cycle
   // two quick blinks inside the first 0.6s, exponential-ish decay
@@ -631,6 +644,36 @@ function wizardFlash() {
 }
 
 THEMES.wizard.bgLayers = [
+  // Heavy storm clouds: dark, low, slow-drifting banks across the top of the sky.
+  // They brighten briefly with each lightning flash (lit from within the storm).
+  { speed: 0, draw() {
+      const t = nowSec();
+      const f = wizardFlash();
+      const drift = (t * 12) % (C.W + 300);                    // slow leftward roll
+      const base = `rgba(${44 + f * 90},${38 + f * 80},${64 + f * 90},`;
+      for (let k = 0; k < 6; k++) {
+        const cx = ((k * 280 - drift + C.W + 300) % (C.W + 300)) - 150;
+        const cy = 40 + (k % 3) * 34;
+        const w = 200 + (k % 2) * 80, h = 70 + (k % 3) * 16;
+        // each bank = a clump of overlapping lobes, denser/darker than fair clouds
+        pixelCloud(cx, cy, w, h, base + (0.85) + ')');
+        pixelCloud(cx + 50, cy + 14, w * 0.7, h * 0.8, base + (0.7) + ')');
+      }
+  } },
+  // Wind-blown dust: fine particles streaking right→left, faster than the clouds.
+  { speed: 0, draw() {
+      const t = nowSec();
+      for (let i = 0; i < 80; i++) {
+        const spd = 120 + (i % 6) * 40;                        // gusty range
+        const x = C.W - ((t * spd + i * 137) % (C.W + 60)) + 30; // right→left
+        const y = (i * 89 + 20) % (C.GROUND - 30) + Math.sin(t * 2 + i) * 6;
+        const len = 5 + (i % 4) * 3;
+        const a = 0.12 + (i % 5) * 0.05;
+        ctx.strokeStyle = `rgba(200,185,225,${a})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y + 1); ctx.stroke(); // streak trails behind
+      }
+  } },
   // Lightning: a full-sky flash painted behind the mountains on a periodic strike.
   { speed: 0, draw() {
       const f = wizardFlash();
@@ -736,6 +779,34 @@ function particleStream(count, dir, opt, drawOne) {
     const a = opt.minA + near * opt.spanA;
     drawOne(x, y, r, a);
   }
+}
+
+// A few free-roaming creatures crossing the whole screen on distinct meandering
+// paths — the shared engine behind the bee theme's bees and the bird theme's birds.
+// Each creature: steady horizontal drift + a 2D Lissajous wander (two out-of-phase
+// sines), wraps at the edges, and is canvas-translated to its position + rotated to
+// face its heading. The caller's drawOne(i, t, flap) paints the body at the origin,
+// where `flap` is a 0/1 wingbeat phase. NOT tiled → never reads as synced clones.
+// `specs` = [{ drift, baseY, yAmp, wx, wy, sx, sy, bank, flapHz }]. Render-only.
+function wanderers(specs, drawOne) {
+  const t = nowSec();
+  specs.forEach((s, i) => {
+    const at = (tt) => {
+      const px = (((tt * s.drift + i * 311) % (C.W + 120)) - 60);
+      const py = s.baseY + Math.sin(tt * s.wy + i) * s.yAmp + Math.sin(tt * s.sy + i * 2) * 6;
+      return [px, py];
+    };
+    const [px, py] = at(t);
+    const [px2, py2] = at(t + 0.05);                         // sample ahead for heading
+    const ang = Math.atan2(py2 - py, px2 - px);
+    const flap = Math.sin(t * (s.flapHz ?? 28) + i) > 0 ? 1 : 0;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(ang * (s.bank ?? 0.4));                       // bank toward heading
+    if (s.drift < 0) ctx.scale(-1, 1);                       // face travel direction
+    drawOne(i, t, flap);
+    ctx.restore();
+  });
 }
 
 THEMES.robot.bgLayers = [
