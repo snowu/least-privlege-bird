@@ -218,8 +218,8 @@ const THEMES: { [key: string]: any } = {
   },
   rocket: {
     label: 'Rocket',
-    sky: '#05071a', ground: '#1a1a2e',
-    surface: ['#5a5a7a', '#8a8ab0', '#2e2e44'],   // grey lunar/asteroid regolith lip
+    sky: '#05071a', ground: '#05071a',   // ground = sky → seamless void, no floor
+    surface: null,                        // space has no floor lip
     cloudFill: null, // stars instead
     // Metal station columns with cyan rivets.
     drawPipe(x, topH, gap) {
@@ -1471,28 +1471,56 @@ function celestialBody(cx, cy, r, color, opt = {}) {
 }
 
 THEMES.rocket.bgLayers = [
-  // Distant planets of varied types + a cratered moon. Slow parallax drift.
-  { speed: 0.08, draw(o) { tileMotif(o, 760, x => {
-      // 1) Saturn-type ringed gas giant, with a small moon orbiting it
-      celestialBody(x + 120, 130, 34, '#c97b5a', {
-        shade: true,
-        ring: { color: '#e0b88a' },
-        moon: { dist: 70, r: 5, color: '#cfd8dc', speed: 0.7 },
-      });
-      // 2) Banded gas giant (Jupiter-like) — two latitude bands + a great red spot
-      celestialBody(x + 330, 200, 28, '#d9a86b', {
-        shade: true,
-        bands: [{ dy: -8, h: 5, color: 'rgba(140,90,50,0.55)' }, { dy: 5, h: 4, color: 'rgba(160,110,70,0.5)' }],
-        spot: { dx: 8, dy: 3, r: 6, color: 'rgba(200,80,60,0.6)' },
-      });
-      // 3) Small rocky ice planet (pale blue) with a polar cap
-      celestialBody(x + 520, 95, 16, '#8fd3e0', {
-        caps: [{ dx: 0, dy: -10, r: 6, color: '#eaffff' }],
-      });
-      // 4) Cratered moon
-      celestialBody(x + 650, 160, 18, '#cfd8dc', {
-        caps: [{ dx: -6, dy: -4, r: 4, color: '#b0bec5' }, { dx: 6, dy: 6, r: 3, color: '#b0bec5' }],
-      });
+  // Distant planets of varied types + cratered moons. Slow parallax drift. Each tile's
+  // planets are PROCEDURAL: per-tile hashes pick the body type, position, size, hue and
+  // surface features. The tile is WIDER than the canvas (TILEW > C.W) so no more than one
+  // tile is ever fully on screen → planets never repeat within a single view. Salted by
+  // AD_LOAD_SEED so the whole sky reshuffles every page load.
+  { speed: 0.08, draw(o) { const TILEW = 1700; tileMotif(o, TILEW, (x, tile) => {
+      const GAS = ['#c97b5a', '#d9a86b', '#b07a9a', '#7a8fc9', '#6fae8f', '#c2b15a', '#cf6f6f', '#8a7ac2'];
+      const ICE = ['#8fd3e0', '#a8c4e8', '#cfe8e0', '#9fd0c4', '#bcd4f0'];
+      const ROCK = ['#cfd8dc', '#c2a89a', '#b0bec5', '#a89f8a', '#9aa0a8'];
+      const SPOT = ['rgba(200,80,60,0.6)', 'rgba(90,140,210,0.5)', 'rgba(180,150,70,0.55)', 'rgba(150,90,170,0.5)'];
+      const h = (k) => hash01(tile * 17.3 + k * 3.7 + AD_LOAD_SEED);
+      const pick = (arr, k) => arr[Math.floor(h(k) * arr.length)];
+      const count = 4 + Math.floor(h(0) * 3);                      // 4..6 bodies across the wide tile
+      for (let i = 0; i < count; i++) {
+        const b = i * 13 + 1;                                      // per-body hash offset
+        const px = x + (i + 0.5) * (TILEW / count) + (h(b + 1) - 0.5) * 160;
+        const py = 60 + h(b + 2) * 200;
+        const type = Math.floor(h(b + 3) * 4);                     // 0 ring,1 banded,2 ice,3 moon
+        const opt: any = {};
+        if (type === 0) {                                          // ringed gas giant (+ maybe moons)
+          const r = 24 + h(b + 4) * 22;
+          opt.shade = true;
+          opt.ring = { color: pick(['#e0b88a', '#c9b6d8', '#a8c0d8', '#d8c89a'], b + 5), tilt: -0.6 + h(b + 6) * 1.2, scale: 1.9 + h(b + 7) * 0.6 };
+          opt.moon = { dist: r * (1.8 + h(b + 8)), r: 3 + h(b + 9) * 4, color: pick(ROCK, b + 10), speed: 0.4 + h(b + 11) * 1.2 };
+          if (h(b + 12) > 0.6) opt.bands = [{ dy: -r * 0.3, h: 4, color: 'rgba(255,255,255,0.18)' }];
+          celestialBody(px, py, r, pick(GAS, b + 13), opt);
+        } else if (type === 1) {                                   // banded gas giant + storm spot
+          const r = 22 + h(b + 4) * 22;
+          opt.shade = true;
+          opt.bands = [{ dy: -r * 0.3, h: 4 + h(b + 5) * 3, color: 'rgba(140,90,50,0.5)' }, { dy: r * 0.2, h: 3 + h(b + 6) * 3, color: 'rgba(160,110,70,0.45)' }];
+          if (h(b + 7) > 0.35) opt.spot = { dx: r * 0.3, dy: h(b + 8) * r * 0.3, r: r * 0.2, color: pick(SPOT, b + 9) };
+          if (h(b + 10) > 0.7) opt.ring = { color: '#d8c89a', tilt: -0.4 + h(b + 11) * 0.8 };
+          celestialBody(px, py, r, pick(GAS, b + 12), opt);
+        } else if (type === 2) {                                   // small ice planet + polar cap(s)
+          const r = 11 + h(b + 4) * 12;
+          opt.caps = [{ dx: 0, dy: -r * 0.6, r: r * 0.4, color: '#eaffff' }];
+          if (h(b + 5) > 0.5) opt.caps.push({ dx: 0, dy: r * 0.6, r: r * 0.3, color: '#dffafa' });
+          opt.shade = true;
+          celestialBody(px, py, r, pick(ICE, b + 6), opt);
+        } else {                                                   // cratered moon (varied craters)
+          const r = 13 + h(b + 4) * 12;
+          const caps: any[] = [];
+          const craters = 2 + Math.floor(h(b + 5) * 3);
+          for (let c = 0; c < craters; c++) {
+            const ca = h(b + 6 + c) * Math.PI * 2, cd = h(b + 9 + c) * r * 0.6;
+            caps.push({ dx: Math.cos(ca) * cd, dy: Math.sin(ca) * cd, r: r * (0.12 + h(b + 12 + c) * 0.16), color: '#9aa0a8' });
+          }
+          celestialBody(px, py, r, pick(ROCK, b + 2), { caps });
+        }
+      }
   }); } },
   // Shooting stars: streaks that periodically dart across the sky, each on its own
   // long cycle so they appear sporadically rather than in lockstep. Render-only.
@@ -1912,13 +1940,17 @@ function drawBackground() {
   const px = 6; // pixel block size for ground detail
   ctx.fillStyle = t.ground;
   ctx.fillRect(0, C.GROUND, C.W, C.HUD);
-  const [lip, lipHi, seam] = t.surface || ['#5aa02c', '#7ec850', '#3a6e1a'];
-  ctx.fillStyle = lip;
-  ctx.fillRect(0, C.GROUND, C.W, px * 2);
-  ctx.fillStyle = lipHi;
-  for (let gx = 0; gx < C.W; gx += px * 2) ctx.fillRect(gx, C.GROUND, px, px); // dither highlights
-  ctx.fillStyle = seam;
-  ctx.fillRect(0, C.GROUND + px * 2, C.W, px); // shadow seam under the lip
+  // A theme can opt OUT of a floor entirely (surface: null) — e.g. space, where the
+  // scene has no ground; the bar just blends into the void + the dark HUD wash below.
+  if (t.surface !== null) {
+    const [lip, lipHi, seam] = t.surface || ['#5aa02c', '#7ec850', '#3a6e1a'];
+    ctx.fillStyle = lip;
+    ctx.fillRect(0, C.GROUND, C.W, px * 2);
+    ctx.fillStyle = lipHi;
+    for (let gx = 0; gx < C.W; gx += px * 2) ctx.fillRect(gx, C.GROUND, px, px); // dither highlights
+    ctx.fillStyle = seam;
+    ctx.fillRect(0, C.GROUND + px * 2, C.W, px); // shadow seam under the lip
+  }
   // Dark wash over the HUD bar (below the grass lip) so the white HUD readout stays
   // legible regardless of the avatar's ground color (e.g. penguin's near-white ice).
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
