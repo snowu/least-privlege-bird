@@ -252,7 +252,17 @@ const THEMES: { [key: string]: any } = {
     sky: '#1a0533', ground: '#4a4453',
     cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
     anim: true,            // 2-frame: wings beat down on flap (round bakes fire into frame 2)
-    animFire: true,        // pixel-only: rare 3rd fire frame every ~5-10 flaps (see drawPlayer)
+    // Data-driven effect layer (render-only). The flame is its OWN transparent asset
+    // drawn past the snout in drawPlayer — not baked into the sprite box — so it can be
+    // long + gently tapered without clipping. Pixel-only: round bakes fire into frame 2.
+    // Generalizes to any avatar effect (rocket exhaust, squid ink, …) via this same data.
+    fx: {
+      sprite: 'fire', styles: ['pixel'],
+      trigger: 'flapRandom', everyMin: 5, everyMax: 10, // re-rolled each fire
+      durationMs: 1000,
+      anchorX: 0.30, anchorY: -0.05,                     // offset from sprite centre (×s)
+      scale: 1.4,                                        // fx width = s × scale
+    },
     // Stone brick towers with mortar lines and moss-tinted caps (a dragon's ruined keep).
     drawPipe(x, topH, gap) {
       framedPipe(x, topH, gap, {
@@ -1264,11 +1274,10 @@ function loadSprites() {
     // Render-only: never read by physics/replay, so determinism is unaffected.
     // Themes without it just keep using frame 1 (automatic single-frame fallback).
     theme.img2 = theme.anim ? makeImg(`assets/${gfxStyle}/${key}-2.svg`) : null;
-    // Optional rare 3rd frame (<key>-fire.svg): a fire-breath beat shown only every
-    // few flaps, held longer than img2. Render-only. Only the pixel dragon ships one;
-    // round bakes its fire into img2 (every flap) by choice.
-    theme.imgFire = (theme.animFire && gfxStyle === 'pixel')
-      ? makeImg(`assets/${gfxStyle}/${key}-fire.svg`) : null;
+    // Optional data-driven effect overlay (theme.fx): a transparent FX sprite drawn
+    // beside the avatar in drawPlayer, gated to the styles in fx.styles. Render-only.
+    theme.fxImg = (theme.fx && theme.fx.styles.includes(gfxStyle))
+      ? makeImg(`assets/${gfxStyle}/fx/${theme.fx.sprite}.svg`) : null;
   }
   applyStyle();
 }
@@ -1449,12 +1458,11 @@ let idleAnimId = 0;
 // Deliberately NOT tied to the sim tick — purely cosmetic, never feeds replay.
 let lastFlapAt = -1e9;
 const FLAP_FRAME_MS = 180; // how long frame 2 (the "push") shows after a flap
-const FIRE_FRAME_MS = 1000; // fire-breath frame held a constant 1s (longer than a flap beat)
-// Fire-breath cadence (render-only): count flaps, and every random 5-10 flaps the next
-// flap shows the fire frame instead of the plain push frame.
-let flapsSinceFire = 0;
-let nextFireAt = 5 + Math.floor(Math.random() * 6); // 5..10
-let fireFlapAt = -1e9;                               // timestamp of the last fire flap
+// Effect-layer cadence (render-only, theme.fx with trigger 'flapRandom'): count flaps,
+// and every random everyMin..everyMax flaps fire the effect for fx.durationMs.
+let flapsSinceFx = 0;
+let nextFxAt = 1;        // (re)seeded from the active theme's fx when it first fires
+let fxFiredAt = -1e9;    // timestamp the current effect started
 let countdownStart;
 let acc, lastFrameTime;              // fixed-timestep bookkeeping (render side)
 let seed, flapTicks;                 // replay inputs (captured for submission)
@@ -1733,15 +1741,20 @@ function drawPlayer() {
   // 2-frame avatars show frame 2 (the "push") for a beat after each flap; others
   // (img2 == null) always render frame 1. Render-only, so replay is unaffected.
   const now = performance.now();
-  const inFire = currentTheme.imgFire && (now - fireFlapAt) < FIRE_FRAME_MS;
   const inFlap = (now - lastFlapAt) < FLAP_FRAME_MS;
-  const sprite = inFire ? currentTheme.imgFire
-    : (inFlap && currentTheme.img2) ? currentTheme.img2
-    : currentTheme.img;
+  const sprite = (inFlap && currentTheme.img2) ? currentTheme.img2 : currentTheme.img;
   ctx.save();
   ctx.translate(C.PLAYER_X, gs.player.y);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, gs.player.vy * 0.05)));
   ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
+  // Effect overlay (theme.fx): a transparent FX sprite drawn relative to the avatar for
+  // fx.durationMs after it fired. Inside the same translate/rotate so it tracks + tilts
+  // with the body; drawn past the sprite box so it isn't clipped. Render-only.
+  const fx = currentTheme.fx;
+  if (currentTheme.fxImg && fx && (now - fxFiredAt) < fx.durationMs) {
+    const fw = s * fx.scale, fh = fw * 0.5;          // fire.svg viewBox aspect = 0.5
+    ctx.drawImage(currentTheme.fxImg, s * fx.anchorX, s * fx.anchorY - fh / 2, fw, fh);
+  }
   ctx.restore();
 }
 
@@ -1899,12 +1912,14 @@ function flap() {
   // boundary keeps browser play byte-identical to the server replay.
   pendingFlap = true;
   lastFlapAt = performance.now();      // trigger the render-only flap frame
-  // Fire-breath cadence: every random 5-10 flaps, mark this flap as a fire flap so the
-  // renderer swaps in the (longer-held) fire frame. Render-only, never feeds replay.
-  if (++flapsSinceFire >= nextFireAt) {
-    flapsSinceFire = 0;
-    nextFireAt = 5 + Math.floor(Math.random() * 6); // 5..10
-    fireFlapAt = lastFlapAt;
+  // Effect cadence: for a theme.fx using trigger 'flapRandom', every random
+  // everyMin..everyMax flaps mark this flap as the effect start so the renderer overlays
+  // the FX sprite for fx.durationMs. Render-only, never feeds replay.
+  const fx = currentTheme.fxImg && currentTheme.fx;
+  if (fx && fx.trigger === 'flapRandom' && ++flapsSinceFx >= nextFxAt) {
+    flapsSinceFx = 0;
+    nextFxAt = fx.everyMin + Math.floor(Math.random() * (fx.everyMax - fx.everyMin + 1));
+    fxFiredAt = lastFlapAt;
   }
   const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   AudioFX.flap(key);
