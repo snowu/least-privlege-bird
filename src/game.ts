@@ -2496,6 +2496,13 @@ canvas.addEventListener('pointerdown', () => {
 const nameInput  = document.getElementById('name-input');
 const userSelect = document.getElementById('user-select');
 
+// QOL: remember the last player name typed, so returning players land on a
+// pre-filled input instead of retyping it every visit (mirrors lpb_avatar/lpb_gfx).
+try {
+  const lastPlayer = localStorage.getItem('lpb_player');
+  if (lastPlayer) nameInput.value = lastPlayer;
+} catch {}
+
 async function populateUserSelect() {
   const data = _loadLocal(); // sync local read for the dropdown
   const names = Object.keys(data).sort();
@@ -2510,13 +2517,17 @@ async function populateUserSelect() {
 }
 
 userSelect.addEventListener('change', () => {
-  if (userSelect.value) nameInput.value = userSelect.value;
+  if (userSelect.value) {
+    nameInput.value = userSelect.value;
+    try { localStorage.setItem('lpb_player', userSelect.value); } catch {}
+  }
 });
 
 document.getElementById('btn-play').addEventListener('click', async () => {
   AudioFX.unlock(); // first user gesture — enable audio
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
+  try { localStorage.setItem('lpb_player', name); } catch {}   // QOL: remember last pick
   // DB interaction (token) is self-gated on LIVE_DB inside ensurePlayerToken.
   // DEV_MODE independently controls only the SSO/captcha friction below.
   await ensurePlayerToken(name);
