@@ -2015,12 +2015,13 @@ function buildAvatarPickerInto(container) {
   const selectedKey = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   container.innerHTML = '';
   container.classList.toggle('round-gfx', gfxStyle === 'round');
-  // Display order: penguin (mascot) leads, then the strong themes in THEMES order,
-  // with bird + bee parked at the end (the least-improved, blander options for now).
+  // Display order: penguin (mascot) leads, then the showcase themes robot/airplane/
+  // dragon, then everything else in THEMES order, with bird + bee parked at the end
+  // (the least-improved, blander options for now).
   const TAIL = ['bird', 'bee'];
-  const lead = 'penguin';
-  const mid = Object.keys(THEMES).filter(k => k !== lead && !TAIL.includes(k));
-  const ordered = [lead, ...mid, ...TAIL];
+  const LEAD = ['penguin', 'robot', 'airplane', 'dragon'];
+  const mid = Object.keys(THEMES).filter(k => !LEAD.includes(k) && !TAIL.includes(k));
+  const ordered = [...LEAD, ...mid, ...TAIL];
   ordered.forEach((key) => {
     const theme = THEMES[key];
     const div = document.createElement('div');
