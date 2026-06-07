@@ -456,8 +456,8 @@
   <script>
     // Set on window before the bundle loads; the modules read window.DEV_MODE / window.LIVE_DB.
     // DEV_MODE: skip the friction theater (SSO/captchas) for fast gameplay iteration.
-    //window.DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
-    window.DEV_MODE = true;
+    window.DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
+    //window.DEV_MODE = true;
     // LIVE_DB: talk to the real Supabase. ALWAYS true in production. Locally it is OFF
     // by default (don't pollute prod from a laptop); flip it from the devtools console:
     //   localStorage.lpb_live = '1'   → reload to enable real reads/writes locally
