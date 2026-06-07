@@ -251,7 +251,8 @@ const THEMES: { [key: string]: any } = {
     label: 'Dragon',
     sky: '#1a0533', ground: '#4a4453',
     cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
-    anim: true,            // 2-frame: wings beat down on flap + fire breath (baked into frame 2)
+    anim: true,            // 2-frame: wings beat down on flap (round bakes fire into frame 2)
+    animFire: true,        // pixel-only: rare 3rd fire frame every ~5-10 flaps (see drawPlayer)
     // Stone brick towers with mortar lines and moss-tinted caps (a dragon's ruined keep).
     drawPipe(x, topH, gap) {
       framedPipe(x, topH, gap, {
@@ -1263,6 +1264,11 @@ function loadSprites() {
     // Render-only: never read by physics/replay, so determinism is unaffected.
     // Themes without it just keep using frame 1 (automatic single-frame fallback).
     theme.img2 = theme.anim ? makeImg(`assets/${gfxStyle}/${key}-2.svg`) : null;
+    // Optional rare 3rd frame (<key>-fire.svg): a fire-breath beat shown only every
+    // few flaps, held longer than img2. Render-only. Only the pixel dragon ships one;
+    // round bakes its fire into img2 (every flap) by choice.
+    theme.imgFire = (theme.animFire && gfxStyle === 'pixel')
+      ? makeImg(`assets/${gfxStyle}/${key}-fire.svg`) : null;
   }
   applyStyle();
 }
@@ -1443,6 +1449,12 @@ let idleAnimId = 0;
 // Deliberately NOT tied to the sim tick — purely cosmetic, never feeds replay.
 let lastFlapAt = -1e9;
 const FLAP_FRAME_MS = 180; // how long frame 2 (the "push") shows after a flap
+const FIRE_FRAME_MS = 420; // fire-breath frame lingers longer than a normal flap beat
+// Fire-breath cadence (render-only): count flaps, and every random 5-10 flaps the next
+// flap shows the fire frame instead of the plain push frame.
+let flapsSinceFire = 0;
+let nextFireAt = 1; // DEBUG: fire every flap to verify visibility; restore to 5..10
+let fireFlapAt = -1e9;                               // timestamp of the last fire flap
 let countdownStart;
 let acc, lastFrameTime;              // fixed-timestep bookkeeping (render side)
 let seed, flapTicks;                 // replay inputs (captured for submission)
@@ -1720,8 +1732,12 @@ function drawPlayer() {
   const s = C.PLAYER_SIZE * C.SPRITE_SCALE;
   // 2-frame avatars show frame 2 (the "push") for a beat after each flap; others
   // (img2 == null) always render frame 1. Render-only, so replay is unaffected.
-  const inFlap = (performance.now() - lastFlapAt) < FLAP_FRAME_MS;
-  const sprite = (inFlap && currentTheme.img2) ? currentTheme.img2 : currentTheme.img;
+  const now = performance.now();
+  const inFire = currentTheme.imgFire && (now - fireFlapAt) < FIRE_FRAME_MS;
+  const inFlap = (now - lastFlapAt) < FLAP_FRAME_MS;
+  const sprite = inFire ? currentTheme.imgFire
+    : (inFlap && currentTheme.img2) ? currentTheme.img2
+    : currentTheme.img;
   ctx.save();
   ctx.translate(C.PLAYER_X, gs.player.y);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, gs.player.vy * 0.05)));
@@ -1883,6 +1899,13 @@ function flap() {
   // boundary keeps browser play byte-identical to the server replay.
   pendingFlap = true;
   lastFlapAt = performance.now();      // trigger the render-only flap frame
+  // Fire-breath cadence: every random 5-10 flaps, mark this flap as a fire flap so the
+  // renderer swaps in the (longer-held) fire frame. Render-only, never feeds replay.
+  if (++flapsSinceFire >= nextFireAt) {
+    flapsSinceFire = 0;
+    nextFireAt = 5 + Math.floor(Math.random() * 6); // 5..10
+    fireFlapAt = lastFlapAt;
+  }
   const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   AudioFX.flap(key);
 }
