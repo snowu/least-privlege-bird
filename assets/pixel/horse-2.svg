@@ -1,0 +1,44 @@
+<!-- Horse frame 2 (gallop GATHERED: legs tucked under the body, the suspension moment of
+     a gallop). Shown for a beat after each flap → with frame 1 it reads as a running cycle.
+     Same body; only the legs change. Mane/tail streamers drawn in drawPlayer. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- tail base -->
+  <rect x="4" y="7" width="1" height="3" fill="#5a3823"/>
+  <rect x="3" y="8" width="1" height="2" fill="#4a2c1a"/>
+  <!-- barrel body -->
+  <g fill="#a86a42"><rect x="5" y="6" width="7" height="4"/></g>
+  <rect x="5" y="6" width="7" height="1" fill="#bd7d52"/>
+  <rect x="5" y="9" width="7" height="1" fill="#8d5a3b"/>
+  <!-- chest / shoulder -->
+  <rect x="10" y="5" width="2" height="4" fill="#a86a42"/>
+  <!-- arched neck -->
+  <rect x="11" y="4" width="2" height="3" fill="#a86a42"/>
+  <!-- mane base along the neck crest -->
+  <rect x="10" y="3" width="2" height="1" fill="#5a3823"/>
+  <rect x="11" y="4" width="1" height="2" fill="#5a3823"/>
+  <!-- head + muzzle -->
+  <rect x="12" y="3" width="3" height="3" fill="#a86a42"/>
+  <rect x="14" y="5" width="1" height="1" fill="#8d5a3b"/>
+  <!-- ear -->
+  <rect x="12" y="2" width="1" height="1" fill="#8d5a3b"/>
+  <!-- eye + nostril -->
+  <rect x="13" y="4" width="1" height="1" fill="#1a1008"/>
+  <rect x="14" y="5" width="1" height="1" fill="#1a1008"/>
+  <!-- ALL legs gathered/tucked under the barrel (suspension moment) -->
+  <g fill="#8d5a3b">
+    <rect x="10" y="10" width="1" height="2"/>
+    <rect x="9" y="10" width="1" height="2"/>
+    <rect x="7" y="10" width="1" height="2"/>
+    <rect x="6" y="10" width="1" height="2"/>
+  </g>
+  <!-- bent lower legs angling inward -->
+  <g fill="#8d5a3b">
+    <rect x="10" y="12" width="2" height="1"/>
+    <rect x="6" y="12" width="2" height="1"/>
+  </g>
+  <!-- hooves -->
+  <g fill="#2b1a0e">
+    <rect x="11" y="12" width="1" height="1"/>
+    <rect x="7" y="12" width="1" height="1"/>
+  </g>
+</svg>

@@ -61,6 +61,7 @@ const AudioFX = (() => {
     bee:    () => { beep(420, 380, 0.12, 'square', 0.12); beep(440, 400, 0.12, 'square', 0.1, 0.01); }, // buzzy
     dragon: () => { beep(160, 90, 0.16, 'sawtooth', 0.18); beep(420, 120, 0.1, 'square', 0.1, 0.04); }, // roar/whoosh
     robot:  () => beep(140, 140, 0.09, 'square', 0.16),                // flat blip
+    horse:  () => { beep(520, 300, 0.10, 'sawtooth', 0.13); beep(300, 180, 0.14, 'sawtooth', 0.12, 0.05); beep(180, 120, 0.1, 'square', 0.1, 0.11); }, // descending whinny
   };
 
   return {
@@ -344,6 +345,36 @@ const THEMES: { [key: string]: any } = {
           ctx.fillStyle = 'rgba(55,71,79,0.6)';
           ctx.fillRect(capX, topH - capH, capW, capH);
           ctx.fillRect(capX, botY, capW, capH);
+        },
+      });
+    },
+  },
+  horse: {
+    label: 'Horse',
+    sky: '#f3c98b', ground: '#c08a4e',   // dusty desert daylight + sandy trail
+    cloudFill: 'rgba(255,250,235,0.85)',
+    anim: true,           // 2-frame: gallop extended ↔ gathered (legs tuck under)
+    // Programmatic mane + tail streamers that ripple in the wind every frame (not just
+    // on flap), drawn relative to the sprite in drawPlayer. Render-only — never the sim.
+    fx: { kind: 'mane', styles: ['pixel', 'round'], color: '#5a3823' },
+    // Red-rock sandstone mesa pillars: warm banded stone with a darker shelf cap and
+    // horizontal strata lines (the canyon the trail runs through).
+    drawPipe(x, topH, gap) {
+      framedPipe(x, topH, gap, {
+        bodyColor: '#b5613a', capColor: '#9a4f30', capH: 18, capW: C.PIPE_W + 8,
+        decorate({ x, topH, botY, capX, capW, capH }) {
+          // strata: lighter + darker horizontal bands carved into the rock face
+          const strata = ['rgba(214,140,98,0.55)', 'rgba(120,58,34,0.4)'];
+          for (let y = 8, i = 0; y < topH - capH; y += 9, i++) {
+            ctx.fillStyle = strata[i % 2]; ctx.fillRect(x, y, C.PIPE_W, 3);
+          }
+          for (let y = botY + capH + 8, i = 0; y < C.GROUND; y += 9, i++) {
+            ctx.fillStyle = strata[i % 2]; ctx.fillRect(x, y, C.PIPE_W, 3);
+          }
+          // shelf shadow under each cap
+          ctx.fillStyle = 'rgba(70,34,18,0.35)';
+          ctx.fillRect(capX, topH - capH, capW, 3);
+          ctx.fillRect(capX, botY + capH - 3, capW, 3);
         },
       });
     },
@@ -1372,6 +1403,109 @@ THEMES.rocket.bgLayers = [
   } },
 ];
 
+// A flat-topped mesa: a trapezoid butte of red rock with a couple of strata bands and
+// a darker shaded right face, anchored to the ground. Pixel mode = blocky; round draws
+// the same trapezoid (it's already chunky enough to read in both styles).
+function pixelMesa(x, w, h, top, bodyC, shadeC) {
+  const baseY = G(), topY = baseY - h, topW = w * top;          // top narrower than base
+  const tx = x + (w - topW) / 2;
+  ctx.fillStyle = bodyC;
+  ctx.beginPath();
+  ctx.moveTo(x, baseY); ctx.lineTo(tx, topY);
+  ctx.lineTo(tx + topW, topY); ctx.lineTo(x + w, baseY);
+  ctx.closePath(); ctx.fill();
+  // shaded right third
+  ctx.fillStyle = shadeC;
+  ctx.beginPath();
+  ctx.moveTo(x + w * 0.62, baseY); ctx.lineTo(tx + topW * 0.62, topY);
+  ctx.lineTo(tx + topW, topY); ctx.lineTo(x + w, baseY);
+  ctx.closePath(); ctx.fill();
+  // strata lines
+  ctx.strokeStyle = 'rgba(80,38,20,0.3)'; ctx.lineWidth = 2;
+  for (let i = 1; i <= 2; i++) {
+    const yy = baseY - (h * i / 3);
+    const inset = (w - topW) / 2 * (i / 3);
+    ctx.beginPath(); ctx.moveTo(x + inset, yy); ctx.lineTo(x + w - inset, yy); ctx.stroke();
+  }
+  ctx.lineWidth = 1;
+}
+
+THEMES.horse.bgLayers = [
+  // Big pale desert sun, low and hazy, with a soft heat-shimmer ring.
+  { speed: 0, draw() {
+      celestialBody(C.W - 200, 120, 52, '#ffe9b0', { rays: { color: '255,220,150', count: 16, speed: 0.06 } });
+  } },
+  // FAR mesa range: distant blue-grey buttes on the horizon, slow parallax.
+  { speed: 0.06, draw(o) { tileMotif(o, 520, x => {
+      pixelMesa(x, 260, 150, 0.5, '#9a6f63', '#83584d');
+      pixelMesa(x + 300, 200, 110, 0.55, '#a87a6b', '#8f6557');
+  }); } },
+  // MID mesa range: warmer red-rock buttes, closer + taller.
+  { speed: 0.12, draw(o) { tileMotif(o, 460, x => {
+      pixelMesa(x + 40, 300, 210, 0.42, '#b5613a', '#8f4528');
+      pixelMesa(x + 260, 220, 150, 0.5, '#c06a40', '#9a4f30');
+  }); } },
+  // FAR ranch fence in parallax: a line of weathered posts + two rails running across
+  // the midground (between mesas and trail). Slower than the trail → sits back.
+  { speed: 0.35, draw(o) { tileMotif(o, 56, x => {
+      const fy = G() - 60;
+      ctx.fillStyle = '#7a5532';
+      ctx.fillRect(x, fy, 5, 44);                              // post
+      ctx.fillStyle = 'rgba(122,85,50,0.85)';
+      ctx.fillRect(x, fy + 10, 56, 4);                         // top rail
+      ctx.fillRect(x, fy + 26, 56, 4);                         // bottom rail
+  }); } },
+  // Roadside billboards on weathered wooden posts — hay-fever / snake-oil ads. Spaced
+  // far apart so one drifts by "from time to time", not a wall of signs.
+  { speed: 0.5, draw(o) { tileMotif(o, 900, (x, tile) => {
+      const bx = x + 120, bw = 150, bh = 80, by = G() - 200;
+      // two posts
+      ctx.fillStyle = '#6b4a2b';
+      ctx.fillRect(bx + 18, by + bh, 8, 200 - bh);
+      ctx.fillRect(bx + bw - 26, by + bh, 8, 200 - bh);
+      // board (reuse the neon-ad engine; warm wood frame colour). seed by tile for variety.
+      adBillboard(bx, by, bw, bh, '120,72,40', AD_HORSE, tile, { noFlicker: true });
+  }); } },
+  // The TRAIL beneath us: a sandy road band hugging the ground with dashed centre ruts
+  // + scattered pebbles that scroll past at near-foreground speed (sells the gallop).
+  { speed: 0.95, draw(o) {
+      const roadY = G() - 16;
+      ctx.fillStyle = '#b07d44'; ctx.fillRect(0, roadY, C.W, 16);            // packed dirt
+      ctx.fillStyle = '#9a6a39'; ctx.fillRect(0, roadY, C.W, 3);            // top edge shade
+      tileMotif(o, 70, x => {
+        ctx.fillStyle = 'rgba(90,58,28,0.6)'; ctx.fillRect(x, roadY + 8, 26, 3); // wheel rut dash
+        ctx.fillStyle = 'rgba(60,40,20,0.5)'; ctx.fillRect(x + 40, roadY + 12, 4, 3); // pebble
+      });
+  } },
+  // Tumbleweeds bouncing along the trail (shared wanderers engine) — spiky dry balls
+  // that roll + rotate as they drift across. A couple at different heights/speeds.
+  { speed: 0, draw() {
+      const t = nowSec();
+      wanderers(
+        [
+          { drift: 120, baseY: G() - 22, yAmp: 14, wy: 3.2, sy: 1.1, bank: 0, flapHz: 1 },
+          { drift: 86,  baseY: G() - 30, yAmp: 20, wy: 2.4, sy: 0.8, bank: 0, flapHz: 1 },
+          { drift: 150, baseY: G() - 18, yAmp: 10, wy: 4.0, sy: 1.4, bank: 0, flapHz: 1 },
+        ],
+        (i, _t, _flap) => {
+          ctx.rotate((t * (2 + i)) % (Math.PI * 2));            // rolling spin
+          const r = 9 + i * 2;
+          // tangled dry brush: a disc of crossing twigs
+          ctx.strokeStyle = 'rgba(150,116,66,0.9)'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+          for (let k = 0; k < 7; k++) {
+            const a = (k / 7) * Math.PI;
+            ctx.beginPath();
+            ctx.moveTo(-Math.cos(a) * r, -Math.sin(a) * r);
+            ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+            ctx.stroke();
+          }
+          ctx.strokeStyle = 'rgba(120,90,50,0.8)';
+          ctx.beginPath(); ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2); ctx.stroke();
+          ctx.lineWidth = 1;
+        });
+  } },
+];
+
 // (Re)load every theme's sprite for the active art style. Pixel art wants crisp
 // scaling; round art wants smooth — flip the canvas hint to match.
 function loadSprites() {
@@ -1472,6 +1606,14 @@ const COW_ART = {
     '         \\ [o o]',
     '           |_-_|',
     '           |   |',
+  ].join('\n'),
+  // Horse — derpy nonsense steed, mane streaming, mid-gallop.
+  horse: [
+    '        \\   ~^',
+    '         \\ /o \\__',
+    '           |    o\\',
+    '           |__||__',
+    '           ^^   ^^',
   ].join('\n'),
 };
 
@@ -1702,7 +1844,7 @@ const EGG_RARITY = 14;   // ~1 in N slogan-cycles, a board glitches to an IT-err
 // freshness). Render-only — billboards never touch physics/replay, so Math.random here
 // is safe and cannot affect determinism.
 const AD_LOAD_SEED = Math.floor(Math.random() * 9973);
-function adBillboard(sx, sy, w, h, col, slogans, seed) {
+function adBillboard(sx, sy, w, h, col, slogans, seed, opt = {}) {
   const t = nowSec();
   const period = 9;                                     // seconds per slogan (slow)
   // stride the start index by a coprime of the list length so neighbouring boards
@@ -1718,8 +1860,9 @@ function adBillboard(sx, sy, w, h, col, slogans, seed) {
   const phase = (t / period + seed * 0.37) % 1;         // 0..1, desynced per board
   // fade in at the start, hold, fade out at the end (swap transition)
   const fade = Math.min(1, phase * 8) * Math.min(1, (1 - phase) * 8);
-  // power-flicker: a brief, rare brownout, deterministic per seed
-  const flick = Math.sin(t * 5 + seed * 9) > 0.985 ? 0.45 : 1;
+  // power-flicker: a brief, rare brownout, deterministic per seed. Neon-only — painted
+  // wooden signs (opt.noFlicker) don't flicker.
+  const flick = opt.noFlicker ? 1 : (Math.sin(t * 5 + seed * 9) > 0.985 ? 0.45 : 1);
   const lit = fade * flick;
   // panel + neon frame
   ctx.fillStyle = 'rgba(8,14,22,0.9)'; ctx.fillRect(sx, sy, w, h);
@@ -1794,6 +1937,17 @@ const AD_ROBOT = [
   'FRESH BLUE SUN GOODS', 'CANT STOP THE SIGNAL', 'SHINY! BUY NOW',
   'FRUITY OATY BARS', 'JAYNES HAT 9.99', 'ALLIANCE-APPROVED',
   'GORRAM GOOD DEALS', 'I AIM TO MISBEHAVE',
+];
+
+// Horse theme: a dusty western frontier — roadside billboards hawking allergy/hay-fever
+// remedies (the running gag), plus old-timey patent-medicine snake-oil. Wry, sneezy.
+const AD_HORSE = [
+  'HAY FEVER? GIDDY-UP', 'SNEEZE NO MORE', 'POLLEN BE GONE', 'ALLERGY-OFF TONIC',
+  'DR. DUSTY ANTIHISTAMINE', 'STOP THE SNIFFLES', 'RAGWEED RELIEF 5¢', 'BREATHE EASY PARDNER',
+  'NO MORE ITCHY EYES', 'POLLEN COUNT: HIGH', 'ACHOO ELIXIR', 'PRAIRIE NASAL SPRAY',
+  'ASK YER DOCTOR', 'SIDE EFFECTS: NEIGHING', 'NON-DROWSY* (LIES)', 'HORSE-STRENGTH DOSE',
+  'CACTUS-FREE FORMULA', 'TUMBLEWEED ALLERGY?', 'SADDLE UP, SNEEZE LESS', 'GENUINE SNAKE OIL',
+  'CURES ALL AILMENTS', 'PATENTED 1887', 'DESERT BLOOM DEFENSE', 'GESUNDHEIT GULCH',
 ];
 
 // Easter-egg pool: the only IT/auth-error slogans left. adBillboard surfaces one of
@@ -1879,9 +2033,14 @@ function drawPlayer() {
   const now = performance.now();
   const inFlap = (now - lastFlapAt) < FLAP_FRAME_MS;
   const sprite = (inFlap && currentTheme.img2) ? currentTheme.img2 : currentTheme.img;
+  const fxMane = fxActiveForStyle(currentTheme);
   ctx.save();
   ctx.translate(C.PLAYER_X, gs.player.y);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, gs.player.vy * 0.05)));
+  // Mane + tail streamers (horse): rippling hair drawn BEHIND the body so it trails the
+  // neck crest and rump. Continuous sine flutter via nowSec → always blowing, not just
+  // on flap. Render-only, no sim touch.
+  if (fxMane && fxMane.kind === 'mane') drawMane(s, fxMane.color);
   ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
   // Sprite effect (theme.fx with fx.sprite): a transparent FX image drawn relative to the
   // avatar for fx.durationMs after it fired. Inside the same translate/rotate so it tracks
@@ -1911,6 +2070,40 @@ function drawPlayer() {
       drawBolt(headX, boltSpawnY, fx);
     }
   }
+}
+
+// Flowing mane + tail for the horse. Several hair strands stream BACKWARD (leftward,
+// the sprite faces right) from the neck crest and the rump, each a wavy line whose tail
+// ripples via a phase-shifted sine on nowSec. Lengths/phases differ per strand so it
+// reads as windblown hair, not a comb. Called inside drawPlayer's translate/rotate frame
+// (origin = sprite centre). Render-only, deterministic in time → never feeds the sim.
+function drawMane(s, color) {
+  const t = nowSec();
+  ctx.save();
+  ctx.lineCap = 'round';
+  // one wavy strand from (ox,oy) blowing back; `len`×s long, `amp`×s wave height.
+  const strand = (ox, oy, len, amp, ph, w, alpha) => {
+    ctx.strokeStyle = withAlpha(color, alpha); ctx.lineWidth = w;
+    ctx.beginPath();
+    const x0 = ox * s, y0 = oy * s, L = len * s, segs = 6;
+    ctx.moveTo(x0, y0);
+    for (let i = 1; i <= segs; i++) {
+      const f = i / segs;
+      const x = x0 - L * f;                                   // trails left (backward)
+      const wave = Math.sin(t * 7 + ph + f * 4) * amp * s * f; // grows toward the tip
+      ctx.lineTo(x, y0 + wave);
+    }
+    ctx.stroke();
+  };
+  // mane along the neck crest (upper-right of the body)
+  strand(0.30, -0.30, 0.42, 0.10, 0.0, Math.max(2, s * 0.06), 0.95);
+  strand(0.24, -0.24, 0.50, 0.13, 1.1, Math.max(2, s * 0.05), 0.85);
+  strand(0.18, -0.18, 0.46, 0.11, 2.2, Math.max(1, s * 0.045), 0.75);
+  // tail off the rump (left side)
+  strand(-0.32, -0.04, 0.40, 0.12, 0.6, Math.max(2, s * 0.06), 0.95);
+  strand(-0.32, 0.02, 0.46, 0.15, 1.7, Math.max(1, s * 0.05), 0.8);
+  ctx.restore();
+  ctx.lineWidth = 1;
 }
 
 // A small glowing energy bolt with a short motion-trail, travelling right.
@@ -2219,7 +2412,7 @@ function buildAvatarPickerInto(container) {
   // dragon, then everything else in THEMES order, with bird + bee parked at the end
   // (the least-improved, blander options for now).
   const TAIL = ['bird', 'bee'];
-  const LEAD = ['penguin', 'robot', 'airplane', 'dragon'];
+  const LEAD = ['penguin', 'horse', 'robot', 'airplane', 'dragon'];
   const mid = Object.keys(THEMES).filter(k => !LEAD.includes(k) && !TAIL.includes(k));
   const ordered = [...LEAD, ...mid, ...TAIL];
   ordered.forEach((key) => {
