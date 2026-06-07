@@ -26,23 +26,22 @@
   <!-- eye + nostril -->
   <rect x="13" y="4" width="1" height="1" fill="#1a1008"/>
   <rect x="14" y="5" width="1" height="1" fill="#1a1008"/>
-  <!-- FRONT legs: reaching forward -->
+  <!-- FRONT legs reaching forward: upper shank from the chest, then lower leg angled
+       forward to a hoof. Two legs, the leading one further ahead. -->
   <g fill="#8d5a3b">
-    <rect x="11" y="10" width="1" height="3"/>
-    <rect x="12" y="12" width="2" height="1"/>
-    <rect x="9" y="10" width="1" height="3"/>
+    <rect x="10" y="10" width="1" height="2"/><rect x="11" y="12" width="1" height="2"/> <!-- near front -->
+    <rect x="9"  y="10" width="1" height="3"/>                                            <!-- far front -->
   </g>
-  <!-- hind legs: kicked back -->
+  <!-- HIND legs kicked back: upper shank from the rump, lower leg angled back to a hoof. -->
   <g fill="#8d5a3b">
-    <rect x="6" y="10" width="1" height="3"/>
-    <rect x="4" y="11" width="2" height="1"/>
-    <rect x="7" y="10" width="1" height="2"/>
+    <rect x="7" y="10" width="1" height="2"/><rect x="6" y="12" width="1" height="2"/>   <!-- near hind -->
+    <rect x="6" y="10" width="1" height="2"/>                                             <!-- far hind upper -->
   </g>
-  <!-- hooves -->
+  <!-- hooves at each leg's foot -->
   <g fill="#2b1a0e">
-    <rect x="13" y="13" width="1" height="1"/>
-    <rect x="9" y="13" width="1" height="1"/>
-    <rect x="4" y="12" width="1" height="1"/>
-    <rect x="7" y="12" width="1" height="1"/>
+    <rect x="11" y="14" width="1" height="1"/>  <!-- near front -->
+    <rect x="9"  y="13" width="1" height="1"/>  <!-- far front -->
+    <rect x="6"  y="14" width="1" height="1"/>  <!-- near hind -->
+    <rect x="6"  y="12" width="1" height="1"/>  <!-- far hind -->
   </g>
 </svg>

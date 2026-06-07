@@ -2081,27 +2081,30 @@ function drawMane(s, color) {
   const t = nowSec();
   ctx.save();
   ctx.lineCap = 'round';
-  // one wavy strand from (ox,oy) blowing back; `len`×s long, `amp`×s wave height.
-  const strand = (ox, oy, len, amp, ph, w, alpha) => {
+  // One wavy strand rooted at (ox,oy), trailing back (left). `droop` biases the tip
+  // vertically (− = lifts up, + = sags down) so the strand follows a base arc; the
+  // ripple rides on top via a per-strand `freq`/`ph`/`dir` so no two move in lockstep.
+  const strand = (ox, oy, len, droop, amp, freq, ph, dir, w, alpha) => {
     ctx.strokeStyle = withAlpha(color, alpha); ctx.lineWidth = w;
     ctx.beginPath();
-    const x0 = ox * s, y0 = oy * s, L = len * s, segs = 6;
+    const x0 = ox * s, y0 = oy * s, L = len * s, segs = 7;
     ctx.moveTo(x0, y0);
     for (let i = 1; i <= segs; i++) {
       const f = i / segs;
-      const x = x0 - L * f;                                   // trails left (backward)
-      const wave = Math.sin(t * 7 + ph + f * 4) * amp * s * f; // grows toward the tip
-      ctx.lineTo(x, y0 + wave);
+      const x = x0 - L * f;                                       // trails backward
+      const arc = droop * s * f * f;                             // base sag/lift (eases out)
+      const wave = dir * Math.sin(t * freq + ph + f * 5) * amp * s * f;
+      ctx.lineTo(x, y0 + arc + wave);
     }
     ctx.stroke();
   };
-  // mane along the neck crest (upper-right of the body)
-  strand(0.30, -0.30, 0.42, 0.10, 0.0, Math.max(2, s * 0.06), 0.95);
-  strand(0.24, -0.24, 0.50, 0.13, 1.1, Math.max(2, s * 0.05), 0.85);
-  strand(0.18, -0.18, 0.46, 0.11, 2.2, Math.max(1, s * 0.045), 0.75);
-  // tail off the rump (left side)
-  strand(-0.32, -0.04, 0.40, 0.12, 0.6, Math.max(2, s * 0.06), 0.95);
-  strand(-0.32, 0.02, 0.46, 0.15, 1.7, Math.max(1, s * 0.05), 0.8);
+  // MANE off the neck crest: short, lifts UP-and-back, fast nervous flutter.
+  strand(0.30, -0.30, 0.34, -0.14, 0.07, 9.0, 0.0,  1, Math.max(2, s * 0.06), 0.95);
+  strand(0.25, -0.26, 0.40, -0.10, 0.09, 8.2, 1.6, -1, Math.max(2, s * 0.05), 0.85);
+  strand(0.20, -0.21, 0.36, -0.05, 0.08, 7.4, 3.0,  1, Math.max(1, s * 0.045), 0.7);
+  // TAIL off the rump: longer, sags DOWN-and-back, slower heavier sway (opposite phase).
+  strand(-0.32, -0.02, 0.50, 0.16, 0.10, 4.6, 2.4, -1, Math.max(2, s * 0.06), 0.95);
+  strand(-0.33, 0.04, 0.46, 0.22, 0.13, 5.2, 0.8,  1, Math.max(1, s * 0.05), 0.8);
   ctx.restore();
   ctx.lineWidth = 1;
 }
@@ -2412,7 +2415,7 @@ function buildAvatarPickerInto(container) {
   // dragon, then everything else in THEMES order, with bird + bee parked at the end
   // (the least-improved, blander options for now).
   const TAIL = ['bird', 'bee'];
-  const LEAD = ['penguin', 'horse', 'robot', 'airplane', 'dragon'];
+  const LEAD = ['penguin', 'robot', 'horse', 'airplane', 'dragon'];
   const mid = Object.keys(THEMES).filter(k => !LEAD.includes(k) && !TAIL.includes(k));
   const ordered = [...LEAD, ...mid, ...TAIL];
   ordered.forEach((key) => {

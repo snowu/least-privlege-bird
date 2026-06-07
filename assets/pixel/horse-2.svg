@@ -26,19 +26,16 @@
   <rect x="14" y="5" width="1" height="1" fill="#1a1008"/>
   <!-- ALL legs gathered/tucked under the barrel (suspension moment) -->
   <g fill="#8d5a3b">
-    <rect x="10" y="10" width="1" height="2"/>
-    <rect x="9" y="10" width="1" height="2"/>
-    <rect x="7" y="10" width="1" height="2"/>
-    <rect x="6" y="10" width="1" height="2"/>
+    <rect x="10" y="10" width="1" height="2"/><rect x="10" y="12" width="1" height="1"/> <!-- front near -->
+    <rect x="9"  y="10" width="1" height="2"/>                                            <!-- front far -->
+    <rect x="7"  y="10" width="1" height="2"/><rect x="7" y="12" width="1" height="1"/>  <!-- hind near -->
+    <rect x="6"  y="10" width="1" height="2"/>                                            <!-- hind far -->
   </g>
-  <!-- bent lower legs angling inward -->
-  <g fill="#8d5a3b">
-    <rect x="10" y="12" width="2" height="1"/>
-    <rect x="6" y="12" width="2" height="1"/>
-  </g>
-  <!-- hooves -->
+  <!-- hooves tucked under the barrel -->
   <g fill="#2b1a0e">
-    <rect x="11" y="12" width="1" height="1"/>
-    <rect x="7" y="12" width="1" height="1"/>
+    <rect x="10" y="13" width="1" height="1"/>
+    <rect x="9"  y="12" width="1" height="1"/>
+    <rect x="7"  y="13" width="1" height="1"/>
+    <rect x="6"  y="12" width="1" height="1"/>
   </g>
 </svg>
