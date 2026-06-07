@@ -232,7 +232,7 @@ const THEMES: { [key: string]: any } = {
   },
   bee: {
     label: 'Bee',
-    sky: '#fffde7', ground: '#388e3c',
+    sky: '#aee0f0', ground: '#388e3c',
     cloudFill: 'rgba(255,255,255,0.9)',
     drawPipe(x, topH, gap) {
       // Brown flower stalks with leaf caps
@@ -487,16 +487,31 @@ function pixelPeak(x, w, h, c, snow) {
     pxRect(Math.round(apexX / u) * u, apexY + u, u, u, snow);
   }
 }
-// A conifer on a trunk: stacked stepped triangles in pixel mode, smooth rounded
-// tiers (filled triangles with soft corners) in round mode.
-function pixelTree(x, scale, leaf, trunk) {
+// Blend a hex colour toward white by `f` (0..1) — used to haze distant foliage so
+// far trees read lighter/cooler (aerial perspective). Render-only.
+function lighten(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const m = (c) => Math.round(c + (255 - c) * f);
+  return `rgb(${m(r)},${m(g)},${m(b)})`;
+}
+
+// A conifer on a trunk: stacked stepped triangles in pixel mode, smooth rounded tiers
+// (soft-cornered triangles) in round mode. `tiers` controls height (more = taller); the
+// trunk and tier geometry scale with both `scale` and `tiers` so big trees stay in
+// proportion. `tint` (0..1) hazes the foliage toward white for distance/depth.
+function pixelTree(x, scale, leaf, trunk, opt: any = {}) {
   const s = scale, baseY = G();
+  const tiers = opt.tiers ?? 3;
+  const leafC = opt.tint ? lighten(leaf, opt.tint) : leaf;
+  const trunkC = opt.tint ? lighten(trunk, opt.tint * 0.7) : trunk;
+  const trunkH = 4 * s;
   if (isRound()) {
-    ctx.fillStyle = trunk;
-    ctx.fillRect(x - 2 * s, baseY - 4 * s, 4 * s, 4 * s);         // trunk (kept blocky/short)
-    ctx.fillStyle = leaf;
-    for (let tier = 0; tier < 3; tier++) {
-      const ty = baseY - (4 + tier * 5) * s, tw = (14 - tier * 3) * s, th = 7 * s;
+    ctx.fillStyle = trunkC;
+    ctx.fillRect(x - 2 * s, baseY - trunkH, 4 * s, trunkH);       // trunk (kept blocky/short)
+    ctx.fillStyle = leafC;
+    for (let tier = 0; tier < tiers; tier++) {
+      const ty = baseY - (4 + tier * 5) * s, tw = (14 + (tiers - 3) * 2 - tier * 3) * s, th = 7 * s;
       ctx.beginPath();
       ctx.moveTo(x, ty - th);                                     // apex
       ctx.quadraticCurveTo(x - tw / 2, ty, x, ty);                // left skirt, soft
@@ -506,11 +521,32 @@ function pixelTree(x, scale, leaf, trunk) {
     }
     return;
   }
-  pxRect(x - 2 * s, baseY - 4 * s, 4 * s, 4 * s, trunk);          // trunk
-  for (let tier = 0; tier < 3; tier++) {
-    const ty = baseY - (4 + tier * 5) * s, tw = (14 - tier * 3) * s;
-    for (let r = 0; r < 5; r++) pxRect(x - tw / 2 + r * s, ty - r * s, tw - r * 2 * s, s, leaf);
+  pxRect(x - 2 * s, baseY - trunkH, 4 * s, trunkH, trunkC);       // trunk
+  for (let tier = 0; tier < tiers; tier++) {
+    const ty = baseY - (4 + tier * 5) * s, tw = (14 + (tiers - 3) * 2 - tier * 3) * s;
+    for (let r = 0; r < 5; r++) pxRect(x - tw / 2 + r * s, ty - r * s, tw - r * 2 * s, s, leafC);
   }
+}
+
+// A depth-sorted clump of conifers across one tile. Deterministic per tile via hash01:
+// each tree gets a pseudo-random x, scale, and tier-count, and is shaded by distance
+// (smaller → more tint, drawn first so larger near trees overlap them). One call paints
+// a varied stand of trees; shared by the bird + bee meadows. `seed` keys the variation
+// (pass the tileMotif tile index). `palette` = [leafColor, trunkColor].
+function treeStand(x, tileW, seed, [leaf, trunk], count = 4) {
+  const trees: any[] = [];
+  for (let i = 0; i < count; i++) {
+    const r1 = hash01(seed * 7.3 + i * 11.1), r2 = hash01(seed * 3.7 + i * 5.9), r3 = hash01(seed * 9.1 + i * 2.3);
+    const scale = 2 + r2 * 3.2;                                   // 2 … 5.2
+    trees.push({
+      tx: x + Math.round(r1 * (tileW - 30)) + 15,
+      scale,
+      tiers: 3 + Math.floor(r3 * 2),                              // 3 or 4
+      depth: (5.2 - scale) / 3.2,                                 // 0 (near/big) … 1 (far/small)
+    });
+  }
+  trees.sort((a, b) => b.depth - a.depth);                        // far first → near overlaps
+  for (const t of trees) pixelTree(t.tx, t.scale, leaf, trunk, { tiers: t.tiers, tint: t.depth * 0.45 });
 }
 
 THEMES.bird.bgLayers = [
@@ -632,17 +668,63 @@ THEMES.squid.bgLayers = [
 ];
 
 THEMES.bee.bgLayers = [
+  // A sun in the corner with slowly rotating, breathing rays + an inner glow cap.
+  { speed: 0, draw() {
+      celestialBody(C.W - 120, 110, 38, '#ffd54f', {
+        rays: { color: '255,213,79', count: 12, speed: 0.12 },
+        caps: [{ dx: 0, dy: 0, r: 32, color: '#ffe57f' }],       // inner brighter core
+      });
+  } },
+  // High drifting clouds that sail across (and in front of) the sun. Time-driven drift,
+  // deterministic via index hashes — same engine as the bird theme's sky.
+  { speed: 0, draw() {
+      const tt = nowSec();
+      const span = C.W + 320;
+      for (let i = 0; i < 5; i++) {
+        const spd = 6 + hash01(i * 9.7) * 8;                     // each cloud its own pace
+        const cx = ((hash01(i * 3.1) * span - tt * spd) % span + span) % span - 160;
+        const cy = 60 + hash01(i * 5.3) * 110;
+        const w = 90 + hash01(i * 7.9) * 70, h = 34 + hash01(i * 2.7) * 16;
+        pixelCloud(cx, cy, w, h, 'rgba(255,255,255,0.85)');
+      }
+  } },
+  // Distant birds gliding across the sky ("M" gull silhouettes; wings beat on the flap
+  // phase). Slow flap → distant soaring. Shared wanderers engine.
+  { speed: 0, draw() {
+      wanderers(
+        [
+          { drift: 26,  baseY: 150, yAmp: 30, wy: 0.5, sy: 1.1, bank: 0.25, flapHz: 3.5 },
+          { drift: 22,  baseY: 200, yAmp: 26, wy: 0.7, sy: 1.4, bank: 0.25, flapHz: 4.0 },
+          { drift: 30,  baseY: 110, yAmp: 22, wy: 0.4, sy: 0.9, bank: 0.25, flapHz: 3.0 },
+        ],
+        (i, t, flap) => {
+          const up = flap ? 5 : 2;
+          ctx.strokeStyle = 'rgba(40,50,60,0.7)';
+          ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-7, 0); ctx.lineTo(-2, -up); ctx.lineTo(0, -1);
+          ctx.lineTo(2, -up); ctx.lineTo(7, 0);
+          ctx.stroke();
+          ctx.lineWidth = 1;
+        });
+  } },
   // Soft green hills
   { speed: 0.18, draw(o) { tileMotif(o, 300, x => { pixelHill(x, 280, 100, '#9ccc65'); pixelHill(x + 150, 220, 70, '#aed581'); }); } },
-  // Flower stalks + small trees up front — blooms sway in the breeze (tiled; a
-  // repeating meadow reads naturally, unlike repeating insects).
+  // Trees + classic skep beehives up front — stacked straw domes on the ground with a
+  // dark entrance hole (tiled; a repeating apiary reads naturally).
   { speed: 0.55, draw(o) { tileMotif(o, 170, x => {
-      const t = nowSec();
       pixelTree(x + 30, 3, '#558b2f', '#6d4c41');
-      const sway = Math.sin(t * 1.8 + x * 0.01) * 4;
-      pxRect(x + 110, G() - 26, 2, 26, '#33691e');               // stem
-      pxRect(x + 106 + sway, G() - 32, 10, 8, '#ec407a');        // bloom (sways)
-      pxRect(x + 109 + sway, G() - 30, 4, 4, '#ffeb3b');         // center
+      // skep beehive: tapering stacked bands (widest at the base) topped by a knob.
+      const hx = x + 112, baseY = G(), bands = ['#e0a84e', '#c8923c', '#e0a84e', '#c8923c', '#d49a44'];
+      const bandH = 7;
+      bands.forEach((c, i) => {
+        const w = 30 - i * 4, by = baseY - (i + 1) * bandH;
+        pxRect(hx - w / 2, by, w, bandH, c);
+        ctx.fillStyle = 'rgba(120,80,20,0.35)';                  // coil shadow under each band
+        ctx.fillRect(hx - w / 2, by + bandH - 1, w, 1);
+      });
+      pxRect(hx - 2, baseY - bands.length * bandH - 3, 4, 3, '#b07c2e'); // top knob
+      pxRect(hx - 3, baseY - 6, 6, 4, '#3a2a10');               // entrance hole
   }); } },
   // A few free-roaming bees on distinct wandering paths (shared wanderers engine).
   { speed: 0, draw() {
@@ -1525,7 +1607,10 @@ function loadSprites() {
 }
 loadSprites();
 
-let currentTheme: any = THEMES.penguin;  // penguin is the mascot / default avatar
+// Restore the last-picked avatar (QOL); fall back to penguin (mascot / default) if
+// unset or unknown. Persisted in selectAvatar under 'lpb_avatar'.
+const _savedAvatar = (() => { try { return localStorage.getItem('lpb_avatar'); } catch { return null; } })();
+let currentTheme: any = (_savedAvatar && THEMES[_savedAvatar]) ? THEMES[_savedAvatar] : THEMES.penguin;
 
 // ─── HIGH SCORES — provided by scores.js ──────────────────────────────────────
 
@@ -2414,8 +2499,8 @@ function buildAvatarPickerInto(container) {
   // Display order: penguin (mascot) leads, then the showcase themes robot/airplane/
   // dragon, then everything else in THEMES order, with bird + bee parked at the end
   // (the least-improved, blander options for now).
-  const TAIL = ['bird', 'bee'];
-  const LEAD = ['penguin', 'robot', 'horse', 'airplane', 'dragon'];
+  const TAIL = ['bird'];
+  const LEAD = ['penguin', 'robot', 'horse', 'airplane', 'dragon', 'bee'];
   const mid = Object.keys(THEMES).filter(k => !LEAD.includes(k) && !TAIL.includes(k));
   const ordered = [...LEAD, ...mid, ...TAIL];
   ordered.forEach((key) => {
@@ -2431,6 +2516,7 @@ function buildAvatarPickerInto(container) {
 // Apply an avatar choice and reflect it in every picker (menu + game-over).
 function selectAvatar(key) {
   currentTheme = THEMES[key];
+  try { localStorage.setItem('lpb_avatar', key); } catch {}   // QOL: remember last pick
   document.querySelectorAll('.avatar-opt').forEach(d =>
     d.classList.toggle('selected', d.dataset.key === key));
   drawBackground();      // live preview (menu or game-over background)
