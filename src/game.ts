@@ -961,38 +961,125 @@ THEMES.robot.bgLayers = [
       };
       far(x, 50, 150, '#00e5ff'); far(x + 80, 40, 110, '#76ff03'); far(x + 150, 60, 190, '#00e5ff');
   }); } },
-  // Transit tubes: Futurama-style translucent transport tubes arc across the sky with
-  // little passenger pods whooshing through them. Drawn behind the dense traffic.
+  // Transit tubes: Futurama-style translucent transport tubes carry little passenger
+  // pods — each pod holds a crude pixel person. Mix of styles: shallow horizontal
+  // bands, a steep riser, and one tube that recedes INTO the screen (perspective),
+  // where pods + people shrink as they travel toward the vanishing point.
   { speed: 0, draw() {
       const t = nowSec();
-      // a few fixed tubes at different heights/slopes; each carries pods at staggered phases.
-      const tubes = [
-        { y: 70,  slope: -0.05, len: C.W + 120 },
-        { y: 150, slope: 0.07,  len: C.W + 120 },
-        { y: 215, slope: -0.04, len: C.W + 120 },
-      ];
-      tubes.forEach((tb, ti) => {
-        const x0 = -60, yAt = (x) => tb.y + (x - x0) * tb.slope;
-        // glass tube: a soft double-walled band
-        ctx.strokeStyle = 'rgba(120,220,255,0.16)'; ctx.lineWidth = 14;
-        ctx.beginPath(); ctx.moveTo(x0, yAt(x0)); ctx.lineTo(x0 + tb.len, yAt(x0 + tb.len)); ctx.stroke();
+      const round = isRound();
+      // A seated pixel figure built from explicit body parts so it reads as a person:
+      // round head, neck, torso, two arms, two bent legs. `cy` = the seat line (hips);
+      // `s` = scale (1 near, <1 far). Parts grow/shrink together with `u`.
+      const drawPerson = (cx, cy, s) => {
+        const u = Math.max(1, 2 * s);                 // base pixel unit (≥1px)
+        const dark = 'rgba(16,24,38,0.96)';           // torso/limbs
+        const skin = 'rgba(60,76,98,0.98)';           // head (lighter → reads separate)
+        const x = Math.round(cx), hipY = Math.round(cy);
+        const px = (ox, oy, w, h, c) => pxRect(Math.round(x + ox), Math.round(hipY + oy), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), c);
+        // legs: thighs forward (seated), shins down
+        px(-u * 1.6, 0, u * 1.4, u, dark);            // thigh L
+        px(u * 0.2, 0, u * 1.4, u, dark);             // thigh R
+        px(u * 1.0, u, u, u * 1.2, dark);             // shin (front, bent down)
+        // torso
+        px(-u, -u * 2.6, u * 2, u * 2.6, dark);
+        // arms (resting forward on lap)
+        px(u * 0.4, -u * 1.6, u * 1.2, u * 0.9, dark);
+        // neck + head
+        px(-u * 0.4, -u * 3.1, u * 0.8, u * 0.6, skin);
+        if (round) pixelDisc(x, Math.round(hipY - u * 4), Math.max(1, Math.round(u)), skin);
+        else px(-u, -u * 4.6 + u * 0.4, u * 2, u * 1.6, skin);
+      };
+      // A glowing capsule with a person inside. `s` = scale, `col` = rgb triplet string.
+      const drawPod = (cx, cy, s, col) => {
+        const w = Math.max(4, Math.round(15 * s)), h = Math.max(4, Math.round(15 * s));
+        const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
+        // glass shell: faint translucent fill + a thin neon outline (the person shows through)
+        ctx.fillStyle = `rgba(${col},0.18)`;
+        ctx.strokeStyle = `rgba(${col},0.85)`; ctx.lineWidth = 1;
+        if (round) {
+          roundRect(ctx, x, y, w, h, Math.max(2, 4 * s)); ctx.fill(); ctx.stroke();
+        } else {
+          ctx.fillRect(x, y, w, h);
+          ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        }
+        drawPerson(cx, cy + h * 0.28, s);            // seat at lower part of the pod
+        ctx.lineWidth = 1;
+      };
+      // A straight glass tube as a soft double-walled band between two points.
+      const drawTube = (ax, ay, bx, by, rad) => {
+        ctx.strokeStyle = 'rgba(120,220,255,0.16)'; ctx.lineWidth = rad * 2;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
         ctx.strokeStyle = 'rgba(180,240,255,0.3)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(x0, yAt(x0) - 7); ctx.lineTo(x0 + tb.len, yAt(x0 + tb.len) - 7); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(x0, yAt(x0) + 7); ctx.lineTo(x0 + tb.len, yAt(x0 + tb.len) + 7); ctx.stroke();
-        // pods sliding through the tube
-        const dir = ti % 2 ? -1 : 1, spd = 130 + ti * 30;
+        // wall lines offset perpendicular to the tube direction
+        const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len * rad, ny = dx / len * rad;
+        ctx.beginPath(); ctx.moveTo(ax + nx, ay + ny); ctx.lineTo(bx + nx, by + ny); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax - nx, ay - ny); ctx.lineTo(bx - nx, by - ny); ctx.stroke();
+        ctx.lineWidth = 1;
+      };
+
+      // --- 2 shallow horizontal bands (the calm baseline) ---
+      const bands = [
+        { y: 70,  slope: -0.05 },
+        { y: 215, slope: -0.04 },
+      ];
+      bands.forEach((tb, ti) => {
+        const x0 = -60, len = C.W + 120, yAt = (x) => tb.y + (x - x0) * tb.slope;
+        drawTube(x0, yAt(x0), x0 + len, yAt(x0 + len), 9);
+        const dir = ti % 2 ? -1 : 1, spd = 130 + ti * 30, span = len + 80;
         for (let p = 0; p < 3; p++) {
-          const span = tb.len + 80;
-          let px = ((t * spd + p * 240 + ti * 90) % span);
+          let px = (t * spd + p * 240 + ti * 90) % span;
           if (dir < 0) px = span - px;
-          const x = x0 + px - 40, y = yAt(x);
-          const col = p % 2 ? '255,213,79' : '0,229,255';
-          ctx.fillStyle = `rgba(${col},0.95)`;
-          roundRect(ctx, x - 7, y - 4, 14, 8, 3); ctx.fill();      // pod capsule
-          ctx.fillStyle = 'rgba(20,30,45,0.9)';                    // passenger silhouette
-          ctx.fillRect(x - 2, y - 3, 4, 3);
+          const x = x0 + px - 40;
+          drawPod(x, yAt(x), 1, p % 2 ? '255,213,79' : '0,229,255');
         }
       });
+
+      // --- 1 steep riser tube (endpoints on-screen, pods climbing) ---
+      {
+        const ax = 280, ay = G() - 40, bx = 360, by = 30, span = 1, spd = 0.22;
+        drawTube(ax, ay, bx, by, 9);
+        for (let p = 0; p < 3; p++) {
+          const u = (t * spd + p / 3) % span;                       // 0 (bottom) → 1 (top)
+          const x = ax + (bx - ax) * u, y = ay + (by - ay) * u;
+          drawPod(x, y, 1, p % 2 ? '0,229,255' : '255,40,200');
+        }
+      }
+
+      // --- 1 perspective tube receding INTO the screen ---
+      {
+        const nx = 120, ny = G() - 70, fx = 620, fy = 120;           // near (big) → far (small)
+        const nRad = 11, fRad = 2, nScale = 1, fScale = 0.18, spd = 0.16;
+        // converging walls
+        ctx.fillStyle = 'rgba(120,220,255,0.12)';
+        const ndx = fx - nx, ndy = fy - ny, nlen = Math.hypot(ndx, ndy) || 1;
+        const ux = -ndy / nlen, uy = ndx / nlen;                     // unit perpendicular
+        ctx.beginPath();
+        ctx.moveTo(nx + ux * nRad, ny + uy * nRad);
+        ctx.lineTo(fx + ux * fRad, fy + uy * fRad);
+        ctx.lineTo(fx - ux * fRad, fy - uy * fRad);
+        ctx.lineTo(nx - ux * nRad, ny - uy * nRad);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(180,240,255,0.3)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(nx + ux * nRad, ny + uy * nRad); ctx.lineTo(fx + ux * fRad, fy + uy * fRad);
+        ctx.moveTo(nx - ux * nRad, ny - uy * nRad); ctx.lineTo(fx - ux * fRad, fy - uy * fRad);
+        ctx.stroke();
+        // far rim
+        pixelDisc(Math.round(fx), Math.round(fy), fRad, 'rgba(120,220,255,0.25)');
+        // pods: travel far(1)→near(0); draw in far-first order so near overlaps far
+        const pods = [];
+        for (let p = 0; p < 3; p++) {
+          const u = 1 - ((t * spd + p / 3) % 1);                     // 1 (far) → 0 (near)
+          pods.push(u);
+        }
+        pods.sort((a, b) => b - a).forEach((u, i) => {               // largest u (far) first
+          const x = nx + (fx - nx) * u, y = ny + (fy - ny) * u;
+          const s = nScale + (fScale - nScale) * u;
+          drawPod(x, y, s, i % 2 ? '255,213,79' : '0,229,255');
+        });
+      }
   } },
   // Flying traffic: dense streams of neon vehicles streaking across in lanes, each with
   // a fading light trail. Two stacked streams per direction → a busy traffic corridor.
@@ -1009,27 +1096,35 @@ THEMES.robot.bgLayers = [
       ];
       const cars = [];
       lanes.forEach(l => { for (let c = 0; c < 3; c++) cars.push({ ...l, baseY: l.baseY + c * 3 }); });
+      const round = isRound();
       wanderers(cars, (i, t, flap) => {
         const col = i % 5 === 0 ? '255,213,79' : (i % 2 ? '255,40,200' : '0,229,255');
-        const grad = ctx.createLinearGradient(0, 0, -24, 0);
+        const big = i % 3 === 0;                                   // a few longer cars for variety
+        const L = big ? 9 : 6, trail = big ? 30 : 24;
+        // fading speed trail behind the car
+        const grad = ctx.createLinearGradient(0, 0, -trail, 0);
         grad.addColorStop(0, `rgba(${col},0.9)`);
         grad.addColorStop(1, `rgba(${col},0)`);
         ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-24, 0); ctx.stroke(); // trail
-        pxRect(0, -1, 6, 3, `rgba(${col},1)`);                    // body
-        if (flap) pixelDisc(2, 0, 2, '#ffffff');                  // headlight blink
+        ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(-trail, 0); ctx.stroke();
+        // chassis (front nose tapers): a body bar with a sloped front in round mode.
+        ctx.fillStyle = `rgba(${col},1)`;
+        if (round) {
+          roundRect(ctx, -L + 1, -2, L + 2, 4, 2); ctx.fill();
+        } else {
+          pxRect(-L + 1, -2, L, 4, `rgba(${col},1)`);
+          pxRect(L - 2, -1, 2, 2, `rgba(${col},1)`);              // pointed nose
+        }
+        // canopy cabin bump + a tiny passenger silhouette inside
+        const dark = 'rgba(14,22,34,0.9)';
+        pxRect(-2, -4, 4, 2, `rgba(${col},0.85)`);                // cabin glass
+        pxRect(-1, -4, 2, 1, dark);                               // passenger head
+        // headlight at the nose; blinks brighter on the wingbeat phase
+        if (round) pixelDisc(L, 0, flap ? 2 : 1, '#ffffff');
+        else pxRect(L - 1, -1, 2, 2, flap ? '#ffffff' : `rgba(255,255,255,0.7)`);
+        pxRect(-L, -1, 1, 2, 'rgba(255,60,60,0.9)');              // red taillight
         ctx.lineWidth = 1;
       });
-  } },
-  // Rising data packets: glowing bits float up between the towers (particleStream).
-  { speed: 0, draw() {
-      particleStream(40, -1,
-        { minSpd: 30, spanSpd: 60, minSway: 3, spanSway: 8, minR: 1, spanR: 2.5, minA: 0.3, spanA: 0.5 },
-        (x, y, r, a) => {
-          const col = (Math.round(x + y) % 2) ? '0,229,255' : '118,255,3';
-          ctx.fillStyle = `rgba(${col},${a})`;
-          ctx.fillRect(Math.round(x), Math.round(y), Math.round(r + 1), Math.round(r + 1)); // square bits
-        });
   } },
   // MAIN neon circuit-city skyline — towers with antenna spires, setback crowns and a
   // grid of pulsing window lights. Pixel mode = square lights blinking; round mode
