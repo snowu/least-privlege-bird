@@ -528,25 +528,84 @@ function pixelTree(x, scale, leaf, trunk, opt: any = {}) {
   }
 }
 
-// A depth-sorted clump of conifers across one tile. Deterministic per tile via hash01:
-// each tree gets a pseudo-random x, scale, and tier-count, and is shaded by distance
-// (smaller → more tint, drawn first so larger near trees overlap them). One call paints
-// a varied stand of trees; shared by the bird + bee meadows. `seed` keys the variation
-// (pass the tileMotif tile index). `palette` = [leafColor, trunkColor].
-function treeStand(x, tileW, seed, [leaf, trunk], count = 4) {
-  const trees: any[] = [];
+// Generic structure-scatter engine: lays out `count` props across one tile with
+// deterministic-per-tile variety (hash01) and DEPTH SORTING — each prop gets a random
+// x, a scale in [sMin,sMax], a `depth` (0 near/big … 1 far/small), and a spare random
+// `r` for per-prop shape variation. Props are drawn far-first so nearer/bigger ones
+// overlap them, and `tint = depth × tintMax` hazes distant props toward white (aerial
+// perspective). The `draw(px, scale, depth, tint, r)` callback paints ONE prop at px,
+// anchored to the ground. Render-only + deterministic → never feeds the sim.
+// Shared by the bird/bee tree stands, the bee apiary, and the airplane rooftop gear.
+function scatterProps(x, tileW, seed, count, sMin, sMax, tintMax, draw) {
+  const span = sMax - sMin;
+  const props: any[] = [];
   for (let i = 0; i < count; i++) {
-    const r1 = hash01(seed * 7.3 + i * 11.1), r2 = hash01(seed * 3.7 + i * 5.9), r3 = hash01(seed * 9.1 + i * 2.3);
-    const scale = 2 + r2 * 3.2;                                   // 2 … 5.2
-    trees.push({
-      tx: x + Math.round(r1 * (tileW - 30)) + 15,
-      scale,
-      tiers: 3 + Math.floor(r3 * 2),                              // 3 or 4
-      depth: (5.2 - scale) / 3.2,                                 // 0 (near/big) … 1 (far/small)
-    });
+    const r1 = hash01(seed * 7.3 + i * 11.1), r2 = hash01(seed * 3.7 + i * 5.9), r = hash01(seed * 9.1 + i * 2.3);
+    const scale = sMin + r2 * span;
+    props.push({ px: x + Math.round(r1 * (tileW - 30)) + 15, scale, depth: (sMax - scale) / span, r });
   }
-  trees.sort((a, b) => b.depth - a.depth);                        // far first → near overlaps
-  for (const t of trees) pixelTree(t.tx, t.scale, leaf, trunk, { tiers: t.tiers, tint: t.depth * 0.45 });
+  props.sort((a, b) => b.depth - a.depth);                        // far first → near overlaps
+  for (const p of props) draw(p.px, p.scale, p.depth, p.depth * tintMax, p.r);
+}
+
+// A varied stand of conifers across one tile (shared by the bird + bee meadows).
+// `palette` = [leafColor, trunkColor].
+function treeStand(x, tileW, seed, [leaf, trunk], count = 4) {
+  scatterProps(x, tileW, seed, count, 2, 5.2, 0.45, (px, scale, _d, tint, r) =>
+    pixelTree(px, scale, leaf, trunk, { tiers: 3 + Math.floor(r * 2), tint }));
+}
+
+// A classic skep beehive: tapering stacked straw bands (widest at the base) topped by a
+// knob, with a dark entrance hole. `s` = scale (band width/height grow with it). `tint`
+// hazes it toward white for depth. Render-only.
+// `s = 1` ≈ the original fixed hive (~30px wide base, ~7px bands).
+function pixelHive(x, s, tint = 0) {
+  const baseY = G(), bandH = Math.max(3, Math.round(7 * s));
+  const straw = (c) => tint ? lighten(c, tint) : c;
+  const bands = ['#e0a84e', '#c8923c', '#e0a84e', '#c8923c', '#d49a44'];
+  bands.forEach((c, i) => {
+    const w = Math.round((30 - i * 4) * s), by = baseY - (i + 1) * bandH;
+    pxRect(x - w / 2, by, w, bandH, straw(c));
+    ctx.fillStyle = `rgba(120,80,20,${0.35 * (1 - tint)})`;       // coil shadow under each band
+    ctx.fillRect(x - w / 2, by + bandH - 1, w, 1);
+  });
+  pxRect(x - Math.round(2 * s), baseY - bands.length * bandH - 3, Math.round(4 * s), 3, straw('#b07c2e')); // knob
+  pxRect(x - Math.round(3 * s), baseY - Math.round(6 * s), Math.round(6 * s), Math.round(4 * s), '#3a2a10'); // entrance
+}
+
+// A varied apiary of skep beehives across one tile (shared scatter engine).
+function hiveStand(x, tileW, seed, count = 3) {
+  scatterProps(x, tileW, seed, count, 0.5, 0.95, 0.4, (px, scale, _d, tint) => pixelHive(px, scale, tint));
+}
+
+// A rooftop AC cooling unit with a vent grille + a blinking status LED. `s` = scale,
+// `tint` hazes it for depth, `baseY` = the surface it sits on (defaults to the ground;
+// pass a rooftop Y to mount it on a building). Blink phase keyed off x.
+function acUnit(x, s, tint = 0, baseY = G()) {
+  const w = Math.round(60 * s), h = Math.round(40 * s);
+  pxRect(x - w / 2, baseY - h, w, h, tint ? lighten('#37474f', tint) : '#37474f');
+  pxRect(x - w / 2 + Math.round(8 * s), baseY - h + Math.round(6 * s), Math.round(44 * s), Math.round(12 * s), tint ? lighten('#263238', tint) : '#263238');
+  const led = Math.sin(nowSec() * 2.5 + x) > 0.3;
+  pixelDisc(x + Math.round(w / 2 - 6 * s), baseY - h + Math.round(4 * s), Math.max(1, 2 * s), led ? 'rgba(120,255,140,0.9)' : 'rgba(120,255,140,0.2)');
+}
+
+// A satellite dish on a mast that slowly pans back and forth. `s` = scale, `tint` for
+// depth, `baseY` = mast foot (defaults to the ground; pass a rooftop Y to mount it on a
+// building). Pan phase keyed off x → each dish sweeps independently.
+function satelliteDish(x, s, tint = 0, baseY = G()) {
+  const mastH = Math.round(30 * s), mastY = baseY - mastH;
+  const face = tint ? lighten('#78909c', tint) : '#78909c';
+  const inner = tint ? lighten('#9fb3c2', tint) : '#9fb3c2';
+  pxRect(x - Math.round(3 * s), mastY, Math.round(6 * s), mastH, tint ? lighten('#455a64', tint) : '#455a64'); // mast
+  ctx.save();
+  ctx.translate(x, mastY);
+  ctx.rotate(Math.sin(nowSec() * 0.4 + x * 0.01) * 0.5);          // pan
+  ctx.fillStyle = face;
+  ctx.beginPath(); ctx.ellipse(0, -12 * s, 16 * s, 9 * s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = inner;
+  ctx.beginPath(); ctx.ellipse(0, -12 * s, 11 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
+  pxRect(-1 * s, -12 * s, Math.max(1, 2 * s), 8 * s, '#37474f');   // feed arm
+  ctx.restore();
 }
 
 THEMES.bird.bgLayers = [
@@ -599,8 +658,8 @@ THEMES.bird.bgLayers = [
   } },
   // Distant rolling hills
   { speed: 0.15, draw(o) { tileMotif(o, 360, x => { pixelHill(x, 320, 120, '#6aa84f'); pixelHill(x + 180, 260, 90, '#7cb85f'); }); } },
-  // Near treeline
-  { speed: 0.5, draw(o) { tileMotif(o, 200, x => { pixelTree(x + 40, 4, '#2e7d32', '#5d4037'); pixelTree(x + 130, 3, '#388e3c', '#5d4037'); }); } },
+  // Near treeline — a depth-sorted stand of varied conifers (shared treeStand engine).
+  { speed: 0.5, draw(o) { tileMotif(o, 280, (x, tile) => treeStand(x, 280, tile, ['#2e7d32', '#5d4037'], 5)); } },
 ];
 
 THEMES.penguin.bgLayers = [
@@ -710,22 +769,11 @@ THEMES.bee.bgLayers = [
   } },
   // Soft green hills
   { speed: 0.18, draw(o) { tileMotif(o, 300, x => { pixelHill(x, 280, 100, '#9ccc65'); pixelHill(x + 150, 220, 70, '#aed581'); }); } },
-  // Trees + classic skep beehives up front — stacked straw domes on the ground with a
-  // dark entrance hole (tiled; a repeating apiary reads naturally).
-  { speed: 0.55, draw(o) { tileMotif(o, 170, x => {
-      pixelTree(x + 30, 3, '#558b2f', '#6d4c41');
-      // skep beehive: tapering stacked bands (widest at the base) topped by a knob.
-      const hx = x + 112, baseY = G(), bands = ['#e0a84e', '#c8923c', '#e0a84e', '#c8923c', '#d49a44'];
-      const bandH = 7;
-      bands.forEach((c, i) => {
-        const w = 30 - i * 4, by = baseY - (i + 1) * bandH;
-        pxRect(hx - w / 2, by, w, bandH, c);
-        ctx.fillStyle = 'rgba(120,80,20,0.35)';                  // coil shadow under each band
-        ctx.fillRect(hx - w / 2, by + bandH - 1, w, 1);
-      });
-      pxRect(hx - 2, baseY - bands.length * bandH - 3, 4, 3, '#b07c2e'); // top knob
-      pxRect(hx - 3, baseY - 6, 6, 4, '#3a2a10');               // entrance hole
-  }); } },
+  // A varied stand of trees behind the apiary (shared treeStand engine, lighter green).
+  { speed: 0.35, draw(o) { tileMotif(o, 300, (x, tile) => treeStand(x, 300, tile + 17, ['#4c9a3a', '#6d4c41'], 5)); } },
+  // A varied apiary of skep beehives up front (shared scatter engine — size variety +
+  // depth haze, same as the tree stands).
+  { speed: 0.55, draw(o) { tileMotif(o, 240, (x, tile) => hiveStand(x, 240, tile + 5, 3)); } },
   // A few free-roaming bees on distinct wandering paths (shared wanderers engine).
   { speed: 0, draw() {
       wanderers(
@@ -922,6 +970,16 @@ THEMES.airplane.bgLayers = [
           const blink = 0.35 + 0.65 * (Math.sin(t * 3.2 + seed) > 0 ? 1 : 0.2);
           pixelDisc(mx, topY - mastH - 2, 3.5, `rgba(255,40,40,${blink})`);
         }
+        // Small panning satellite dish on the roof (~55% of slabs), set toward one edge.
+        if (hash01(seed * 23 + 1) > 0.45) {
+          const dx = sx + Math.round(w * (0.6 + hash01(seed * 29) * 0.3));
+          satelliteDish(dx, 0.35 + hash01(seed * 31) * 0.2, 0, topY);
+        }
+        // Small AC cooling unit on the roof (~50% of slabs), toward the other edge.
+        if (hash01(seed * 37 + 2) > 0.5) {
+          const ax = sx + Math.round(w * (0.1 + hash01(seed * 41) * 0.25));
+          acUnit(ax, 0.22 + hash01(seed * 43) * 0.12, 0, topY);
+        }
         // Backlit ad board on the slab face — most tall-enough slabs carry one.
         if (h > 100 && hash01(seed * 19) > 0.25) {
           const bw = Math.min(w - 12, 90 + Math.floor(hash01(seed * 23) * 36));
@@ -957,27 +1015,6 @@ THEMES.airplane.bgLayers = [
         pixelCloud(cx, G() - 70, 240, 50, 'rgba(190,200,218,0.12)');
       }
   } },
-  // Foreground cooling units / satellite dishes — dish slowly rotating + link LED.
-  { speed: 0.5, draw(o) { tileMotif(o, 240, x => {
-      const t = nowSec();
-      pxRect(x + 30, G() - 40, 60, 40, '#37474f');               // AC unit
-      pxRect(x + 38, G() - 34, 44, 12, '#263238');              // vents
-      // blinking AC status LED
-      const led = Math.sin(t * 2.5 + x) > 0.3;
-      pixelDisc(x + 84, G() - 36, 2, led ? 'rgba(120,255,140,0.9)' : 'rgba(120,255,140,0.2)');
-      // satellite dish that slowly pans back and forth
-      const mastX = x + 153, mastY = G() - 30;
-      pxRect(x + 150, G() - 30, 6, 30, '#455a64');               // dish mast
-      ctx.save();
-      ctx.translate(mastX, mastY);
-      ctx.rotate(Math.sin(t * 0.4 + x * 0.01) * 0.5);            // pan
-      ctx.fillStyle = '#78909c';
-      ctx.beginPath(); ctx.ellipse(0, -12, 16, 9, 0, 0, Math.PI * 2); ctx.fill(); // dish face
-      ctx.fillStyle = '#9fb3c2';
-      ctx.beginPath(); ctx.ellipse(0, -12, 11, 6, 0, 0, Math.PI * 2); ctx.fill();
-      pxRect(-1, -12, 2, 8, '#37474f');                          // feed arm
-      ctx.restore();
-  }); } },
   // Light rain — faint diagonal streaks (fits the overcast sky). Foreground-most.
   { speed: 0, draw() {
       const t = nowSec();
@@ -1300,18 +1337,18 @@ THEMES.robot.bgLayers = [
       // Mid-tower board (~half the tiles) — smaller, deeper, partly hidden by front towers.
       if (hash01(tile * 11) > 0.5) {
         const mbw = 80, mbh = 40;
-        adBillboard(midX + Math.round((midW - mbw) / 2), G() - midH + 22, mbw, mbh, '255,40,200', AD_ROBOT, tile * 2 + 1);
+        adBillboard(midX + Math.round((midW - mbw) / 2), G() - midH + 22, mbw, mbh, '255,40,200', AD_ROBOT, tile * 3 + 2);
       }
       // Draw the billboard tower next (behind the foreground tower), then its board.
       tower(tallX, tallW, tallH, '#00e5ff', 3);
       const bw = 120, bh = 56;
       const bsx = tallX + Math.round((tallW - bw) / 2);
-      adBillboard(bsx, G() - tallH + 25, bw, bh, '0,229,255', AD_ROBOT, tile);
+      adBillboard(bsx, G() - tallH + 25, bw, bh, '0,229,255', AD_ROBOT, tile * 3);
       // Foreground tower last → overlaps and partly hides the board behind it.
       tower(shortX, shortW, shortH, '#76ff03', 2);
       // Board on the foreground short tower (always on top, fully readable).
       const sbw = 96, sbh = 46;
-      adBillboard(shortX + Math.round((shortW - sbw) / 2), G() - shortH + 22, sbw, sbh, '118,255,3', AD_ROBOT, tile * 2);
+      adBillboard(shortX + Math.round((shortW - sbw) / 2), G() - shortH + 22, sbw, sbh, '118,255,3', AD_ROBOT, tile * 3 + 1);
   }); } },
   // Neon perspective grid on the ground bar + a periodic scanline sweep over all.
   { speed: 0, draw() {
