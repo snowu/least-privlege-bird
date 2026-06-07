@@ -198,6 +198,7 @@ const THEMES: { [key: string]: any } = {
   penguin: {
     label: 'Penguin',
     sky: '#bfe6f2', ground: '#dfeef5',
+    surface: ['#cfeef8', '#ffffff', '#9cc6d8'],   // packed snow lip with icy highlights
     cloudFill: 'rgba(255,255,255,0.9)',
     // Ice pillars: pale cyan body with bands and a frosted cap. Same construction.
     drawPipe(x, topH, gap) {
@@ -207,6 +208,7 @@ const THEMES: { [key: string]: any } = {
   squid: {
     label: 'Squid',
     sky: '#0a3d52', ground: '#06212e',
+    surface: ['#1f6b5e', '#3fbf9e', '#0c3a30'],   // mossy seafloor lip
     cloudFill: 'none',                        // underwater — no clouds at all
     anim: true,                               // 2-frame: tentacles tighten on flap
     // Kelp / coral columns: deep teal body with a glow band. Same construction (capH 26).
@@ -217,6 +219,7 @@ const THEMES: { [key: string]: any } = {
   rocket: {
     label: 'Rocket',
     sky: '#05071a', ground: '#1a1a2e',
+    surface: ['#5a5a7a', '#8a8ab0', '#2e2e44'],   // grey lunar/asteroid regolith lip
     cloudFill: null, // stars instead
     // Metal station columns with cyan rivets.
     drawPipe(x, topH, gap) {
@@ -251,6 +254,7 @@ const THEMES: { [key: string]: any } = {
   dragon: {
     label: 'Dragon',
     sky: '#1a0533', ground: '#4a4453',
+    surface: ['#5a4a6a', '#7a6a8e', '#332a40'],   // cracked dark-stone lip
     cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
     anim: true,            // 2-frame: wings beat down on flap (round bakes fire into frame 2)
     // Data-driven effect layer (render-only). The flame is its OWN transparent asset
@@ -282,6 +286,7 @@ const THEMES: { [key: string]: any } = {
   airplane: {
     label: 'Airplane',
     sky: '#aebfd0', ground: '#3a4150',   // overcast server-room haze
+    surface: ['#4a5263', '#6b7488', '#262b36'],   // wet asphalt rooftop lip
     cloudFill: 'rgba(255,255,255,0.7)',
     // Data-center server-rack towers: dark steel columns with rack-unit slots,
     // rows of status LEDs, and a vented cap. (Not buildings — racks.)
@@ -319,6 +324,7 @@ const THEMES: { [key: string]: any } = {
   robot: {
     label: 'Robot',
     sky: '#0d1f2d', ground: '#1c2a3a',
+    surface: ['#1f3a4a', '#00e5ff', '#0c2230'],   // neon-lit metal grating lip
     cloudFill: null, // square data-packet clouds
     anim: true,      // 2-frame: bendy pincer arm pumps up/down on flap
     // Effect layer: on a random flap cadence, fire an energy BOLT that LEAVES the pincer
@@ -352,6 +358,7 @@ const THEMES: { [key: string]: any } = {
   horse: {
     label: 'Horse',
     sky: '#f3c98b', ground: '#c08a4e',   // dusty desert daylight + sandy trail
+    surface: ['#d9a866', '#e8c488', '#a8703a'],   // sandy trail lip
     cloudFill: 'rgba(255,250,235,0.85)',
     anim: true,           // 2-frame: gallop extended ↔ gathered (legs tuck under)
     // Programmatic mane + tail streamers that ripple in the wind every frame (not just
@@ -1899,17 +1906,19 @@ function drawBackground() {
   // horizontal scroll for that layer's tile width, handled by tileMotif.
   if (t.bgLayers) for (const layer of t.bgLayers) layer.draw(bgScroll * layer.speed);
 
-  // Ground / HUD bar — pixel grass lip on top of a dirt bar.
+  // Ground / HUD bar — a pixel "surface" lip on top of a dirt/base bar. The lip palette
+  // is per-theme (t.surface = [lip, highlight, seam]) so each avatar gets a fitting top
+  // edge (grass, sand, snow, seafloor, metal grating, …); falls back to green grass.
   const px = 6; // pixel block size for ground detail
   ctx.fillStyle = t.ground;
   ctx.fillRect(0, C.GROUND, C.W, C.HUD);
-  // grass strip
-  ctx.fillStyle = '#5aa02c';
+  const [lip, lipHi, seam] = t.surface || ['#5aa02c', '#7ec850', '#3a6e1a'];
+  ctx.fillStyle = lip;
   ctx.fillRect(0, C.GROUND, C.W, px * 2);
-  ctx.fillStyle = '#7ec850';
+  ctx.fillStyle = lipHi;
   for (let gx = 0; gx < C.W; gx += px * 2) ctx.fillRect(gx, C.GROUND, px, px); // dither highlights
-  ctx.fillStyle = '#3a6e1a';
-  ctx.fillRect(0, C.GROUND + px * 2, C.W, px); // shadow seam under grass
+  ctx.fillStyle = seam;
+  ctx.fillRect(0, C.GROUND + px * 2, C.W, px); // shadow seam under the lip
   // Dark wash over the HUD bar (below the grass lip) so the white HUD readout stays
   // legible regardless of the avatar's ground color (e.g. penguin's near-white ice).
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
