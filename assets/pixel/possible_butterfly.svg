@@ -1,0 +1,71 @@
+<!-- viewBox = squared content bbox so the body fills the same footprint as every
+     other model → the fixed circular hitbox stays visually fair. -->
+<!-- RED dragon frame 1: facing RIGHT. BIG angular bat-wings raised high above the body
+     (clearly different silhouette from frame 2, which sweeps them down). Head front-
+     right, body + arrow tail trailing left. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- LEFT wing: tall triangular membrane raised high, notched outer edge -->
+  <g fill="#b71c1c">
+    <rect x="6" y="1" width="2" height="5"/>
+    <rect x="4" y="2" width="2" height="4"/>
+    <rect x="2" y="4" width="2" height="2"/>
+  </g>
+  <!-- RIGHT wing: same, mirrored toward the head side -->
+  <g fill="#b71c1c">
+    <rect x="9" y="1" width="2" height="4"/>
+    <rect x="11" y="2" width="2" height="3"/>
+    <rect x="13" y="3" width="1" height="2"/>
+  </g>
+  <!-- darker membrane struts (bones) so wings aren't flat -->
+  <g fill="#7f0000">
+    <rect x="6" y="1" width="1" height="5"/>
+    <rect x="4" y="2" width="1" height="4"/>
+    <rect x="10" y="1" width="1" height="4"/>
+    <rect x="12" y="2" width="1" height="3"/>
+  </g>
+  <!-- bright top edge -->
+  <g fill="#ff7676">
+    <rect x="6" y="1" width="2" height="1"/>
+    <rect x="9" y="1" width="2" height="1"/>
+  </g>
+  <!-- horns -->
+  <g fill="#ffd54f">
+    <rect x="11" y="6" width="1" height="1"/>
+    <rect x="13" y="6" width="1" height="1"/>
+  </g>
+  <!-- arrow tail trailing far left -->
+  <g fill="#d32f2f">
+    <rect x="2" y="11" width="3" height="1"/>
+    <rect x="4" y="10" width="2" height="1"/>
+  </g>
+  <rect x="1" y="11" width="1" height="1" fill="#ffd54f"/>
+  <rect x="2" y="10" width="1" height="1" fill="#ffd54f"/>
+  <rect x="2" y="12" width="1" height="1" fill="#ffd54f"/>
+  <!-- chunky body, left→right rising to the head -->
+  <g fill="#d32f2f">
+    <rect x="4" y="8" width="4" height="3"/>
+    <rect x="7" y="7" width="4" height="3"/>
+    <rect x="10" y="6" width="4" height="3"/>
+  </g>
+  <!-- belly highlight -->
+  <g fill="#ff7043">
+    <rect x="5" y="10" width="3" height="1"/>
+    <rect x="8" y="9" width="3" height="1"/>
+  </g>
+  <!-- snout (front-right) + nostril -->
+  <rect x="13" y="8" width="1" height="2" fill="#b71c1c"/>
+  <rect x="13" y="9" width="1" height="1" fill="#7f0000"/>
+  <!-- fierce eye -->
+  <rect x="11" y="7" width="1" height="1" fill="#fff"/>
+  <rect x="12" y="7" width="1" height="1" fill="#ffc400"/>
+  <!-- dorsal spikes -->
+  <g fill="#ffd54f">
+    <rect x="7" y="6" width="1" height="1"/>
+    <rect x="10" y="5" width="1" height="1"/>
+  </g>
+  <!-- legs tucked under -->
+  <g fill="#b71c1c">
+    <rect x="6" y="11" width="1" height="2"/>
+    <rect x="9" y="10" width="1" height="2"/>
+  </g>
+</svg>

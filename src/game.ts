@@ -251,7 +251,7 @@ const THEMES: { [key: string]: any } = {
     label: 'Dragon',
     sky: '#1a0533', ground: '#4a4453',
     cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
-    anim: true,            // 2-frame: wings beat down on flap
+    anim: true,            // 2-frame: wings beat down on flap + fire breath (baked into frame 2)
     // Stone brick towers with mortar lines and moss-tinted caps (a dragon's ruined keep).
     drawPipe(x, topH, gap) {
       framedPipe(x, topH, gap, {
