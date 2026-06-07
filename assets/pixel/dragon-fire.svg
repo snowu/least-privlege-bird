@@ -1,64 +1,74 @@
-<!-- Dragon FIRE frame: wings-down pose + a chunky, blocky (deliberately pixelated, no
-     gradients) flame from the open mouth. Triggered only every ~5-10 flaps and held a
-     bit longer than a normal flap frame, so it reads as a rare, weighty fire-breath
-     rather than a flash on every beat. Body shifted 1px left of frame 2 to leave room
-     for the flame inside the viewBox (also reads as a forward fire-lunge). -->
+<!-- Dragon FIRE frame: wings-down pose + a chunky, blocky (no-gradient) flame blasting
+     FORWARD (rightward, the direction of travel) from the snout, fixed at face level so
+     it tracks the head as the dragon moves. Triggered only on a random ~5-10 flap
+     cadence and held ~1s. The whole dragon is shifted left of frame 2 to leave room for
+     a long, gently-flaring flame cone inside the viewBox. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
-  <!-- tail -->
+  <!-- tail (far left, compact) -->
   <g fill="#e53935">
-    <rect x="5" y="9" width="2" height="1"/>
-    <rect x="3" y="10" width="2" height="1"/>
-    <rect x="2" y="11" width="2" height="1"/>
-    <rect x="1" y="10" width="1" height="2"/>
+    <rect x="2" y="9" width="2" height="1"/>
+    <rect x="1" y="10" width="2" height="1"/>
   </g>
   <rect x="1" y="9" width="1" height="1" fill="#ffd54f"/>
   <!-- BIG wing swept down -->
   <g fill="#c2185b">
-    <rect x="6" y="9" width="2" height="2"/>
-    <rect x="6" y="11" width="2" height="2"/>
-    <rect x="5" y="13" width="2" height="1"/>
-    <rect x="8" y="10" width="2" height="3"/>
-    <rect x="10" y="10" width="2" height="4"/>
+    <rect x="2" y="9" width="2" height="2"/>
+    <rect x="2" y="11" width="2" height="2"/>
+    <rect x="1" y="13" width="2" height="1"/>
+    <rect x="4" y="10" width="2" height="3"/>
+    <rect x="6" y="10" width="2" height="4"/>
   </g>
-  <g fill="#7a0f3a"><rect x="6" y="9" width="1" height="5"/><rect x="9" y="10" width="1" height="3"/><rect x="11" y="10" width="1" height="4"/></g>
-  <g fill="#ff7043"><rect x="5" y="13" width="1" height="1"/><rect x="10" y="13" width="1" height="1"/></g>
+  <g fill="#7a0f3a"><rect x="2" y="9" width="1" height="5"/><rect x="5" y="10" width="1" height="3"/><rect x="7" y="10" width="1" height="4"/></g>
+  <g fill="#ff7043"><rect x="1" y="13" width="1" height="1"/><rect x="6" y="13" width="1" height="1"/></g>
   <!-- body -->
   <g fill="#e53935">
-    <rect x="5" y="8" width="2" height="2"/>
-    <rect x="7" y="7" width="3" height="2"/>
-    <rect x="9" y="6" width="3" height="2"/>
+    <rect x="1" y="8" width="2" height="2"/>
+    <rect x="3" y="7" width="3" height="2"/>
+    <rect x="5" y="6" width="3" height="2"/>
   </g>
-  <g fill="#fb8c00"><rect x="6" y="9" width="2" height="1"/><rect x="8" y="8" width="3" height="1"/></g>
-  <g fill="#c2185b"><rect x="8" y="6" width="1" height="1"/><rect x="10" y="5" width="1" height="1"/></g>
+  <g fill="#fb8c00"><rect x="2" y="9" width="2" height="1"/><rect x="4" y="8" width="3" height="1"/></g>
+  <g fill="#c2185b"><rect x="4" y="6" width="1" height="1"/><rect x="6" y="5" width="1" height="1"/></g>
   <!-- back leg -->
-  <g fill="#c2185b"><rect x="4" y="9" width="2" height="2"/><rect x="3" y="10" width="3" height="1"/></g>
-  <rect x="3" y="11" width="1" height="1" fill="#7a0f3a"/>
-  <rect x="5" y="11" width="1" height="1" fill="#7a0f3a"/>
+  <g fill="#c2185b"><rect x="1" y="9" width="2" height="2"/></g>
+  <rect x="1" y="11" width="1" height="1" fill="#7a0f3a"/>
   <!-- front leg -->
-  <g fill="#c2185b"><rect x="10" y="8" width="1" height="1"/></g>
+  <g fill="#c2185b"><rect x="6" y="8" width="1" height="1"/></g>
   <!-- horns -->
-  <g fill="#ffd54f"><rect x="10" y="4" width="1" height="1"/><rect x="12" y="4" width="1" height="1"/></g>
+  <g fill="#ffd54f"><rect x="6" y="4" width="1" height="1"/><rect x="8" y="4" width="1" height="1"/></g>
   <!-- head, mouth OPEN -->
-  <g fill="#e53935"><rect x="10" y="5" width="3" height="3"/></g>
-  <rect x="12" y="7" width="1" height="1" fill="#b71c1c"/>
+  <g fill="#e53935"><rect x="6" y="5" width="3" height="3"/></g>
+  <rect x="8" y="7" width="1" height="1" fill="#b71c1c"/>
   <!-- eye -->
-  <rect x="11" y="5" width="1" height="1" fill="#fff"/>
-  <rect x="12" y="5" width="1" height="1" fill="#1a1a1a"/>
-  <!-- CHUNKY PIXEL FLAME: big square blocks, hard colour steps (red→orange→yellow),
-       no anti-aliasing. Spans the mouth out to the right edge + a detached ember. -->
-  <!-- outer red flame body -->
+  <rect x="7" y="5" width="1" height="1" fill="#fff"/>
+  <rect x="8" y="5" width="1" height="1" fill="#1a1a1a"/>
+  <!-- CHUNKY FORWARD FLAME CONE: narrow at the snout, flaring GENTLY wider over 6
+       columns to the right edge. Soft slope (1px → 9px tall over x9..14). Layered
+       red (outer) → orange (mid) → yellow (hot core near the mouth). -->
+  <!-- outer red cone -->
   <g fill="#e53935">
-    <rect x="13" y="4" width="2" height="6"/>
-    <rect x="12" y="5" width="1" height="3"/>
+    <rect x="9"  y="6" width="1" height="2"/>
+    <rect x="10" y="6" width="1" height="3"/>
+    <rect x="11" y="5" width="1" height="4"/>
+    <rect x="12" y="4" width="1" height="6"/>
+    <rect x="13" y="4" width="1" height="7"/>
+    <rect x="14" y="3" width="1" height="9"/>
   </g>
-  <!-- orange mid layer -->
+  <!-- orange mid cone -->
   <g fill="#fb8c00">
-    <rect x="13" y="5" width="2" height="4"/>
-    <rect x="12" y="6" width="1" height="1"/>
+    <rect x="9"  y="6" width="1" height="1"/>
+    <rect x="10" y="6" width="1" height="2"/>
+    <rect x="11" y="6" width="1" height="2"/>
+    <rect x="12" y="5" width="1" height="4"/>
+    <rect x="13" y="5" width="1" height="5"/>
+    <rect x="14" y="4" width="1" height="7"/>
   </g>
   <!-- yellow hot core -->
   <g fill="#ffd54f">
-    <rect x="13" y="6" width="1" height="2"/>
-    <rect x="14" y="6" width="1" height="1"/>
+    <rect x="9"  y="6" width="1" height="1"/>
+    <rect x="10" y="6" width="1" height="1"/>
+    <rect x="11" y="6" width="1" height="1"/>
+    <rect x="12" y="6" width="1" height="2"/>
+    <rect x="13" y="6" width="1" height="3"/>
+    <rect x="14" y="6" width="1" height="3"/>
   </g>
 </svg>

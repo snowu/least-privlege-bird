@@ -1449,11 +1449,11 @@ let idleAnimId = 0;
 // Deliberately NOT tied to the sim tick — purely cosmetic, never feeds replay.
 let lastFlapAt = -1e9;
 const FLAP_FRAME_MS = 180; // how long frame 2 (the "push") shows after a flap
-const FIRE_FRAME_MS = 420; // fire-breath frame lingers longer than a normal flap beat
+const FIRE_FRAME_MS = 1000; // fire-breath frame held a constant 1s (longer than a flap beat)
 // Fire-breath cadence (render-only): count flaps, and every random 5-10 flaps the next
 // flap shows the fire frame instead of the plain push frame.
 let flapsSinceFire = 0;
-let nextFireAt = 1; // DEBUG: fire every flap to verify visibility; restore to 5..10
+let nextFireAt = 5 + Math.floor(Math.random() * 6); // 5..10
 let fireFlapAt = -1e9;                               // timestamp of the last fire flap
 let countdownStart;
 let acc, lastFrameTime;              // fixed-timestep bookkeeping (render side)
