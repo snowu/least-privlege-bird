@@ -1,8 +1,5 @@
-<!-- viewBox = squared content bbox so the body fills the same footprint as every other
-     model. Robot frame 1 (arm RAISED). Bender (Futurama) inspired, side-profile facing
-     RIGHT: segmented grey antenna, a clear glass eye-DOME with two round eyes, a wide
-     curved smiling grille, a cylindrical chrome torso, two leg-poles with feet, and a
-     bendy arm reaching forward-up to a 2-prong pincer claw. -->
+<!-- Robot frame 2 (arm LOWERED). Same Bender-inspired side-profile body as robot.svg;
+     only the bendy arm + pincer swing DOWN (the flap down-beat). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
   <!-- segmented antenna -->
   <rect x="7" y="1" width="1" height="2" fill="#9aa7b0"/>
@@ -13,7 +10,7 @@
   <rect x="4" y="3" width="7" height="1" fill="#cfd8dc"/>
   <rect x="4" y="3" width="1" height="6" fill="#b0bec5"/>
   <rect x="10" y="3" width="1" height="6" fill="#6d7b85"/>
-  <!-- glass eye dome (Bender's visor) with two round eyes -->
+  <!-- glass eye dome with two round eyes -->
   <g fill="#263238"><rect x="5" y="4" width="6" height="2"/></g>
   <rect x="7" y="4" width="1" height="1" fill="#fff"/>
   <rect x="9" y="4" width="1" height="1" fill="#fff"/>
@@ -31,23 +28,22 @@
   <g fill="#546e7a"><rect x="5" y="10" width="6" height="3"/></g>
   <rect x="5" y="10" width="1" height="3" fill="#6d7b85"/>
   <rect x="10" y="10" width="1" height="3" fill="#455a64"/>
-  <!-- door/chest seam + lights -->
   <rect x="7" y="10" width="1" height="3" fill="#455a64"/>
   <rect x="6" y="11" width="1" height="1" fill="#ff9800"/>
   <rect x="8" y="11" width="1" height="1" fill="#76ff03"/>
   <!-- leg poles + feet -->
   <g fill="#607d8b"><rect x="6" y="13" width="1" height="1"/><rect x="9" y="13" width="1" height="1"/></g>
   <g fill="#37474f"><rect x="5" y="14" width="2" height="1"/><rect x="9" y="14" width="2" height="1"/></g>
-  <!-- bendy arm RAISED: shoulder up-forward to the pincer -->
+  <!-- bendy arm LOWERED: shoulder down-forward to the pincer -->
   <g fill="#607d8b">
     <rect x="11" y="10" width="2" height="1"/>
-    <rect x="12" y="8" width="1" height="2"/>
-    <rect x="12" y="7" width="2" height="1"/>
+    <rect x="12" y="11" width="1" height="2"/>
+    <rect x="12" y="12" width="2" height="1"/>
   </g>
   <!-- 2-prong PINCER claw, open, at the arm tip -->
   <g fill="#90a4ae">
-    <rect x="14" y="5" width="1" height="2"/>
-    <rect x="14" y="7" width="1" height="2"/>
+    <rect x="14" y="12" width="1" height="2"/>
+    <rect x="14" y="13" width="1" height="2"/>
   </g>
-  <rect x="13" y="6" width="1" height="2" fill="#455a64"/>
+  <rect x="13" y="13" width="1" height="2" fill="#455a64"/>
 </svg>

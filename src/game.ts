@@ -319,6 +319,18 @@ const THEMES: { [key: string]: any } = {
     label: 'Robot',
     sky: '#0d1f2d', ground: '#1c2a3a',
     cloudFill: null, // square data-packet clouds
+    anim: true,      // 2-frame: bendy pincer arm pumps up/down on flap
+    // Effect layer: on a random flap cadence, fire an energy BOLT that LEAVES the pincer
+    // and travels right (kind 'bolt' → a moving projectile drawn in drawPlayer) until it
+    // collides with a pipe or the screen edge, where it pops. Same trigger as the dragon's
+    // fire. Render-only — purely cosmetic, never feeds the sim/replay.
+    fx: {
+      kind: 'bolt', styles: ['pixel', 'round'],
+      trigger: 'flapRandom', everyMin: 5, everyMax: 10,
+      speed: 1400,                                   // px/sec the bolt travels
+      anchorX: 0.5, anchorY: -0.18,                  // pincer tip (× sprite size, from centre)
+      color: '#00e5ff', radius: 6,
+    },
     // Steel girders with yellow hazard-striped caps.
     drawPipe(x, topH, gap) {
       framedPipe(x, topH, gap, {
@@ -1274,9 +1286,10 @@ function loadSprites() {
     // Render-only: never read by physics/replay, so determinism is unaffected.
     // Themes without it just keep using frame 1 (automatic single-frame fallback).
     theme.img2 = theme.anim ? makeImg(`assets/${gfxStyle}/${key}-2.svg`) : null;
-    // Optional data-driven effect overlay (theme.fx): a transparent FX sprite drawn
-    // beside the avatar in drawPlayer, gated to the styles in fx.styles. Render-only.
-    theme.fxImg = (theme.fx && theme.fx.styles.includes(gfxStyle))
+    // Optional data-driven effect overlay (theme.fx): gated to the styles in fx.styles.
+    // Sprite effects (fx.sprite) load a transparent FX image; programmatic effects
+    // (fx.kind, e.g. 'beam') need no asset. Render-only.
+    theme.fxImg = (theme.fx && theme.fx.sprite && theme.fx.styles.includes(gfxStyle))
       ? makeImg(`assets/${gfxStyle}/fx/${theme.fx.sprite}.svg`) : null;
   }
   applyStyle();
@@ -1463,6 +1476,9 @@ const FLAP_FRAME_MS = 180; // how long frame 2 (the "push") shows after a flap
 let flapsSinceFx = 0;
 let nextFxAt = 1;        // (re)seeded from the active theme's fx when it first fires
 let fxFiredAt = -1e9;    // timestamp the current effect started
+// For projectile effects (kind 'bolt'): the spawn point captured at fire time, plus the
+// resolved impact x (where it pops). The bird keeps moving, so these are frozen on fire.
+let boltSpawnX = 0, boltSpawnY = 0, boltActive = false;
 let countdownStart;
 let acc, lastFrameTime;              // fixed-timestep bookkeeping (render side)
 let seed, flapTicks;                 // replay inputs (captured for submission)
@@ -1732,6 +1748,31 @@ function drawCountdown(n) {
   ctx.textBaseline = 'alphabetic';
 }
 
+// The active theme's fx, but only if it applies to the current gfx style (and, for
+// sprite effects, only once its image exists). Used by both the flap trigger and render.
+function fxActiveForStyle(theme) {
+  const fx = theme.fx;
+  if (!fx || !fx.styles.includes(gfxStyle)) return null;
+  if (fx.sprite && !theme.fxImg) return null;
+  return fx;
+}
+
+// The x where a rightward projectile at height `y`, starting at `x0`, first meets a
+// pipe's solid part (top column or bottom column, not the gap) — else the screen edge.
+// Mirrors framedPipe geometry: a pipe occupies [p.x, p.x+PIPE_W] and is solid outside
+// the gap (y < p.topH or y > p.topH+p.gap). Render-only; reads sim state, never mutates.
+function beamEndX(x0, y) {
+  let end = C.W;
+  for (const p of gs.pipes) {
+    const left = p.x;
+    if (left + C.PIPE_W <= x0 || left >= end) continue;     // behind us or beyond a closer hit
+    const inGap = y > p.topH && y < p.topH + p.gap;
+    if (inGap) continue;                                    // bolt passes through the gap
+    if (left >= x0) end = Math.min(end, left);              // stops at the pipe's near face
+  }
+  return end;
+}
+
 function drawPlayer() {
   // Render LARGER than the hitbox so the sprite looks meaty. The collision radius
   // (PLAYER_SIZE/2 - 4) is unchanged and stays mirrored in sim.ts — this is a
@@ -1747,14 +1788,68 @@ function drawPlayer() {
   ctx.translate(C.PLAYER_X, gs.player.y);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, gs.player.vy * 0.05)));
   ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
-  // Effect overlay (theme.fx): a transparent FX sprite drawn relative to the avatar for
-  // fx.durationMs after it fired. Inside the same translate/rotate so it tracks + tilts
-  // with the body; drawn past the sprite box so it isn't clipped. Render-only.
-  const fx = currentTheme.fx;
-  if (currentTheme.fxImg && fx && (now - fxFiredAt) < fx.durationMs) {
+  // Sprite effect (theme.fx with fx.sprite): a transparent FX image drawn relative to the
+  // avatar for fx.durationMs after it fired. Inside the same translate/rotate so it tracks
+  // + tilts with the body; drawn past the sprite box so it isn't clipped. Render-only.
+  const fx = fxActiveForStyle(currentTheme);
+  const fxOn = fx && (now - fxFiredAt) < fx.durationMs;
+  if (fx && fx.sprite && fxOn) {
     const fw = s * fx.scale, fh = fw * 0.5;          // fire.svg viewBox aspect = 0.5
     ctx.drawImage(currentTheme.fxImg, s * fx.anchorX, s * fx.anchorY - fh / 2, fw, fh);
   }
+  ctx.restore();
+
+  // Bolt effect (theme.fx kind 'bolt'): a projectile that LEFT the pincer at fire time
+  // and travels right at fx.speed until it reaches its impact point (next pipe face or
+  // screen edge), then pops. Drawn in SCREEN space since it crosses the canvas. The
+  // spawn point was frozen in flap(); we recompute the impact each frame against live
+  // pipe positions (they scroll left, so the bolt closes on them faster). Render-only.
+  if (fx && fx.kind === 'bolt' && boltActive) {
+    const travelled = (now - fxFiredAt) / 1000 * fx.speed;
+    const headX = boltSpawnX + travelled;
+    const impactX = beamEndX(boltSpawnX, boltSpawnY);  // where a clear path ends
+    if (headX >= impactX) {
+      // reached the wall/edge → pop and retire
+      drawBoltImpact(impactX, boltSpawnY, fx);
+      boltActive = false;
+    } else {
+      drawBolt(headX, boltSpawnY, fx);
+    }
+  }
+}
+
+// A small glowing energy bolt with a short motion-trail, travelling right.
+function drawBolt(x, y, fx) {
+  const r = fx.radius, tail = r * 3.2;
+  ctx.save();
+  ctx.lineCap = 'round';
+  // trailing streak
+  ctx.strokeStyle = fx.color; ctx.globalAlpha = 0.4; ctx.lineWidth = r * 1.2;
+  ctx.beginPath(); ctx.moveTo(x - tail, y); ctx.lineTo(x, y); ctx.stroke();
+  // glow
+  ctx.globalAlpha = 0.35; ctx.fillStyle = fx.color;
+  ctx.beginPath(); ctx.arc(x, y, r * 1.8, 0, Math.PI * 2); ctx.fill();
+  // core + hot white centre
+  ctx.globalAlpha = 1; ctx.fillStyle = fx.color;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(x, y, r * 0.45, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+// A quick burst where the bolt collides.
+function drawBoltImpact(x, y, fx) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = fx.color; ctx.lineCap = 'round'; ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
+  const spokes = 6, len = fx.radius * 2.2;
+  for (let i = 0; i < spokes; i++) {
+    const a = (i / spokes) * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.stroke();
+  }
+  ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(0, 0, fx.radius * 0.7, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
@@ -1835,6 +1930,8 @@ function loop(now) {
 async function startGame(playerName) {
   stopIdle();
   gameActive = true;
+  boltActive = false;            // clear any in-flight projectile from a prior run
+  flapsSinceFx = 0;
   showScreen(null);
   // Fetch the authoritative best from Supabase once, before the loop starts.
   // null ⇒ offline/unknown → HUD omits the High readout.
@@ -1915,11 +2012,19 @@ function flap() {
   // Effect cadence: for a theme.fx using trigger 'flapRandom', every random
   // everyMin..everyMax flaps mark this flap as the effect start so the renderer overlays
   // the FX sprite for fx.durationMs. Render-only, never feeds replay.
-  const fx = currentTheme.fxImg && currentTheme.fx;
+  const fx = fxActiveForStyle(currentTheme);
   if (fx && fx.trigger === 'flapRandom' && ++flapsSinceFx >= nextFxAt) {
     flapsSinceFx = 0;
     nextFxAt = fx.everyMin + Math.floor(Math.random() * (fx.everyMax - fx.everyMin + 1));
     fxFiredAt = lastFlapAt;
+    // Projectile: freeze the muzzle point at fire time so the bolt flies from where the
+    // pincer was, independent of the bird's continued motion.
+    if (fx.kind === 'bolt' && gameActive) {
+      const s = C.PLAYER_SIZE * C.SPRITE_SCALE;
+      boltSpawnX = C.PLAYER_X + s * fx.anchorX;
+      boltSpawnY = gs.player.y + s * fx.anchorY;
+      boltActive = true;
+    }
   }
   const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   AudioFX.flap(key);
