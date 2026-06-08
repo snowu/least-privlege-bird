@@ -42,7 +42,7 @@
     }
 
     #overlay {
-      position: absolute; top: 0; left: 0;
+      position: fixed; inset: 0; z-index: 10;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 12px;
       color: #fff;
@@ -260,6 +260,7 @@
   </div>
   <div id="game-frame">
   <canvas id="canvas"></canvas>
+  </div><!-- #game-frame -->
 
   <div id="overlay">
 
@@ -401,7 +402,6 @@
     </div>
 
   </div>
-  </div><!-- #game-frame -->
 
   <!-- ══ STYLE TOGGLE (fixed bottom-left corner) ══ -->
   <label id="gfx-toggle" style="
