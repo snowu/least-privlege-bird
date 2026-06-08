@@ -55,19 +55,38 @@ document.addEventListener('fullscreenchange', fitToViewport);
 
 // Fullscreen toggle
 const btnFullscreen = document.getElementById('btn-fullscreen') as HTMLButtonElement;
+const mobileHint    = document.getElementById('mobile-hint')    as HTMLButtonElement;
+
+function enterFS() {
+  document.documentElement.requestFullscreen()
+    .then(() => screen.orientation?.lock?.('landscape').catch(() => {}))
+    .catch(() => {});
+}
+function exitFS() {
+  screen.orientation?.unlock?.();
+  document.exitFullscreen();
+}
+
+function updateFsUI() {
+  const isMobile    = window.innerWidth < 900 || window.innerHeight < 900;
+  const isLandscape = window.innerWidth > window.innerHeight;
+  // Portrait on mobile: show the hint banner, hide the corner exit button.
+  // Landscape on mobile: hide the hint, show the small exit button.
+  // Desktop: hide both.
+  mobileHint.style.display    = isMobile && !isLandscape ? 'block' : 'none';
+  btnFullscreen.style.display = isMobile && isLandscape  ? 'block' : 'none';
+}
+updateFsUI();
+window.addEventListener('resize', updateFsUI);
+window.addEventListener('orientationchange', updateFsUI);
+document.addEventListener('fullscreenchange', updateFsUI);
+
 if (!document.documentElement.requestFullscreen) {
-  btnFullscreen.style.display = 'none'; // API not available (e.g. iOS Safari)
+  btnFullscreen.style.display = 'none';
+  mobileHint.style.display    = 'none';
 } else {
-  btnFullscreen.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen();
-    }
-  });
-  document.addEventListener('fullscreenchange', () => {
-    btnFullscreen.textContent = document.fullscreenElement ? '⊡' : '⛶';
-  });
+  mobileHint.addEventListener('click', enterFS);
+  btnFullscreen.addEventListener('click', exitFS);
 }
 
 // ─── AUDIO (synthesized, no files) ────────────────────────────────────────────
