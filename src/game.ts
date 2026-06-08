@@ -23,9 +23,10 @@ canvas.style.height = C.H + 'px';
 // Crisp sprite scaling: our 16px pixel-art SVGs are drawn up to 40px — keep hard edges.
 ctx.imageSmoothingEnabled = false;
 
-// Overlay is position:fixed/inset:0 — it fills the full viewport independently
-// of the canvas, so UI screens are always readable on any screen size.
+// Size overlay to match canvas
 const overlay = document.getElementById('overlay');
+overlay.style.width  = C.W + 'px';
+overlay.style.height = C.H + 'px';
 
 // ─── MOBILE SCALING ───────────────────────────────────────────────────────────
 // Scale the #game-frame wrapper via CSS transform so the canvas always fits the
