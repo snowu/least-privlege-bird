@@ -50,7 +50,10 @@ function fitToViewport() {
 }
 fitToViewport();
 window.addEventListener('resize', fitToViewport);
-window.addEventListener('orientationchange', fitToViewport);
+window.addEventListener('orientationchange', () => {
+  fitToViewport();
+  setTimeout(fitToViewport, 150);
+});
 document.addEventListener('fullscreenchange', fitToViewport);
 
 // Fullscreen toggle
@@ -96,7 +99,10 @@ function updateFsUI() {
 }
 updateFsUI();
 window.addEventListener('resize', updateFsUI);
-window.addEventListener('orientationchange', updateFsUI);
+window.addEventListener('orientationchange', () => {
+  updateFsUI();
+  setTimeout(updateFsUI, 150);
+});
 document.addEventListener('fullscreenchange', updateFsUI);
 
 if (isIOS || !document.documentElement.requestFullscreen) {
@@ -136,7 +142,10 @@ function updateCowPosition() {
 }
 updateCowPosition();
 window.addEventListener('resize', updateCowPosition);
-window.addEventListener('orientationchange', updateCowPosition);
+window.addEventListener('orientationchange', () => {
+  updateCowPosition();
+  setTimeout(updateCowPosition, 150);
+});
 
 if (isMobileViewport()) {
   devDisclaimer.style.display = 'none';
