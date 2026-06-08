@@ -310,6 +310,40 @@ const THEMES: { [key: string]: any } = {
       });
     },
   },
+  // WIP / parked: a straight copy of the dragon level (storm, lightning, ruined
+  // keep) earmarked for a future wizard avatar — kept `hidden` (no picker entry,
+  // no sprite load attempts) so this work survives while `dragon` itself gets
+  // redone as a fire/lava volcano stage. Bring it back by giving it real sprite
+  // assets (assets/{pixel,round}/wizard{,-2}.svg) and dropping `hidden`.
+  wizard: {
+    label: 'Wizard',
+    hidden: true,
+    sky: '#1a0533', ground: '#4a4453',
+    surface: ['#5a4a6a', '#7a6a8e', '#332a40'],   // cracked dark-stone lip
+    cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
+    anim: true,
+    fx: {
+      sprite: 'fire', styles: ['pixel'],
+      trigger: 'flapRandom', everyMin: 5, everyMax: 10,
+      durationMs: 1000,
+      anchorX: 0.30, anchorY: -0.05,
+      scale: 1.4,
+    },
+    // Stone brick towers with mortar lines and moss-tinted caps (a ruined keep).
+    drawPipe(x, topH, gap) {
+      framedPipe(x, topH, gap, {
+        bodyColor: '#6d6875', capColor: '#6d6875', capH: 24, capW: C.PIPE_W + 10,
+        decorate({ x, topH, botY, capX, capW, capH }) {
+          ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+          for (let y = 8; y < topH - capH; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
+          for (let y = botY + capH + 8; y < C.GROUND; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
+          ctx.fillStyle = 'rgba(100,200,80,0.25)';
+          ctx.fillRect(capX, topH - capH, capW, capH);
+          ctx.fillRect(capX, botY, capW, capH);
+        },
+      });
+    },
+  },
   airplane: {
     label: 'Airplane',
     sky: '#aebfd0', ground: '#3a4150',   // overcast server-room haze
@@ -1019,6 +1053,68 @@ THEMES.dragon.bgLayers = [
       for (let t = 0; t < 4; t++) pxRect(bx - 6 + t * 40, by - 100, 12, 10, d); // tower caps
       pxRect(bx + 50, by - 40, 20, 40, d);                        // gate
       ctx.fillStyle = win; ctx.fillRect(bx + 18, by - 56, 8, 8); ctx.fillRect(bx + 94, by - 56, 8, 8); // lit windows
+  }); } },
+];
+
+// Straight copy of the dragon level's scenery — parked here for the (hidden,
+// asset-less) wizard theme so this storm/keep work survives the dragon redesign.
+THEMES.wizard.bgLayers = [
+  { speed: 0, draw() {
+      const t = nowSec();
+      const f = dragonFlash();
+      const drift = (t * 12) % (C.W + 300);
+      const base = `rgba(${44 + f * 90},${38 + f * 80},${64 + f * 90},`;
+      for (let k = 0; k < 6; k++) {
+        const cx = ((k * 280 - drift + C.W + 300) % (C.W + 300)) - 150;
+        const cy = 40 + (k % 3) * 34;
+        const w = 200 + (k % 2) * 80, h = 70 + (k % 3) * 16;
+        pixelCloud(cx, cy, w, h, base + (0.85) + ')');
+        pixelCloud(cx + 50, cy + 14, w * 0.7, h * 0.8, base + (0.7) + ')');
+      }
+  } },
+  { speed: 0, draw() {
+      const t = nowSec();
+      for (let i = 0; i < 80; i++) {
+        const spd = 120 + (i % 6) * 40;
+        const x = C.W - ((t * spd + i * 137) % (C.W + 60)) + 30;
+        const y = (i * 89 + 20) % (C.GROUND - 30) + Math.sin(t * 2 + i) * 6;
+        const len = 5 + (i % 4) * 3;
+        const a = 0.12 + (i % 5) * 0.05;
+        ctx.strokeStyle = `rgba(200,185,225,${a})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y + 1); ctx.stroke();
+      }
+  } },
+  { speed: 0, draw() {
+      const f = dragonFlash();
+      if (f <= 0) return;
+      ctx.fillStyle = `rgba(200,190,255,${0.55 * f})`;
+      ctx.fillRect(0, 0, C.W, C.GROUND);
+      if (f > 0.5) {
+        ctx.strokeStyle = `rgba(255,255,255,${f})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let bx = C.W * 0.62, by = 0;
+        ctx.moveTo(bx, by);
+        for (let s = 0; s < 6; s++) { bx += (s % 2 ? 26 : -22); by += 48; ctx.lineTo(bx, by); }
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+  } },
+  { speed: 0.12, draw(o) { tileMotif(o, 420, x => {
+      pixelPeak(x - 40, 300, 200, '#3a2a5a', '#d8cfe8');
+      pixelPeak(x + 150, 260, 160, '#4a3a6e', '#cfc4e0');
+      pixelPeak(x + 320, 220, 130, '#332551');
+  }); } },
+  { speed: 0.35, draw(o) { tileMotif(o, 520, x => {
+      const bx = x + 60, by = G(), c = '#5a5566', d = '#403c4a';
+      const f = dragonFlash();
+      const win = `rgba(255,213,79,${0.85 + 0.15 * f})`;
+      pxRect(bx, by - 70, 120, 70, c);
+      for (let t = 0; t < 4; t++) pxRect(bx - 10 + t * 40, by - 92, 20, 26, c);
+      for (let t = 0; t < 4; t++) pxRect(bx - 6 + t * 40, by - 100, 12, 10, d);
+      pxRect(bx + 50, by - 40, 20, 40, d);
+      ctx.fillStyle = win; ctx.fillRect(bx + 18, by - 56, 8, 8); ctx.fillRect(bx + 94, by - 56, 8, 8);
   }); } },
 ];
 
@@ -1803,6 +1899,7 @@ THEMES.horse.bgLayers = [
 // scaling; round art wants smooth — flip the canvas hint to match.
 function loadSprites() {
   for (const [key, theme] of Object.entries(THEMES)) {
+    if (theme.hidden) continue; // WIP themes parked without sprite assets yet — skip to avoid 404s
     theme.img = makeImg(`assets/${gfxStyle}/${key}.svg`);
     // Themes flagged `anim` get a second frame (<key>-2.svg) shown briefly on flap.
     // Render-only: never read by physics/replay, so determinism is unaffected.
@@ -2740,7 +2837,8 @@ function buildAvatarPickerInto(container) {
   // (the least-improved, blander options for now).
   const TAIL = ['bird'];
   const LEAD = ['penguin', 'robot', 'horse', 'airplane', 'dragon', 'bee'];
-  const mid = Object.keys(THEMES).filter(k => !LEAD.includes(k) && !TAIL.includes(k));
+  // `hidden` themes (WIP, no sprite assets yet) never appear in the picker.
+  const mid = Object.keys(THEMES).filter(k => !LEAD.includes(k) && !TAIL.includes(k) && !THEMES[k].hidden);
   const ordered = [...LEAD, ...mid, ...TAIL];
   ordered.forEach((key) => {
     const theme = THEMES[key];
