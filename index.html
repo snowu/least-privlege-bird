@@ -42,7 +42,7 @@
     }
 
     #overlay {
-      position: absolute; top: 0; left: 0;
+      position: fixed; inset: 0; z-index: 10;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 12px;
       color: #fff;
@@ -260,14 +260,11 @@
   </div>
   <div id="game-frame">
   <canvas id="canvas"></canvas>
+  </div><!-- #game-frame -->
 
   <div id="overlay">
 
-    <!-- ══ FORTUNE COW — anchored to the game window's bottom-right corner ══
-         Lives inside #overlay (which is sized to the canvas), so it pins to the
-         canvas corner, not the viewport. Populated by game.js from the `fortune`
-         edge function, wrapped cowsay-style with the selected avatar's ASCII.
-         Always true monospace so the art stays aligned in either art style. -->
+    <!-- ══ FORTUNE COW ══ -->
     <pre id="fortune-cow" class="hidden" aria-hidden="true"></pre>
 
     <!-- ══ MENU ══ -->
@@ -401,7 +398,6 @@
     </div>
 
   </div>
-  </div><!-- #game-frame -->
 
   <!-- ══ STYLE TOGGLE (fixed bottom-left corner) ══ -->
   <label id="gfx-toggle" style="

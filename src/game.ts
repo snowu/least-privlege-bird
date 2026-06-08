@@ -23,10 +23,7 @@ canvas.style.height = C.H + 'px';
 // Crisp sprite scaling: our 16px pixel-art SVGs are drawn up to 40px — keep hard edges.
 ctx.imageSmoothingEnabled = false;
 
-// Size overlay to match canvas
 const overlay = document.getElementById('overlay');
-overlay.style.width  = C.W + 'px';
-overlay.style.height = C.H + 'px';
 
 // ─── MOBILE SCALING ───────────────────────────────────────────────────────────
 // Scale the #game-frame wrapper via CSS transform so the canvas always fits the
@@ -47,6 +44,9 @@ function fitToViewport() {
   // sits centered in the space below the disclaimer.
   gameFrame.style.top = `calc(50% + ${reserved / 2}px)`;
   gameFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  // Partial font-size compensation: sqrt dampens the scale-down so UI text
+  // stays legible without ballooning to full 1/scale size on desktop.
+  document.documentElement.style.fontSize = `${12 / Math.pow(scale, 0.08)}px`;
 }
 fitToViewport();
 window.addEventListener('resize', fitToViewport);
