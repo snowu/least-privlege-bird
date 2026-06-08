@@ -405,6 +405,346 @@ export const Clave = (() => {
         { text: 'It is typically faster than symmetric crypto', correct: false, explain: 'Wrong. Asymmetric is slower; TLS uses it only to exchange a symmetric key.' },
       ],
     },
+    {
+      prompt: 'What primarily causes a <strong>Lambda cold start</strong>?',
+      type: 'single',
+      options: [
+        { text: 'AWS provisioning a fresh execution environment before the first invocation', correct: true,  explain: 'Correct. A cold start is the overhead of initializing a new runtime + your code.' },
+        { text: 'The function exceeding its memory limit',          correct: false, explain: 'Wrong. That triggers an out-of-memory error, not a cold start.' },
+        { text: 'DNS resolution timing out',                        correct: false, explain: 'Wrong. DNS issues cause connection errors, not cold starts.' },
+        { text: 'The deployment package exceeding 256 KB',          correct: false, explain: 'Wrong. That is a direct-upload size limit, unrelated to cold starts.' },
+      ],
+    },
+    {
+      prompt: 'In <strong>DynamoDB</strong>, what is the role of the partition key?',
+      type: 'single',
+      options: [
+        { text: 'It determines which physical partition stores the item', correct: true,  explain: 'Correct. DynamoDB hashes the partition key to decide where the item lives.' },
+        { text: 'It enforces uniqueness across the whole table',     correct: false, explain: 'Wrong. Only partition+sort key together must be unique (if a sort key exists).' },
+        { text: 'It defines the item\'s TTL',                        correct: false, explain: 'Wrong. TTL is a separate attribute you configure independently.' },
+        { text: 'It controls IAM access to the table',               correct: false, explain: 'Wrong. Access is controlled via IAM policies, not the key schema.' },
+      ],
+    },
+    {
+      prompt: 'What does putting a <strong>CloudFront</strong> distribution in front of an S3 bucket give you?',
+      type: 'multi',
+      options: [
+        { text: 'Content cached closer to users at edge locations',  correct: true,  explain: 'Yes — that is the core CDN benefit: lower latency via edge caching.' },
+        { text: 'Automatic encryption of objects at rest in S3',     correct: false, explain: 'Wrong. That is S3 server-side encryption, unrelated to CloudFront.' },
+        { text: 'Reduced direct load on the origin bucket',          correct: true,  explain: 'Yes — cached responses are served from the edge without hitting S3.' },
+        { text: 'HTTPS on a custom domain via ACM certificates',     correct: true,  explain: 'Yes — CloudFront integrates with ACM for custom-domain TLS.' },
+      ],
+    },
+    {
+      prompt: 'What makes a <strong>VPC subnet</strong> "public"?',
+      type: 'single',
+      options: [
+        { text: 'Its route table sends 0.0.0.0/0 to an Internet Gateway', correct: true,  explain: 'Correct. The route to an IGW is what makes a subnet public — nothing else.' },
+        { text: 'Instances in it get public IPs automatically',      correct: false, explain: 'Wrong. That\'s a per-instance/subnet setting, not the defining property.' },
+        { text: 'It has no Network ACL attached',                    correct: false, explain: 'Wrong. Every subnet has a NACL — the default one if none is specified.' },
+        { text: 'It lives in Availability Zone "a"',                 correct: false, explain: 'Wrong. AZ placement has nothing to do with public/private routing.' },
+      ],
+    },
+    {
+      prompt: 'What is <strong>envelope encryption</strong> (as used by AWS KMS)?',
+      type: 'single',
+      options: [
+        { text: 'Encrypting data with a data key, then encrypting that key with a master key', correct: true, explain: 'Correct. This avoids sending large payloads to KMS and limits exposure of the master key.' },
+        { text: 'Wrapping an HTTP request in an extra TLS layer',    correct: false, explain: 'Wrong. That would just be nested TLS, not envelope encryption.' },
+        { text: 'Storing encrypted data in a special "envelope" bucket', correct: false, explain: 'Wrong. "Envelope" refers to the key-wrapping technique, not a storage location.' },
+        { text: 'Encrypting only a message\'s headers, not its body', correct: false, explain: 'Wrong — it\'s the opposite: the body (data) is what the data key encrypts.' },
+      ],
+    },
+    {
+      prompt: 'A <strong>CloudWatch Alarm</strong> shows state <code>INSUFFICIENT_DATA</code>. What does that mean?',
+      type: 'single',
+      options: [
+        { text: 'It doesn\'t yet have enough data points to determine OK or ALARM', correct: true, explain: 'Correct — common right after creation, or when the metric stops reporting.' },
+        { text: 'The monitored resource was deleted',                correct: false, explain: 'Wrong. Deletion just stops new data; this is a distinct named state.' },
+        { text: 'Its threshold has been breached',                   correct: false, explain: 'Wrong. A breach moves the alarm to ALARM state.' },
+        { text: 'Its alarm action failed to execute',                correct: false, explain: 'Wrong. Action failures are reported separately from alarm state.' },
+      ],
+    },
+    {
+      prompt: 'Which <strong>Route 53</strong> routing policies route users toward the lowest-latency endpoint?',
+      type: 'multi',
+      options: [
+        { text: 'Latency-based routing',                             correct: true,  explain: 'Yes — it routes based on measured latency between users and AWS regions.' },
+        { text: 'Geolocation routing',                               correct: false, explain: 'Geolocation routes by the user\'s location, not measured latency — close, but not the same.' },
+        { text: 'Weighted routing',                                  correct: false, explain: 'Weighted routing splits traffic by configured percentages, ignoring latency.' },
+        { text: 'Geoproximity routing (with bias)',                  correct: true,  explain: 'Yes — geoproximity can shift traffic toward closer/biased resources, improving latency.' },
+      ],
+    },
+    {
+      prompt: 'An <strong>Auto Scaling Group</strong> target-tracks CPU at 50%. Average CPU climbs to 80%. What happens?',
+      type: 'single',
+      options: [
+        { text: 'It launches more instances to bring the average back toward 50%', correct: true, explain: 'Correct — target tracking adjusts capacity to keep the metric near its target.' },
+        { text: 'It terminates instances to reduce load',            correct: false, explain: 'Wrong — that would push CPU even higher, the opposite of the goal.' },
+        { text: 'It emails an admin and waits for approval',         correct: false, explain: 'Wrong — that describes a manual workflow, not target tracking.' },
+        { text: 'Nothing — target tracking only watches memory',     correct: false, explain: 'Wrong — CPU utilization is one of the most common target-tracking metrics.' },
+      ],
+    },
+    {
+      prompt: 'What is the core difference between <strong>ECS on EC2</strong> and <strong>ECS on Fargate</strong>?',
+      type: 'single',
+      options: [
+        { text: 'Fargate removes the need to provision and manage the underlying servers', correct: true, explain: 'Correct — with Fargate you just specify CPU/memory per task; AWS runs it.' },
+        { text: 'Fargate only supports Windows containers',          correct: false, explain: 'Wrong — Fargate supports both Linux and Windows containers.' },
+        { text: 'ECS on EC2 cannot use load balancers',              correct: false, explain: 'Wrong — both launch types integrate with ALBs/NLBs.' },
+        { text: 'Fargate tasks cannot reach VPC resources',          correct: false, explain: 'Wrong — Fargate tasks run inside your VPC just like EC2-backed ones.' },
+      ],
+    },
+    {
+      prompt: 'What problem do <strong>Step Functions</strong> primarily solve?',
+      type: 'single',
+      options: [
+        { text: 'Orchestrating multi-step workflows across services with retries and branching', correct: true, explain: 'Correct — they coordinate state machines of tasks, including error handling and parallel branches.' },
+        { text: 'Storing large binary objects cheaply',              correct: false, explain: 'Wrong — that\'s S3\'s job.' },
+        { text: 'Running scheduled cron-like jobs only',             correct: false, explain: 'Wrong — that\'s closer to EventBridge Scheduler; Step Functions orchestrates workflows.' },
+        { text: 'Providing a managed relational database',          correct: false, explain: 'Wrong — that would be RDS/Aurora.' },
+      ],
+    },
+    {
+      prompt: 'Why do <strong>Docker images</strong> use a layered filesystem?',
+      type: 'multi',
+      options: [
+        { text: 'Layers can be cached and reused across builds',     correct: true,  explain: 'Yes — unchanged layers are cached, speeding rebuilds and saving storage/transfer.' },
+        { text: 'Each layer runs in its own isolated container',     correct: false, explain: 'Wrong — layers are filesystem diffs, not running containers.' },
+        { text: 'Multiple images can share common base layers on disk', correct: true, explain: 'Yes — a shared base layer (e.g. a common OS) is stored once and reused.' },
+        { text: 'They automatically scan for vulnerabilities on every build', correct: false, explain: 'Wrong — that requires a separate scanning tool/service.' },
+      ],
+    },
+    {
+      prompt: 'In <strong>Kubernetes</strong>, what is a Pod?',
+      type: 'single',
+      options: [
+        { text: 'The smallest deployable unit, wrapping one or more tightly-coupled containers', correct: true, explain: 'Correct — containers in a Pod share a network namespace and storage.' },
+        { text: 'A physical worker machine in the cluster',          correct: false, explain: 'Wrong — that\'s a Node.' },
+        { text: 'A persistent storage volume',                       correct: false, explain: 'Wrong — that\'s a PersistentVolume.' },
+        { text: 'A load balancer routing traffic into the cluster',  correct: false, explain: 'Wrong — that\'s an Ingress or a Service of type LoadBalancer.' },
+      ],
+    },
+    {
+      prompt: 'What is the difference between a Kubernetes <strong>Deployment</strong> and a <strong>Service</strong>?',
+      type: 'single',
+      options: [
+        { text: 'A Deployment manages Pod replicas and rollouts; a Service gives them stable networking', correct: true, explain: 'Correct — Deployments handle "what runs", Services handle "how to reach it".' },
+        { text: 'They are interchangeable names for the same resource', correct: false, explain: 'Wrong — they serve very different purposes.' },
+        { text: 'A Service schedules Pods onto Nodes',                correct: false, explain: 'Wrong — that\'s the scheduler\'s job, tied to Deployments/ReplicaSets.' },
+        { text: 'A Deployment only works alongside StatefulSets',    correct: false, explain: 'Wrong — Deployments and StatefulSets are separate, parallel concepts.' },
+      ],
+    },
+    {
+      prompt: 'A file has permissions <code>rwxr-xr--</code>. What can the <strong>group</strong> do with it?',
+      type: 'single',
+      options: [
+        { text: 'Read and execute, but not write',                   correct: true,  explain: 'Correct — the middle triplet "r-x" applies to the group.' },
+        { text: 'Read, write, and execute',                          correct: false, explain: 'Wrong — that\'s the owner\'s permissions (first triplet).' },
+        { text: 'Read only',                                         correct: false, explain: 'Wrong — the group also has execute ("x") permission.' },
+        { text: 'Nothing — the group has no access',                 correct: false, explain: 'Wrong — "r-x" grants the group read and execute.' },
+      ],
+    },
+    {
+      prompt: 'What does the regular expression <code>^foo.*bar$</code> match?',
+      type: 'single',
+      options: [
+        { text: 'A line starting with "foo", ending with "bar", anything in between', correct: true, explain: 'Correct — ^ anchors the start, $ the end, .* matches any run of characters.' },
+        { text: 'Any line containing both "foo" and "bar" in any order', correct: false, explain: 'Wrong — the anchors and ordering make this position- and order-specific.' },
+        { text: 'A line that is exactly "foobar"',                   correct: false, explain: 'Wrong — .* permits (but doesn\'t require) characters between them.' },
+        { text: 'Lines that do NOT contain "foo" or "bar"',          correct: false, explain: 'Wrong — that needs negation syntax, not present here.' },
+      ],
+    },
+    {
+      prompt: 'What is the difference between <code>Cache-Control: no-cache</code> and <code>no-store</code>?',
+      type: 'single',
+      options: [
+        { text: '"no-cache" requires revalidation before use; "no-store" forbids caching entirely', correct: true, explain: 'Correct — "no-cache" can still be cached but must be revalidated; "no-store" must never be persisted anywhere.' },
+        { text: 'They are synonyms — both block all caching',        correct: false, explain: 'Wrong — "no-cache" is more permissive than its name suggests.' },
+        { text: '"no-store" allows client caching but blocks proxy caching', correct: false, explain: 'Wrong — "no-store" forbids storing anywhere, client or proxy.' },
+        { text: '"no-cache" only applies to images and static assets', correct: false, explain: 'Wrong — these directives apply to any cacheable response.' },
+      ],
+    },
+    {
+      prompt: 'What does <strong>O(log n)</strong> complexity typically tell you about an algorithm?',
+      type: 'single',
+      options: [
+        { text: 'It roughly halves (or divides) the problem with each step, like binary search', correct: true, explain: 'Correct — logarithmic growth comes from repeatedly dividing the input.' },
+        { text: 'It must check every element exactly once',          correct: false, explain: 'Wrong — that\'s O(n), linear time.' },
+        { text: 'Its runtime is constant regardless of input size',  correct: false, explain: 'Wrong — that\'s O(1).' },
+        { text: 'Its runtime doubles with every extra element',      correct: false, explain: 'Wrong — that would be exponential, O(2^n).' },
+      ],
+    },
+    {
+      prompt: 'What does a <strong>CI/CD pipeline</strong> aim to do?',
+      type: 'multi',
+      options: [
+        { text: 'Automatically build and test code on every change', correct: true,  explain: 'Yes — continuous integration catches issues early by validating every change.' },
+        { text: 'Automate and standardize the path from commit to deployment', correct: true, explain: 'Yes — continuous delivery/deployment makes releases repeatable and lower-risk.' },
+        { text: 'Replace the need for code review',                  correct: false, explain: 'Wrong — pipelines complement review; they don\'t replace human judgment.' },
+        { text: 'Guarantee zero bugs in production',                 correct: false, explain: 'Wrong — pipelines reduce risk, but can\'t promise perfection.' },
+      ],
+    },
+    {
+      prompt: 'What is the purpose of a <strong>Terraform state file</strong>?',
+      type: 'single',
+      options: [
+        { text: 'It tracks the real-world resources Terraform manages and maps them to your config', correct: true, explain: 'Correct — state lets Terraform know what already exists so it can plan accurate changes.' },
+        { text: 'It stores your cloud provider credentials',         correct: false, explain: 'Wrong — credentials are configured separately (env vars, profiles, etc).' },
+        { text: 'It is a human-readable changelog of deployments',   correct: false, explain: 'Wrong — that role belongs to a CI/CD audit log, not Terraform state.' },
+        { text: 'It compiles your HCL into a binary executable',     correct: false, explain: 'Wrong — Terraform interprets HCL directly; there\'s no compilation step.' },
+      ],
+    },
+    {
+      prompt: 'In <strong>distributed tracing</strong>, what does a "span" represent?',
+      type: 'single',
+      options: [
+        { text: 'A single unit of work (e.g. one service call) within a larger trace', correct: true, explain: 'Correct — a trace is a tree of spans showing how a request moved through services.' },
+        { text: 'The total time a server has been running',          correct: false, explain: 'Wrong — that\'s uptime, unrelated to tracing.' },
+        { text: 'A region spanning multiple Availability Zones',     correct: false, explain: 'Wrong — that\'s a networking concept, not a tracing one.' },
+        { text: 'A scheduled maintenance window',                    correct: false, explain: 'Wrong — unrelated to observability spans.' },
+      ],
+    },
+    {
+      prompt: 'Why is <strong>Redis</strong> commonly used as a cache in front of a database?',
+      type: 'multi',
+      options: [
+        { text: 'It stores data in memory, making reads very fast',  correct: true,  explain: 'Yes — in-memory storage is what gives Redis its speed advantage.' },
+        { text: 'It reduces repeated load on the primary database',  correct: true,  explain: 'Yes — serving hot data from cache means fewer queries hit the DB.' },
+        { text: 'It guarantees data is never lost on restart',       correct: false, explain: 'Wrong — Redis is in-memory by default and can lose data; persistence is optional.' },
+        { text: 'It automatically normalizes your schema',          correct: false, explain: 'Wrong — Redis is a key-value store; schema design is entirely up to you.' },
+      ],
+    },
+    {
+      prompt: 'What is a key advantage of <strong>GraphQL</strong> over a typical REST API?',
+      type: 'single',
+      options: [
+        { text: 'Clients can request exactly the fields they need in a single query', correct: true, explain: 'Correct — this avoids the over- and under-fetching common with fixed REST endpoints.' },
+        { text: 'It is always faster than REST regardless of use case', correct: false, explain: 'Wrong — performance depends on implementation; GraphQL adds its own overhead.' },
+        { text: 'It eliminates the need for authentication',         correct: false, explain: 'Wrong — GraphQL APIs need auth just like REST ones.' },
+        { text: 'It only works over WebSockets',                     correct: false, explain: 'Wrong — GraphQL typically runs over plain HTTP; subscriptions may use WebSockets.' },
+      ],
+    },
+    {
+      prompt: 'What does a <strong>Cross-Site Scripting (XSS)</strong> attack typically achieve?',
+      type: 'single',
+      options: [
+        { text: 'Running attacker-supplied script in another user\'s browser session', correct: true, explain: 'Correct — XSS injects malicious script that executes in the victim\'s browser context.' },
+        { text: 'Flooding a server with traffic until it crashes',   correct: false, explain: 'Wrong — that describes a DoS/DDoS attack.' },
+        { text: 'Guessing a password through repeated login attempts', correct: false, explain: 'Wrong — that\'s brute-forcing/credential stuffing.' },
+        { text: 'Silently intercepting traffic between two parties', correct: false, explain: 'Wrong — that\'s a man-in-the-middle attack.' },
+      ],
+    },
+    {
+      prompt: 'What does a <strong>CSRF token</strong> protect against?',
+      type: 'single',
+      options: [
+        { text: 'A malicious site tricking a logged-in user\'s browser into making unwanted requests', correct: true, explain: 'Correct — the token proves the request truly originated from your own page, not a forged one.' },
+        { text: 'SQL injection through form fields',                 correct: false, explain: 'Wrong — that needs input sanitization/parameterized queries.' },
+        { text: 'Brute-force password guessing',                     correct: false, explain: 'Wrong — that\'s mitigated by rate limiting and lockouts.' },
+        { text: 'Eavesdropping on network traffic',                  correct: false, explain: 'Wrong — that\'s what TLS/HTTPS protects against.' },
+      ],
+    },
+    {
+      prompt: 'What is the most reliable defense against <strong>SQL injection</strong>?',
+      type: 'single',
+      options: [
+        { text: 'Using parameterized queries / prepared statements', correct: true,  explain: 'Correct — binding parameters separates code from data, so input can never alter query structure.' },
+        { text: 'Escaping quotes in the UI layer',                   correct: false, explain: 'Wrong — UI-layer escaping doesn\'t protect the actual database query.' },
+        { text: 'Storing the DB password in an environment variable', correct: false, explain: 'Wrong — good secrets hygiene, but irrelevant to injection.' },
+        { text: 'Using a NoSQL database instead',                    correct: false, explain: 'Wrong — NoSQL databases have their own injection risks (e.g. operator injection).' },
+      ],
+    },
+    {
+      prompt: 'What distinguishes a <strong>unit test</strong> from an <strong>integration test</strong>?',
+      type: 'single',
+      options: [
+        { text: 'A unit test isolates a small piece of code; an integration test checks multiple parts working together', correct: true, explain: 'Correct — unit tests check components in isolation (often with mocks); integration tests check real interactions.' },
+        { text: 'Unit tests run in production; integration tests run locally', correct: false, explain: 'Wrong — environment doesn\'t define either type.' },
+        { text: 'Integration tests are always faster than unit tests', correct: false, explain: 'Wrong — they\'re usually slower, due to real dependencies (DBs, networks).' },
+        { text: 'Unit tests require a running server; integration tests don\'t', correct: false, explain: 'Wrong — if anything, it tends to be the other way around.' },
+      ],
+    },
+    {
+      prompt: 'What is true about a <strong>JWT (JSON Web Token)</strong>?',
+      type: 'multi',
+      options: [
+        { text: 'Its payload is base64-encoded, not encrypted, by default', correct: true, explain: 'Yes — anyone can decode a standard JWT payload; the signature only proves integrity.' },
+        { text: 'A valid signature proves it was issued by a trusted party and untampered', correct: true, explain: 'Yes — that is the core guarantee a signature provides.' },
+        { text: 'JWTs cannot be used for stateless authentication', correct: false, explain: 'Wrong — stateless auth is one of JWT\'s most common uses.' },
+        { text: 'Expired JWTs are automatically rejected by any server that sees them', correct: false, explain: 'Wrong — the server must explicitly check the "exp" claim; nothing happens automatically.' },
+      ],
+    },
+    {
+      prompt: 'What problem does <strong>OAuth 2.0</strong> primarily solve?',
+      type: 'single',
+      options: [
+        { text: 'Letting a user grant a third-party app limited access without sharing their password', correct: true, explain: 'Correct — OAuth issues scoped, revocable access tokens instead of handing out credentials.' },
+        { text: 'Encrypting data stored in a database',              correct: false, explain: 'Wrong — that\'s a data-at-rest concern, unrelated to OAuth.' },
+        { text: 'Compressing HTTP responses for faster delivery',    correct: false, explain: 'Wrong — that\'s gzip/Brotli, a transport optimization.' },
+        { text: 'Load-balancing requests across multiple servers',   correct: false, explain: 'Wrong — that\'s a load balancer\'s job, not an auth protocol\'s.' },
+      ],
+    },
+    {
+      prompt: 'What is <strong>database sharding</strong>?',
+      type: 'single',
+      options: [
+        { text: 'Splitting a dataset across multiple databases/servers, often by a key', correct: true, explain: 'Correct — sharding distributes data horizontally to scale beyond a single machine.' },
+        { text: 'Creating read replicas of the same data',           correct: false, explain: 'Wrong — that\'s replication, which copies (not splits) data.' },
+        { text: 'Compressing rows to save disk space',               correct: false, explain: 'Wrong — a storage optimization, unrelated to sharding.' },
+        { text: 'Encrypting individual table columns',               correct: false, explain: 'Wrong — that\'s column-level encryption, a security feature.' },
+      ],
+    },
+    {
+      prompt: 'During a <strong>TLS handshake</strong>, what gets negotiated?',
+      type: 'multi',
+      options: [
+        { text: 'Which encryption algorithms (cipher suite) both sides will use', correct: true, explain: 'Yes — cipher-suite negotiation picks the algorithms for the session.' },
+        { text: 'A shared symmetric session key',                    correct: true,  explain: 'Yes — asymmetric crypto briefly establishes a fast symmetric key for the rest of the session.' },
+        { text: 'The DNS record for the domain',                     correct: false, explain: 'Wrong — DNS resolution happens before TLS even starts.' },
+        { text: 'The HTTP status code of the first response',        correct: false, explain: 'Wrong — that\'s decided by the application after the handshake completes.' },
+      ],
+    },
+    {
+      prompt: 'Which HTTP methods are defined as <strong>idempotent</strong> (repeating has the same effect as doing it once)?',
+      type: 'multi',
+      options: [
+        { text: 'GET',    correct: true,  explain: 'Yes — GET should never change server state, so repeating it is harmless.' },
+        { text: 'PUT',    correct: true,  explain: 'Yes — PUT replaces a resource with the given representation; repeating yields the same result.' },
+        { text: 'POST',   correct: false, explain: 'Wrong — POST typically creates a new resource each time (e.g. duplicate orders).' },
+        { text: 'DELETE', correct: true,  explain: 'Yes — deleting an already-deleted resource still leaves it deleted; the end state matches.' },
+      ],
+    },
+    {
+      prompt: 'What is the core difference between the <strong>stack</strong> and the <strong>heap</strong> in memory management?',
+      type: 'single',
+      options: [
+        { text: 'The stack holds short-lived, function-scoped data cleaned up automatically; the heap holds longer-lived data managed manually or by a GC', correct: true, explain: 'Correct — stack frames pop on return; heap allocations persist until freed or collected.' },
+        { text: 'The heap is faster to allocate from than the stack', correct: false, explain: 'Wrong — stack allocation is typically just a pointer bump, faster than heap allocation.' },
+        { text: 'The stack has no size limit; the heap does',        correct: false, explain: 'Wrong — in practice it\'s the opposite; stacks have a (often smaller) fixed limit, hence "stack overflow".' },
+        { text: 'Only multi-threaded programs use the heap',         correct: false, explain: 'Wrong — any program with dynamic allocation uses the heap, threaded or not.' },
+      ],
+    },
+    {
+      prompt: 'What happens to a recursive function that never reaches its <strong>base case</strong>?',
+      type: 'single',
+      options: [
+        { text: 'It keeps calling itself until it exhausts the call stack (stack overflow)', correct: true, explain: 'Correct — without a base case there is no terminating condition, and each call consumes a stack frame.' },
+        { text: 'It silently returns undefined/null',                correct: false, explain: 'Wrong — it keeps executing rather than quietly stopping.' },
+        { text: 'The compiler rejects it at build time',             correct: false, explain: 'Wrong — most languages can\'t statically prove termination, so this compiles fine and fails at runtime.' },
+        { text: 'It automatically turns itself into a loop',         correct: false, explain: 'Wrong — that optimization (tail-call elimination) only applies in specific cases and languages.' },
+      ],
+    },
+    {
+      prompt: 'What does a "least connections" load-balancing algorithm do?',
+      type: 'single',
+      options: [
+        { text: 'Sends each new request to the backend currently handling the fewest active connections', correct: true, explain: 'Correct — this helps even out load when requests vary widely in duration.' },
+        { text: 'Always routes to the geographically closest server', correct: false, explain: 'Wrong — that\'s geo-based or latency-based routing.' },
+        { text: 'Sends requests in a fixed repeating order',         correct: false, explain: 'Wrong — that\'s round robin.' },
+        { text: 'Picks a server at random for every request',        correct: false, explain: 'Wrong — that\'s a random algorithm, a different (simpler) strategy.' },
+      ],
+    },
   ];
 
   // Pick two distinct random questions, fresh every login (not once per page load).
@@ -422,16 +762,34 @@ export const Clave = (() => {
   }
 
   // ── CAPTCHA (QUIZ) BUILDER ──────────────────────────────────────────────────
-  function buildCaptcha(containerId, questionIdx, onSuccess) {
-    const qOrig = QUESTIONS[questionIdx];
-    const shuffled = [...qOrig.options].map((o, i) => ({...o, _origIdx: i}));
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    const q = { ...qOrig, options: shuffled };
+  function buildCaptcha(containerId, questionIdx, onSuccess, excludeIdx) {
     const container = document.getElementById(containerId);
     let failCount = 0;
+    let currentIdx = questionIdx;
+    let q;
+
+    function loadQuestion(idx) {
+      currentIdx = idx;
+      const qOrig = QUESTIONS[idx];
+      const shuffled = [...qOrig.options].map((o, i) => ({...o, _origIdx: i}));
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      q = { ...qOrig, options: shuffled };
+    }
+    loadQuestion(questionIdx);
+
+    // Swap in a fresh, distinct question — bureaucracy generously lets you
+    // file for a different challenge instead of studying for this one.
+    function reroll() {
+      const candidates = QUESTIONS
+        .map((_, i) => i)
+        .filter(i => i !== currentIdx && i !== excludeIdx);
+      loadQuestion(candidates[Math.floor(Math.random() * candidates.length)]);
+      failCount = 0;
+      render();
+    }
 
     function render() {
       container.innerHTML = '';
@@ -443,10 +801,14 @@ export const Clave = (() => {
         <div class="captcha-grid" id="${containerId}-grid"></div>
         <div id="${containerId}-feedback" style="width:100%;display:none;flex-direction:column;gap:6px;"></div>
         <p class="captcha-error" id="${containerId}-err"></p>
-        <button id="${containerId}-btn">Verify</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button id="${containerId}-btn">Verify</button>
+          <button id="${containerId}-reroll" style="font-family:var(--font-display);font-size:0.56rem;background:transparent;border:1px solid #4a6a9a;color:#8aa0c8;padding:6px 10px;cursor:pointer;border-radius:var(--radius);">🔄 Request a different challenge</button>
+        </div>
       `;
       container.appendChild(panel);
       show(containerId);
+      document.getElementById(`${containerId}-reroll`).addEventListener('click', reroll);
 
       const grid = document.getElementById(`${containerId}-grid`);
       q.options.forEach((opt, i) => {
@@ -522,9 +884,11 @@ export const Clave = (() => {
         }
 
         // Lockout countdown
-        const errEl = document.getElementById(`${containerId}-err`);
-        const btn   = document.getElementById(`${containerId}-btn`);
+        const errEl    = document.getElementById(`${containerId}-err`);
+        const btn      = document.getElementById(`${containerId}-btn`);
+        const rerollBtn = document.getElementById(`${containerId}-reroll`);
         btn.disabled = true;
+        rerollBtn.disabled = true;
         grid.querySelectorAll('.captcha-tile').forEach(t => t.classList.remove('selected'));
         grid.style.pointerEvents = 'none';
 
@@ -536,6 +900,7 @@ export const Clave = (() => {
             clearInterval(tick);
             errEl.textContent = '';
             btn.disabled = false;
+            rerollBtn.disabled = false;
             grid.style.pointerEvents = '';
             if (fb.dataset.locked !== 'true') fb.style.display = 'none';
           } else {
@@ -737,7 +1102,7 @@ export const Clave = (() => {
     // Step 1 — CAPTCHA pre-login
     if (!window.DEV_MODE) {
       showClaveStep('clave-step-captcha-pre');
-      await new Promise(resolve => buildCaptcha('clave-step-captcha-pre', _picks[0], resolve));
+      await new Promise(resolve => buildCaptcha('clave-step-captcha-pre', _picks[0], resolve, _picks[1]));
     }
 
     // Step 2 — Connecting spinner
@@ -781,7 +1146,7 @@ export const Clave = (() => {
     // CAPTCHA #2
     if (!window.DEV_MODE) {
       show('captcha-post-screen');
-      await new Promise(resolve => buildCaptcha('captcha-post-screen', _picks[1], resolve));
+      await new Promise(resolve => buildCaptcha('captcha-post-screen', _picks[1], resolve, _picks[0]));
       hide('captcha-post-screen');
     }
 

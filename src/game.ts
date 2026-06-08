@@ -1082,7 +1082,10 @@ function lavaFlow(x0, y0, x1, y1, glow) {
   const dx = x1 - x0, dy = y1 - y0;
   const len = Math.max(1, Math.hypot(dx, dy));
   const nx = -dy / len, ny = dx / len;          // perpendicular unit vector — for meander
-  const steps = 6;
+  // chunk count scales with the slope's actual length so the lava "grain" —
+  // chunk size and spacing — looks the same on a small spike as on the big
+  // volcano cone, instead of sparse-on-big / cramped-on-small
+  const steps = Math.max(3, Math.round(len / 18));
   for (let i = 0; i < steps; i++) {
     const f = i / (steps - 1);
     // gentle meander off the straight line, seeded by i (not random — stays
@@ -1106,14 +1109,19 @@ function lavaFlow(x0, y0, x1, y1, glow) {
 function lavaCrack(x0, y0, x1, y1, glow) {
   const t = nowSec();
   const dx = x1 - x0, dy = y1 - y0;
+  // jag amplitude as a fraction of the crack's own length — keeps it reading
+  // as "the same crack, scaled" rather than relatively straighter on long
+  // slopes and relatively zigzaggier on short ones
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const jag = len * 0.05;
   const pulse = 0.5 + 0.5 * Math.sin(t * 1.7 + x0 * 0.05);
   const bright = glow * (0.35 + 0.65 * pulse);
   ctx.strokeStyle = `rgba(255,${130 + Math.round(90 * bright)},60,${0.2 + 0.5 * bright})`;
   ctx.lineWidth = 1.5; ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(x0, y0);
-  ctx.lineTo(x0 + dx * 0.4 + 4, y0 + dy * 0.4);
-  ctx.lineTo(x0 + dx * 0.7 - 3, y0 + dy * 0.7);
+  ctx.lineTo(x0 + dx * 0.4 + jag, y0 + dy * 0.4);
+  ctx.lineTo(x0 + dx * 0.7 - jag * 0.75, y0 + dy * 0.7);
   ctx.lineTo(x1, y1);
   ctx.stroke();
   ctx.lineWidth = 1;
