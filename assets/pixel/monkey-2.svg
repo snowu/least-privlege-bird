@@ -1,0 +1,36 @@
+<!-- "Barrel-flinging gorilla" frame 2: the knuckle arm pulls up into a paddle
+     stroke alongside the head, mouth open in a holler. Same body/face/tie as
+     monkey.svg, side-profile facing RIGHT. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 0 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- cranium + ear -->
+  <rect x="10" y="2" width="3" height="2" fill="#4a2e1a"/>
+  <rect x="10" y="2" width="1" height="1" fill="#2b1a0e"/>
+  <!-- heavy brow ridge -->
+  <rect x="10" y="4" width="4" height="1" fill="#2b1a0e"/>
+  <!-- face -->
+  <rect x="10" y="5" width="3" height="2" fill="#4a2e1a"/>
+  <!-- muzzle (tan, jutting forward) -->
+  <rect x="13" y="5" width="2" height="2" fill="#c79a6e"/>
+  <!-- eye -->
+  <rect x="11" y="5" width="1" height="1" fill="#e8d8b8"/>
+  <!-- open holler mouth -->
+  <rect x="13" y="6" width="1" height="1" fill="#7a2545"/>
+  <!-- shoulder hump -->
+  <rect x="7" y="4" width="3" height="3" fill="#4a2e1a"/>
+  <!-- back sloping down to the rump -->
+  <rect x="5" y="7" width="3" height="2" fill="#3a2414"/>
+  <rect x="4" y="8" width="2" height="2" fill="#2b1a0e"/>
+  <!-- chest / belly -->
+  <rect x="8" y="7" width="3" height="3" fill="#c79a6e"/>
+  <!-- DK-style tie -->
+  <rect x="8" y="8" width="2" height="2" fill="#d13212"/>
+  <!-- arm pulled up into a paddle stroke alongside the head -->
+  <g fill="#3a2414">
+    <rect x="10" y="6" width="1" height="2"/>
+    <rect x="11" y="4" width="1" height="2"/>
+    <rect x="12" y="2" width="1" height="2"/>
+  </g>
+  <!-- hind leg, tucked -->
+  <rect x="6" y="9" width="2" height="2" fill="#3a2414"/>
+  <rect x="6" y="11" width="1" height="1" fill="#2b1a0e"/>
+</svg>

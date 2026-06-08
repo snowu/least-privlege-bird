@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="Least Privilege Bird" width="120" height="120" />
+<img src="assets/pixel/penguin.svg" alt="Least Privilege Bird" width="120" height="120" />
 
 # Least Privilege Bird
 

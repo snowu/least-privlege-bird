@@ -56,7 +56,7 @@ const AudioFX = (() => {
   const FLAPS = {
     bird:   () => beep(900, 1500, 0.10, 'square', 0.15),               // chirp up
     penguin:() => { beep(300, 240, 0.12, 'sawtooth', 0.16); beep(260, 200, 0.1, 'square', 0.1, 0.04); }, // honk-flail
-    squid:  () => { beep(180, 70, 0.18, 'sine', 0.16); beep(90, 50, 0.12, 'sine', 0.1, 0.05); },         // water-jet blub
+    monkey: () => { beep(520, 760, 0.07, 'square', 0.15); beep(680, 980, 0.05, 'square', 0.12, 0.05); }, // panicked "ook ook!"
     rocket: () => beep(220, 90,  0.16, 'sawtooth', 0.16),              // whoosh down
     bee:    () => { beep(420, 380, 0.12, 'square', 0.12); beep(440, 400, 0.12, 'square', 0.1, 0.01); }, // buzzy
     dragon: () => { beep(160, 90, 0.16, 'sawtooth', 0.18); beep(420, 120, 0.1, 'square', 0.1, 0.04); }, // roar/whoosh
@@ -205,15 +205,42 @@ const THEMES: { [key: string]: any } = {
       bandedPipe(x, topH, gap, { body: '#7fc6dd', light: '#bce7f2', dark: '#4f9ab5', edge: '#2e6e85' });
     },
   },
-  squid: {
-    label: 'Squid',
+  // (squid retired in favor of monkey — assets/{pixel,round}/squid{,-2}.svg are
+  // kept on disk, unreferenced, in case we want to bring it back.)
+  monkey: {
+    label: 'Monkey',
     sky: '#0a3d52', ground: '#06212e',
     surface: ['#1f6b5e', '#3fbf9e', '#0c3a30'],   // mossy seafloor lip
     cloudFill: 'none',                        // underwater — no clouds at all
-    anim: true,                               // 2-frame: tentacles tighten on flap
-    // Kelp / coral columns: deep teal body with a glow band. Same construction (capH 26).
+    anim: true,                               // 2-frame: arms pull up to paddle on flap
+    // Coral-crusted rock pillars: weathered stone columns blotched with strata
+    // patches and dotted with coral polyps/barnacles — DK Country reef vibes,
+    // not the construction-site girders the rest of the roster wears.
     drawPipe(x, topH, gap) {
-      bandedPipe(x, topH, gap, { body: '#1f7a6a', light: '#3fbfa6', dark: '#0f4a40', edge: '#08332c', capH: 26 });
+      framedPipe(x, topH, gap, {
+        bodyColor: '#5e6b5a', capColor: '#46524a', capH: 22, capW: C.PIPE_W + 10,
+        decorate({ x, topH, botY, capX, capW, capH }) {
+          const coral = ['#e8748a', '#f0a35c', '#caa0e8'];
+          // irregular rock-strata blotches — organic offset rows, not clean bands
+          ctx.fillStyle = 'rgba(60,82,64,0.4)';
+          for (let y = 8, i = 0; y < topH - capH - 6; y += 12, i++) ctx.fillRect(x + (i % 2 ? 6 : 0), y, C.PIPE_W - 6, 4);
+          for (let y = botY + capH + 8, i = 0; y < C.GROUND - 6; y += 12, i++) ctx.fillRect(x + (i % 2 ? 6 : 0), y, C.PIPE_W - 6, 4);
+          // coral-polyp clusters dotted along the body, alternating sides
+          const cluster = (cx, cy) => { for (let i = 0; i < 3; i++) { ctx.fillStyle = coral[i]; ctx.fillRect(cx + i * 4, cy - (i % 2) * 3, 3, 3); } };
+          cluster(x + 3, topH - capH - 18);
+          cluster(x + C.PIPE_W - 15, botY + capH + 16);
+          // coral-crust band breaking up the cap's straight edge with organic growth
+          for (let i = 0; i < 5; i++) {
+            ctx.fillStyle = coral[i % coral.length];
+            const bw = 4 + (i % 2) * 2, bh = 3 + (i % 3);
+            ctx.fillRect(capX + 3 + i * (capW - 6) / 5, topH - capH - bh + 2, bw, bh);
+            ctx.fillRect(capX + 3 + i * (capW - 6) / 5, botY + capH - 2, bw, bh);
+          }
+          // barnacles: pale dots clustered right at the cap edges
+          ctx.fillStyle = '#d8ead2';
+          for (let i = 0; i < 3; i++) { ctx.fillRect(capX + 6 + i * 9, topH - capH + 5, 2, 2); ctx.fillRect(capX + 6 + i * 9, botY + 5, 2, 2); }
+        },
+      });
     },
   },
   rocket: {
@@ -691,15 +718,127 @@ THEMES.penguin.bgLayers = [
   } },
 ];
 
-THEMES.squid.bgLayers = [
+THEMES.monkey.bgLayers = [
   // Bubbles rising from the seabed — same particle engine as penguin snow, but
-  // dir=-1 (up) and a hollow-ring bubble style. Near bubbles bigger/faster (depth).
+  // dir=-1 (up). Thinned out from the original pass (fewer, calmer) and given
+  // three alternating looks — derived deterministically from each particle's
+  // radius — so the stream reads as varied bubbles, not a uniform ring-spam.
   { speed: 0, draw() {
-      particleStream(46, -1,
-        { minSpd: 16, spanSpd: 42, minSway: 4, spanSway: 10, minR: 3, spanR: 11, minA: 0.10, spanA: 0.10 },
+      particleStream(28, -1,
+        { minSpd: 14, spanSpd: 34, minSway: 3, spanSway: 8, minR: 2.5, spanR: 10, minA: 0.06, spanA: 0.08 },
         (x, y, r, a) => {
-          pixelDisc(x, y, r, `rgba(150,230,255,${a + 0.06})`);
-          pixelDisc(x, y, Math.max(1, r - 3), `rgba(180,240,255,${a})`); // hollow ring
+          const variant = Math.round(r * 7) % 3;
+          if (variant === 0) {
+            // classic hollow ring
+            pixelDisc(x, y, r, `rgba(150,230,255,${a + 0.05})`);
+            pixelDisc(x, y, Math.max(1, r - 3), `rgba(180,240,255,${a})`);
+          } else if (variant === 1) {
+            // small solid bead — denser, no ring
+            pixelDisc(x, y, Math.max(1, r - 4), `rgba(200,240,255,${a + 0.04})`);
+          } else {
+            // a bubble trailing a tiny companion
+            pixelDisc(x, y, r, `rgba(150,230,255,${a + 0.03})`);
+            pixelDisc(x, y, Math.max(1, r - 3), `rgba(180,240,255,${a - 0.02})`);
+            pixelDisc(x + r * 0.9, y + r * 0.7, Math.max(1, r * 0.4), `rgba(180,240,255,${a})`);
+          }
+        });
+  } },
+  // Reef rock spires: jagged background pillars forming the level's "skyline" —
+  // a coral-flecked silhouette standing in for the construction-site girders the
+  // rest of the roster wears (this level dropped that framing for a reef/jungle one).
+  { speed: 0.35, draw(o) { tileMotif(o, 240, x => {
+      const spire = (sx, peakY, baseW, c) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.moveTo(sx - baseW / 2, G());
+        ctx.lineTo(sx - baseW / 3, peakY + 16);
+        ctx.lineTo(sx - baseW / 7, peakY);
+        ctx.lineTo(sx + baseW / 9, peakY + 12);
+        ctx.lineTo(sx + baseW / 3, peakY + 4);
+        ctx.lineTo(sx + baseW / 2, G());
+        ctx.closePath();
+        ctx.fill();
+      };
+      spire(x + 40,  G() - 150, 70, 'rgba(60,90,82,0.30)');
+      spire(x + 130, G() - 110, 55, 'rgba(50,78,70,0.26)');
+      spire(x + 195, G() - 185, 80, 'rgba(70,100,90,0.22)');
+      // coral-blob accents catching the light along the ridgelines
+      pixelDisc(x + 40,  G() - 152, 3, 'rgba(232,116,138,0.35)');
+      pixelDisc(x + 195, G() - 186, 3, 'rgba(240,163,92,0.30)');
+  }); } },
+  // Rolling barrels: DK's signature hazard, adrift and tumbling end-over-end on
+  // the current — rusty oil-drums with banded rims (shared wanderers engine, the
+  // same one that drives tumbleweeds and traffic).
+  { speed: 0, draw() {
+      const t = nowSec();
+      const round = isRound();
+      wanderers(
+        [
+          { drift: 65,  baseY: G() - 95,  yAmp: 18, wy: 1.6, sy: 0.7, bank: 0, flapHz: 1 },
+          { drift: -50, baseY: G() - 160, yAmp: 24, wy: 1.2, sy: 0.9, bank: 0, flapHz: 1 },
+          { drift: 90,  baseY: G() - 50,  yAmp: 14, wy: 2.1, sy: 0.6, bank: 0, flapHz: 1 },
+        ],
+        (i) => {
+          ctx.rotate((t * (1.6 + i * 0.4)) % (Math.PI * 2));          // tumbling roll
+          const w = 13, h = 17;
+          const body = '#7a4a26', band = '#4a2e16';
+          if (round) {
+            roundRect(ctx, -w / 2, -h / 2, w, h, 4); ctx.fillStyle = body; ctx.fill();
+            ctx.strokeStyle = band; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-w / 2, -h * 0.18); ctx.lineTo(w / 2, -h * 0.18); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-w / 2, h * 0.18); ctx.lineTo(w / 2, h * 0.18); ctx.stroke();
+            ctx.lineWidth = 1;
+          } else {
+            pxRect(-w / 2, -h / 2, w, h, body);
+            pxRect(-w / 2, -h * 0.3, w, 2, band);
+            pxRect(-w / 2, h * 0.18, w, 2, band);
+            pxRect(-w / 2, -h / 2, w, 2, '#3a2210');
+            pxRect(-w / 2, h / 2 - 2, w, 2, '#3a2210');
+          }
+        });
+  } },
+  // Banana bunch: a small drifting DK Country callback, bobbing lazily through
+  // the current alongside the barrels (shared wanderers engine).
+  { speed: 0, draw() {
+      const round = isRound();
+      const body = '#f0d33c', stem = '#6b4a16';
+      wanderers(
+        [{ drift: 45, baseY: G() - 230, yAmp: 14, wy: 1.1, sy: 0.55, bank: 0.15, flapHz: 1 }],
+        () => {
+          const banana = (ox, oy, rot) => {
+            ctx.save(); ctx.translate(ox, oy); ctx.rotate(rot);
+            if (round) { roundRect(ctx, -2.5, -6, 5, 12, 2.5); ctx.fillStyle = body; ctx.fill(); }
+            else pxRect(-2, -6, 4, 12, body);
+            ctx.restore();
+          };
+          banana(-4, 1, -0.5);
+          banana(0, -2, 0);
+          banana(4, 1, 0.5);
+          if (round) { ctx.beginPath(); ctx.arc(0, -8, 1.6, 0, Math.PI * 2); ctx.fillStyle = stem; ctx.fill(); }
+          else pxRect(-1, -9, 2, 2, stem);
+        });
+  } },
+  // Pauline cameo: a tiny "damsel adrift" silhouette riding an air bubble — DK's
+  // rescue target, here just another reef wanderer drifting through the current.
+  { speed: 0, draw() {
+      const round = isRound();
+      const skin = '#e8c9a8', dress = '#d13a6e', hair = '#3a2414';
+      wanderers(
+        [{ drift: -35, baseY: G() - 280, yAmp: 20, wy: 0.8, sy: 0.4, bank: 0, flapHz: 1 }],
+        () => {
+          // air bubble (hollow ring, matching the rising-bubble layer's style)
+          pixelDisc(0, 0, 13, 'rgba(180,240,255,0.18)');
+          pixelDisc(0, 0, 10, 'rgba(150,230,255,0.10)');
+          if (round) {
+            ctx.beginPath(); ctx.moveTo(-3, 6); ctx.lineTo(3, 6); ctx.lineTo(0, -2); ctx.closePath();
+            ctx.fillStyle = dress; ctx.fill();
+            ctx.beginPath(); ctx.arc(0, -4, 2.4, 0, Math.PI * 2); ctx.fillStyle = skin; ctx.fill();
+            ctx.beginPath(); ctx.arc(0, -5.5, 2.4, Math.PI, Math.PI * 2); ctx.fillStyle = hair; ctx.fill();
+          } else {
+            pxRect(-2, -4, 4, 6, dress);  // dress
+            pxRect(-1, -6, 2, 2, skin);   // head
+            pxRect(-1, -7, 2, 1, hair);   // hair
+          }
         });
   } },
   // Foreground: tall swaying-look algae stalks (static curve via stepped offset)
@@ -1725,7 +1864,18 @@ const COW_ART = {
     '           //\\',
     '           V_/_',
   ].join('\n'),
-  // Squid — mantle up, panic eyes, dangling tentacles. Should not be airborne.
+  // Monkey — DK callback: broad ape face (heavy brow, round eyes, wide muzzle),
+  // mid panic-paddle underwater. (Previous draft read as a cat — swapped the
+  // pointy "(\_/)" ears for a rounded gorilla head + brow ridge.)
+  monkey: [
+    '        \\  .------.',
+    '         \\(  o  o )',
+    '           |  ^^  |',
+    '           \\ ==== /',
+    '            d    b',
+  ].join('\n'),
+  // Squid — retired from the avatar roster, but the ascii lives on here (kept
+  // alongside the unreferenced squid.svg assets in case it makes a comeback).
   squid: [
     '        \\   ___',
     '         \\ /o o\\',
