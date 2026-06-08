@@ -46,7 +46,7 @@ function fitToViewport() {
   gameFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
   // Partial font-size compensation: sqrt dampens the scale-down so UI text
   // stays legible without ballooning to full 1/scale size on desktop.
-  document.documentElement.style.fontSize = `${12 / Math.pow(scale, 0.08)}px`;
+  document.documentElement.style.fontSize = `${9 / Math.pow(scale, 0.08)}px`;
 }
 fitToViewport();
 window.addEventListener('resize', fitToViewport);
@@ -111,6 +111,48 @@ mobileHintIOS.addEventListener('click', () => {
 });
 btnIosDismiss.addEventListener('click', () => {
   iosFsModal.style.display = 'none';
+});
+
+// ─── MOBILE DISCLAIMER MODAL ──────────────────────────────────────────────────
+const disclaimerModal   = document.getElementById('disclaimer-modal')      as HTMLDivElement;
+const btnDisclaimerOk   = document.getElementById('btn-disclaimer-accept') as HTMLButtonElement;
+const btnDisclaimerNope = document.getElementById('btn-disclaimer-decline') as HTMLButtonElement;
+const fortuneCow        = document.getElementById('fortune-cow')           as HTMLPreElement;
+
+const DISCLAIMER_KEY = 'lpb-disclaimer-ok';
+
+function isMobileViewport() {
+  return window.innerWidth < 900 || window.innerHeight < 900;
+}
+
+function updateCowPosition() {
+  if (isMobileViewport()) {
+    fortuneCow.style.transform      = 'scale(0.9)';
+    fortuneCow.style.transformOrigin = 'bottom right';
+  } else {
+    fortuneCow.style.transform      = '';
+    fortuneCow.style.transformOrigin = '';
+  }
+}
+updateCowPosition();
+window.addEventListener('resize', updateCowPosition);
+window.addEventListener('orientationchange', updateCowPosition);
+
+if (isMobileViewport()) {
+  devDisclaimer.style.display = 'none';
+  fitToViewport();
+  if (!localStorage.getItem(DISCLAIMER_KEY)) {
+    disclaimerModal.style.display = 'flex';
+  }
+}
+
+btnDisclaimerOk.addEventListener('click', () => {
+  try { localStorage.setItem(DISCLAIMER_KEY, '1'); } catch {}
+  disclaimerModal.style.display = 'none';
+});
+btnDisclaimerNope.addEventListener('click', () => {
+  // TODO: replace with a funny redirect URL
+  window.location.href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 });
 
 // ─── AUDIO (synthesized, no files) ────────────────────────────────────────────

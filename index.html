@@ -258,6 +258,33 @@
   <div id="dev-disclaimer">
     Game is under active development, things may change between reloads. If you encounter a bug, please go to the top of a mountain and scream very loudly. I won't hear it but it will be a nice and cathartic experience for you.
   </div>
+
+  <!-- ══ MOBILE DISCLAIMER MODAL — replaces the fixed banner on small screens ══ -->
+  <div id="disclaimer-modal" style="
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);
+    align-items:center;justify-content:center;z-index:2000;color:#fff;padding:24px;">
+    <div style="background:#1a1a2e;border:2px solid #f5a623;border-radius:14px;
+      padding:28px 24px;max-width:340px;width:100%;
+      display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;">
+      <p style="font-size:1.4rem">⚠️</p>
+      <h2 style="font-family:var(--font-display);font-size:0.7rem;color:#f5a623;line-height:1.7;">
+        Active Development
+      </h2>
+      <p style="font-family:var(--font-display);font-size:0.55rem;color:#ccc;line-height:2;">
+        Things may change between reloads. If you encounter a bug, please go to the top of a mountain and scream very loudly. I won't hear it but it will be a nice and cathartic experience for you.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%;">
+        <button id="btn-disclaimer-accept" style="
+          font-family:var(--font-display);font-size:0.62rem;line-height:1.5;
+          padding:12px 16px;border-radius:var(--radius);border:none;
+          background:#4caf50;color:#fff;cursor:pointer;">I understand, let me in</button>
+        <button id="btn-disclaimer-decline" style="
+          font-family:var(--font-display);font-size:0.55rem;line-height:1.5;
+          padding:10px 16px;border-radius:var(--radius);border:none;
+          background:#2a2a3e;color:#888;cursor:pointer;">Take me somewhere better</button>
+      </div>
+    </div>
+  </div>
   <div id="game-frame">
   <canvas id="canvas"></canvas>
   </div><!-- #game-frame -->
