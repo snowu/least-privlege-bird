@@ -54,8 +54,18 @@ window.addEventListener('orientationchange', fitToViewport);
 document.addEventListener('fullscreenchange', fitToViewport);
 
 // Fullscreen toggle
-const btnFullscreen = document.getElementById('btn-fullscreen') as HTMLButtonElement;
-const mobileHint    = document.getElementById('mobile-hint')    as HTMLButtonElement;
+const btnFullscreen  = document.getElementById('btn-fullscreen')   as HTMLButtonElement;
+const mobileHint     = document.getElementById('mobile-hint')      as HTMLButtonElement;
+const mobileHintIOS  = document.getElementById('mobile-hint-ios')  as HTMLButtonElement;
+const iosFsModal     = document.getElementById('ios-fs-modal')     as HTMLDivElement;
+const btnIosDismiss  = document.getElementById('btn-ios-fs-dismiss') as HTMLButtonElement;
+
+// iPad on iOS 13+ lies and reports MacIntel — catch it via maxTouchPoints.
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Already running as a home-screen PWA — no need to suggest it.
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+  (navigator as any).standalone === true;
 
 function enterFS() {
   document.documentElement.requestFullscreen()
@@ -70,24 +80,38 @@ function exitFS() {
 function updateFsUI() {
   const isMobile    = window.innerWidth < 900 || window.innerHeight < 900;
   const isLandscape = window.innerWidth > window.innerHeight;
-  // Portrait on mobile: show the hint banner, hide the corner exit button.
-  // Landscape on mobile: hide the hint, show the small exit button.
-  // Desktop: hide both.
-  mobileHint.style.display    = isMobile && !isLandscape ? 'block' : 'none';
-  btnFullscreen.style.display = isMobile && isLandscape  ? 'block' : 'none';
+  const inFS        = !!document.fullscreenElement;
+
+  if (isIOS && !isStandalone) {
+    // iOS: can't go fullscreen via API. Show hint in portrait, nothing in landscape.
+    mobileHint.style.display    = 'none';
+    btnFullscreen.style.display = 'none';
+    mobileHintIOS.style.display = isMobile && !isLandscape ? 'block' : 'none';
+  } else {
+    // Chrome/Android: portrait → hint to enter, landscape+fullscreen → exit badge.
+    mobileHintIOS.style.display = 'none';
+    mobileHint.style.display    = isMobile && !isLandscape && !inFS ? 'block' : 'none';
+    btnFullscreen.style.display = isMobile && isLandscape  && inFS  ? 'block' : 'none';
+  }
 }
 updateFsUI();
 window.addEventListener('resize', updateFsUI);
 window.addEventListener('orientationchange', updateFsUI);
 document.addEventListener('fullscreenchange', updateFsUI);
 
-if (!document.documentElement.requestFullscreen) {
-  btnFullscreen.style.display = 'none';
-  mobileHint.style.display    = 'none';
+if (isIOS || !document.documentElement.requestFullscreen) {
+  mobileHint.addEventListener('click', () => {}); // no-op on iOS
 } else {
   mobileHint.addEventListener('click', enterFS);
   btnFullscreen.addEventListener('click', exitFS);
 }
+
+mobileHintIOS.addEventListener('click', () => {
+  iosFsModal.style.display = 'flex';
+});
+btnIosDismiss.addEventListener('click', () => {
+  iosFsModal.style.display = 'none';
+});
 
 // ─── AUDIO (synthesized, no files) ────────────────────────────────────────────
 // All SFX are generated at runtime with the Web Audio API — retro 8-bit blips that

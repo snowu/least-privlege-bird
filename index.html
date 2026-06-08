@@ -422,7 +422,7 @@
     border:2px solid #42a5f5;cursor:pointer;line-height:1;
     box-shadow:0 3px 0 rgba(0,0,0,.5);">⊡</button>
 
-  <!-- ══ MOBILE HINT — tappable, portrait only ══ -->
+  <!-- ══ MOBILE HINT — tappable, portrait only (Chrome/Android) ══ -->
   <button id="mobile-hint" style="
     display:none;
     position:fixed;bottom:58px;left:50%;transform:translateX(-50%);z-index:50;
@@ -432,6 +432,43 @@
     box-shadow:0 4px 16px rgba(0,0,0,.6);white-space:nowrap;cursor:pointer;">
     ⛶ best in fullscreen landscape — tap to enable
   </button>
+
+  <!-- ══ iOS HINT — portrait only, taps open the instruction modal ══ -->
+  <button id="mobile-hint-ios" style="
+    display:none;
+    position:fixed;bottom:58px;left:50%;transform:translateX(-50%);z-index:50;
+    background:#1976d2;border:2px solid #42a5f5;border-radius:10px;
+    padding:12px 22px;color:#fff;text-align:center;
+    font-family:var(--font-body);font-size:0.52rem;line-height:2;
+    box-shadow:0 4px 16px rgba(0,0,0,.6);white-space:nowrap;cursor:pointer;">
+    ⊞ best in fullscreen landscape — tap for how
+  </button>
+
+  <!-- ══ iOS ADD-TO-HOME-SCREEN MODAL ══ -->
+  <div id="ios-fs-modal" style="
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);
+    align-items:center;justify-content:center;z-index:999;color:#fff;">
+    <div style="background:#1a1f2e;border:1px solid #2e3a55;border-radius:14px;
+      padding:28px 32px;max-width:340px;width:90%;
+      display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;">
+      <p style="font-size:2rem">📱</p>
+      <h2 style="font-family:var(--font-display);font-size:0.7rem;line-height:1.7;color:#c8d6f8;">
+        Add to Home Screen<br/>for fullscreen
+      </h2>
+      <ol style="font-family:var(--font-display);font-size:0.55rem;line-height:2;color:#aebbd9;text-align:left;padding-left:18px;width:100%;">
+        <li>Tap the <strong style="color:#fff">Share</strong> button <strong style="color:#fff">⎙</strong> at the bottom of Safari</li>
+        <li>Tap <strong style="color:#fff">Add to Home Screen</strong></li>
+        <li>Open the icon — you get fullscreen landscape, no browser chrome</li>
+      </ol>
+      <p style="font-family:var(--font-display);font-size:0.48rem;color:#7ca4f4;line-height:1.8;">
+        Apple doesn't let browsers go fullscreen.<br/>This is their problem, not ours.
+      </p>
+      <button id="btn-ios-fs-dismiss" style="
+        font-family:var(--font-display);font-size:0.62rem;line-height:1.5;
+        padding:12px 20px;border-radius:var(--radius);border:none;
+        background:#4caf50;color:#fff;cursor:pointer;width:100%;">Got it</button>
+    </div>
+  </div>
 
   <!-- ══ TASTE MODAL (intercepts pixel → round switch) ══ -->
   <div id="taste-modal" class="hidden" style="
