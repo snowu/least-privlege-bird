@@ -28,6 +28,48 @@ const overlay = document.getElementById('overlay');
 overlay.style.width  = C.W + 'px';
 overlay.style.height = C.H + 'px';
 
+// ─── MOBILE SCALING ───────────────────────────────────────────────────────────
+// Scale the #game-frame wrapper via CSS transform so the canvas always fits the
+// viewport without ever changing canvas.style.width/height (which previously
+// caused blurry vertical-band artefacts with image-rendering:pixelated).
+const gameFrame = document.getElementById('game-frame') as HTMLElement;
+const devDisclaimer = document.getElementById('dev-disclaimer') as HTMLElement;
+gameFrame.style.width  = C.W + 'px';
+gameFrame.style.height = C.H + 'px';
+
+function fitToViewport() {
+  // Reserve space for the fixed disclaimer bar (0 once dismissed).
+  const reserved = devDisclaimer.offsetHeight;
+  const availH = window.innerHeight - reserved;
+  const scale = Math.min(window.innerWidth / C.W, availH / C.H, 1);
+  // translate(-50%,-50%) centers the layout box on the anchor point.
+  // Shift the anchor down by half the reserved bar height so the game
+  // sits centered in the space below the disclaimer.
+  gameFrame.style.top = `calc(50% + ${reserved / 2}px)`;
+  gameFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
+}
+fitToViewport();
+window.addEventListener('resize', fitToViewport);
+window.addEventListener('orientationchange', fitToViewport);
+document.addEventListener('fullscreenchange', fitToViewport);
+
+// Fullscreen toggle
+const btnFullscreen = document.getElementById('btn-fullscreen') as HTMLButtonElement;
+if (!document.documentElement.requestFullscreen) {
+  btnFullscreen.style.display = 'none'; // API not available (e.g. iOS Safari)
+} else {
+  btnFullscreen.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    btnFullscreen.textContent = document.fullscreenElement ? '⊡' : '⛶';
+  });
+}
+
 // ─── AUDIO (synthesized, no files) ────────────────────────────────────────────
 // All SFX are generated at runtime with the Web Audio API — retro 8-bit blips that
 // match the pixel aesthetic, with a distinct flap timbre per avatar. Zero assets.
@@ -2922,6 +2964,7 @@ function loop(now) {
 
 async function startGame(playerName) {
   stopIdle();
+  (document.getElementById('gfx-toggle') as HTMLElement).style.display = 'none';
   gameActive = true;
   boltActive = false;            // clear any in-flight projectile from a prior run
   flapsSinceFx = 0;
@@ -2965,6 +3008,7 @@ function showGameOver(msg) {
 async function endGame() {
   cancelAnimationFrame(animId);
   gameActive = false;
+  (document.getElementById('gfx-toggle') as HTMLElement).style.display = '';
   startIdle();           // resume animated menu/game-over background
   AudioFX.gameOver();
 
@@ -3066,6 +3110,9 @@ document.getElementById('btn-play').addEventListener('click', async () => {
   AudioFX.unlock(); // first user gesture — enable audio
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
+  // Dismiss the dev disclaimer banner and reclaim the space it occupied.
+  devDisclaimer.style.display = 'none';
+  fitToViewport();
   try { localStorage.setItem('lpb_player', name); } catch {}   // QOL: remember last pick
   // DB interaction (token) is self-gated on LIVE_DB inside ensurePlayerToken.
   // DEV_MODE independently controls only the SSO/captcha friction below.
