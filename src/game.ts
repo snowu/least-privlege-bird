@@ -280,9 +280,9 @@ const THEMES: { [key: string]: any } = {
   },
   dragon: {
     label: 'Dragon',
-    sky: '#1a0533', ground: '#4a4453',
-    surface: ['#5a4a6a', '#7a6a8e', '#332a40'],   // cracked dark-stone lip
-    cloudFill: 'none',     // storm clouds + dust drawn as a dedicated bgLayer instead
+    sky: '#3a1408', ground: '#1c0f0a',
+    surface: ['#7a1f0a', '#ff7a33', '#3a0f04'],   // molten lava lip — the floor IS the flow
+    cloudFill: 'none',     // ash plumes + embers + meteors drawn as dedicated bgLayers instead
     anim: true,            // 2-frame: wings beat down on flap (round bakes fire into frame 2)
     // Data-driven effect layer (render-only). The flame is its OWN transparent asset
     // drawn past the snout in drawPlayer — not baked into the sprite box — so it can be
@@ -295,15 +295,32 @@ const THEMES: { [key: string]: any } = {
       anchorX: 0.30, anchorY: -0.05,                     // offset from sprite centre (×s)
       scale: 1.4,                                        // fx width = s × scale
     },
-    // Stone brick towers with mortar lines and moss-tinted caps (a dragon's ruined keep).
+    // Obsidian/basalt columns: dark volcanic-rock blocks veined with glowing
+    // lava-seam cracks (swapped from the mossy ruined-keep brickwork).
     drawPipe(x, topH, gap) {
       framedPipe(x, topH, gap, {
-        bodyColor: '#6d6875', capColor: '#6d6875', capH: 24, capW: C.PIPE_W + 10,
+        bodyColor: '#241a18', capColor: '#241a18', capH: 24, capW: C.PIPE_W + 10,
         decorate({ x, topH, botY, capX, capW, capH }) {
-          ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
           for (let y = 8; y < topH - capH; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
           for (let y = botY + capH + 8; y < C.GROUND; y += 12) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + C.PIPE_W, y); ctx.stroke(); }
-          ctx.fillStyle = 'rgba(100,200,80,0.25)';
+          // glowing lava-seam cracks: jagged veins running down the column,
+          // pulsing gently with the volcano's rhythm
+          const vGlow = volcano().glow;
+          const glow = 0.35 + 0.25 * vGlow;
+          ctx.strokeStyle = `rgba(255,${110 + Math.round(60 * glow)},60,${glow})`;
+          ctx.lineWidth = 2; ctx.lineCap = 'round';
+          const vein = (vx, vy0, vy1) => {
+            ctx.beginPath(); ctx.moveTo(vx, vy0);
+            for (let y = vy0, i = 0; y < vy1; y += 9, i++) ctx.lineTo(vx + (i % 2 ? 3 : -3), y);
+            ctx.lineTo(vx, vy1);
+            ctx.stroke();
+          };
+          vein(x + 6,  10, topH - capH - 6);
+          vein(x + C.PIPE_W - 8, botY + capH + 6, C.GROUND - 10);
+          ctx.lineWidth = 1;
+          // ember-crust caps
+          ctx.fillStyle = `rgba(255,140,60,${0.18 + 0.12 * vGlow})`;
           ctx.fillRect(capX, topH - capH, capW, capH);
           ctx.fillRect(capX, botY, capW, capH);
         },
@@ -988,46 +1005,161 @@ function dragonFlash() {
   return Math.max(a, b);
 }
 
+// Volcanic lightning for the new dragon stage: same double-blink shape as
+// dragonFlash, but on a longer ~7s period — "kept, but a bit less" thunder,
+// distinct from the storm-theme cadence the (hidden) wizard inherited.
+function emberLightning() {
+  const t = nowSec();
+  const period = 7;
+  const into = t % period;
+  if (into > 0.6) return 0;
+  const a = Math.max(0, 1 - into / 0.25);
+  const b = into > 0.3 ? Math.max(0, 1 - (into - 0.3) / 0.2) * 0.7 : 0;
+  return Math.max(a, b);
+}
+
+// Eruption state for the dragon's volcano: a slow simmer-build-burst-settle
+// cycle (~9s), independent of dragonFlash's quick lightning timing so the two
+// never sync into a single "everything happens at once" beat. Returns:
+//   glow  — 0.12 (ambient crater simmer) … 1 (peak burst), a brightness curve
+//           that rises then falls — used for the crater/rivulet/ash-tint glow.
+//   erupt — null outside the active eruption window, else a MONOTONIC 0..1
+//           progress through it — drives ballistic bombs / the rising ash
+//           column, which must animate strictly forward (not rise-then-rewind
+//           the way `glow`'s rise-then-fall shape would force them to).
+// Render-only.
+function volcano() {
+  const t = nowSec();
+  const period = 9;
+  const into = t % period;
+  const rampStart = 6, peak = 6.6, settle = 8.5;
+  let glow = 0.12;
+  if (into < rampStart) glow = 0.12;
+  else if (into < peak) glow = 0.12 + 0.88 * (into - rampStart) / (peak - rampStart);
+  else if (into < settle) glow = Math.max(0.12, 1 - (into - peak) / (settle - peak));
+  const erupt = (into >= rampStart && into < settle) ? (into - rampStart) / (settle - rampStart) : null;
+  return { glow, erupt };
+}
+
+// Per-meteor fall-and-impact curve, keyed by index `i` so each meteor in the
+// layer runs its own offset cycle (staggered, not synced). Returns
+// { y: 0..1 fall progress (clamped at 1 = ground), impact: 0..1 flash strength
+// just after landing }. Render-only, deterministic — pure function of time + i.
+function meteorFall(i) {
+  const t = nowSec();
+  const period = 6 + (i % 3) * 2;            // stagger cadence per meteor
+  const into = (t + i * 173) % period;
+  const fallDur = 1.4;
+  if (into < fallDur) return { y: into / fallDur, impact: 0 };
+  const sinceImpact = into - fallDur;
+  const impact = sinceImpact < 0.35 ? Math.max(0, 1 - sinceImpact / 0.35) : 0;
+  return { y: 1, impact };
+}
+
+// Mini lava-vent eruption state — the volcano's `{ glow, erupt }` language
+// reused "in different dimensions": same simmer→build→burst→settle shape, just
+// faster and staggered per-vent by index `i`, so the floor's vents pop off on
+// their own independent cadences rather than mirroring the big one in miniature.
+function ventState(i) {
+  const t = nowSec();
+  const period = 5 + (i % 3);
+  const into = (t + i * 211) % period;
+  const rampStart = period - 2.2, peak = period - 1.7, settle = period - 0.5;
+  let glow = 0.15;
+  if (into < rampStart) glow = 0.15;
+  else if (into < peak) glow = 0.15 + 0.85 * (into - rampStart) / (peak - rampStart);
+  else if (into < settle) glow = Math.max(0.15, 1 - (into - peak) / (settle - peak));
+  const erupt = (into >= rampStart && into < settle) ? (into - rampStart) / (settle - rampStart) : null;
+  return { glow, erupt };
+}
+
+// Blocky pixel-art lava cascade — a stepped channel of glowing chunks running
+// from (x0,y0) to (x1,y1), with a brightness wave that visibly travels
+// downhill over time (the classic "flowing lava" palette-cycle look), pooling
+// in a simmering glow where it meets the ground.
+function lavaFlow(x0, y0, x1, y1, glow) {
+  const t = nowSec();
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const nx = -dy / len, ny = dx / len;          // perpendicular unit vector — for meander
+  const steps = 6;
+  for (let i = 0; i < steps; i++) {
+    const f = i / (steps - 1);
+    // gentle meander off the straight line, seeded by i (not random — stays
+    // replay-deterministic while killing the "ruler" look)
+    const wobble = Math.sin(i * 1.7 + x0 * 0.05) * 4 * (1 - f * 0.4);
+    const px = x0 + dx * f + nx * wobble, py = y0 + dy * f + ny * wobble;
+    const w = 5 + f * 6;
+    const wave = 0.5 + 0.5 * Math.sin((f * 5 - t * 1.4) * Math.PI * 2);
+    const bright = glow * (0.35 + 0.65 * wave);
+    pxRect(px - w/2 - 1, py - w/2 - 1, w + 2, w + 2, `rgba(70,22,10,${0.5 + 0.3*glow})`);
+    pxRect(px - w/2, py - w/2, w, w, `rgba(255,${130 + Math.round(100*bright)},${40 + Math.round(70*bright)},${0.5 + 0.45*bright})`);
+    if (bright > 0.6) pxRect(px - 1, py - 1, 2, 2, `rgba(255,240,200,${(bright - 0.6) * 1.5})`);
+  }
+  const poolGlow = glow * (0.6 + 0.4 * Math.sin(t * 1.4 + x0 * 0.01));
+  pixelDisc(x1, y1 + 2, 6 + 4 * poolGlow, `rgba(255,${120 + Math.round(100*poolGlow)},50,${0.22 + 0.28*poolGlow})`);
+}
+
+// A thinner glowing fissure tracing a slope — a hairline crack of light rather
+// than a full molten cascade. Used for secondary faces so not every slope on
+// the range carries the same heavy effect (variety without extra clutter).
+function lavaCrack(x0, y0, x1, y1, glow) {
+  const t = nowSec();
+  const dx = x1 - x0, dy = y1 - y0;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 1.7 + x0 * 0.05);
+  const bright = glow * (0.35 + 0.65 * pulse);
+  ctx.strokeStyle = `rgba(255,${130 + Math.round(90 * bright)},60,${0.2 + 0.5 * bright})`;
+  ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x0 + dx * 0.4 + 4, y0 + dy * 0.4);
+  ctx.lineTo(x0 + dx * 0.7 - 3, y0 + dy * 0.7);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+}
+
 THEMES.dragon.bgLayers = [
-  // Heavy storm clouds: dark, low, slow-drifting banks across the top of the sky.
-  // They brighten briefly with each lightning flash (lit from within the storm).
+  // Ash plumes: heavy dark banks drifting low across the sky, lit warm-orange
+  // from beneath — brighten as the volcano builds toward an eruption (recolored
+  // + reusing the storm theme's overlapping-lobe cloud-bank technique).
   { speed: 0, draw() {
       const t = nowSec();
-      const f = dragonFlash();
-      const drift = (t * 12) % (C.W + 300);                    // slow leftward roll
-      const base = `rgba(${44 + f * 90},${38 + f * 80},${64 + f * 90},`;
+      const p = volcano().glow;
+      const drift = (t * 12) % (C.W + 300);
+      const base = `rgba(${70 + Math.round(p * 90)},${50 + Math.round(p * 50)},${42 + Math.round(p * 18)},`;
       for (let k = 0; k < 6; k++) {
         const cx = ((k * 280 - drift + C.W + 300) % (C.W + 300)) - 150;
         const cy = 40 + (k % 3) * 34;
         const w = 200 + (k % 2) * 80, h = 70 + (k % 3) * 16;
-        // each bank = a clump of overlapping lobes, denser/darker than fair clouds
         pixelCloud(cx, cy, w, h, base + (0.85) + ')');
         pixelCloud(cx + 50, cy + 14, w * 0.7, h * 0.8, base + (0.7) + ')');
       }
   } },
-  // Wind-blown dust: fine particles streaking right→left, faster than the clouds.
+  // Embers: glowing cinders rising off the volcano on the heat thermals, swaying
+  // lazily as they drift up and fade (recolored + re-aimed from the storm
+  // theme's side-blown wind dust — thinned out to stay calm, not noisy).
   { speed: 0, draw() {
       const t = nowSec();
-      for (let i = 0; i < 80; i++) {
-        const spd = 120 + (i % 6) * 40;                        // gusty range
-        const x = C.W - ((t * spd + i * 137) % (C.W + 60)) + 30; // right→left
-        const y = (i * 89 + 20) % (C.GROUND - 30) + Math.sin(t * 2 + i) * 6;
-        const len = 5 + (i % 4) * 3;
-        const a = 0.12 + (i % 5) * 0.05;
-        ctx.strokeStyle = `rgba(200,185,225,${a})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y + 1); ctx.stroke(); // streak trails behind
+      for (let i = 0; i < 50; i++) {
+        const spd = 28 + (i % 6) * 13;
+        const y = G() - ((t * spd + i * 137) % (C.GROUND + 60));
+        const x = (i * 89 + 20) % C.W + Math.sin(t * 1.3 + i) * 14;
+        const r = 1.4 + (i % 3);
+        const a = 0.08 + (i % 5) * 0.04;
+        pixelDisc(x, y, r, `rgba(255,${130 + (i % 4) * 28},60,${a})`);
       }
   } },
-  // Lightning: a full-sky flash painted behind the mountains on a periodic strike.
+  // Volcanic lightning: real eruptions generate their own static-charge storms —
+  // a satirical-accurate detail. Same strike shape as the storm theme's bolt,
+  // but on a longer cadence ("kept, but a bit less") and a warm-toned flash.
   { speed: 0, draw() {
-      const f = dragonFlash();
+      const f = emberLightning();
       if (f <= 0) return;
-      ctx.fillStyle = `rgba(200,190,255,${0.55 * f})`;
+      ctx.fillStyle = `rgba(255,210,160,${0.45 * f})`;
       ctx.fillRect(0, 0, C.W, C.GROUND);
-      // a jagged bolt down from the sky on the stronger blinks
       if (f > 0.5) {
-        ctx.strokeStyle = `rgba(255,255,255,${f})`;
+        ctx.strokeStyle = `rgba(255,255,240,${f})`;
         ctx.lineWidth = 2;
         ctx.beginPath();
         let bx = C.W * 0.62, by = 0;
@@ -1037,23 +1169,175 @@ THEMES.dragon.bgLayers = [
         ctx.lineWidth = 1;
       }
   } },
-  // Jagged purple mountain range — overlapping snow-capped peaks
-  { speed: 0.12, draw(o) { tileMotif(o, 420, x => {
-      pixelPeak(x - 40, 300, 200, '#3a2a5a', '#d8cfe8');
-      pixelPeak(x + 150, 260, 160, '#4a3a6e', '#cfc4e0');
-      pixelPeak(x + 320, 220, 130, '#332551');
+  // Basalt ridge — dark volcanic-rock peaks streaked with glowing lava flows
+  // running down from their summits (recolored + thinned from the storm theme's
+  // snow-capped range; a calmer backdrop so the volcano reads as the star).
+  { speed: 0.12, draw(o) { tileMotif(o, 460, x => {
+      const glow = volcano().glow;
+      // a point a fraction `f` along the line from (x0,y0) to (x1,y1), nudged
+      // `inset` px toward the interior (perpendicular, left-of-travel) — keeps
+      // the lava hugging the rock face instead of floating off the silhouette
+      const hug = (x0, y0, x1, y1, f, inset) => {
+        const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+        return [x0 + dx * f - (dy / len) * inset, y0 + dy * f + (dx / len) * inset];
+      };
+      // One full molten cascade per peak (its more prominent face) plus a
+      // thinner glowing fissure on the other — mixes the two lava languages so
+      // the range doesn't read as the same effect copy-pasted on every slope.
+      const peak = (px, w, h, c, mainSide) => {
+        pixelPeak(px, w, h, c);
+        const apexX = px + w * 0.42, apexY = G() - h;
+        const shoulderX = px + w * 0.72, shoulderY = G() - h * 0.55;
+        const [lx0, ly0] = hug(px, G(), apexX, apexY, 0.84, 6);
+        const [lx1, ly1] = hug(px, G(), apexX, apexY, 0.14, 6);
+        const [rx0, ry0] = hug(px + w, G(), shoulderX, shoulderY, 0.74, -6);
+        const [rx1, ry1] = hug(px + w, G(), shoulderX, shoulderY, 0.12, -6);
+        if (mainSide === 'left') {
+          lavaFlow(lx0, ly0, lx1, ly1, glow);
+          lavaCrack(rx0, ry0, rx1, ry1, glow);
+        } else {
+          lavaCrack(lx0, ly0, lx1, ly1, glow);
+          lavaFlow(rx0, ry0, rx1, ry1, glow);
+        }
+      };
+      // a sharper, jagged spire — variety against the smoother massifs, with
+      // a thin glowing fissure (not a full cascade — keeps the skyline calm)
+      const spike = (sx, peakY, baseW, c) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.moveTo(sx - baseW / 2, G());
+        ctx.lineTo(sx - baseW / 3, peakY + 14);
+        ctx.lineTo(sx - baseW / 8, peakY);
+        ctx.lineTo(sx + baseW / 10, peakY + 10);
+        ctx.lineTo(sx + baseW / 3, peakY + 3);
+        ctx.lineTo(sx + baseW / 2, G());
+        ctx.closePath();
+        ctx.fill();
+        const [sx0, sy0] = hug(sx - baseW / 2, G(), sx - baseW / 8, peakY, 0.78, 4);
+        const [sx1, sy1] = hug(sx - baseW / 2, G(), sx - baseW / 8, peakY, 0.16, 4);
+        lavaCrack(sx0, sy0, sx1, sy1, glow);
+      };
+      peak(x - 30, 170, 140, '#241814', 'left');
+      peak(x + 170, 140, 110, '#2e1f18', 'right');
+      spike(x + 350, G() - 75, 42, '#1c120e');
   }); } },
-  // A castle on the mid ridge — windows brighten with each lightning flash
-  { speed: 0.35, draw(o) { tileMotif(o, 520, x => {
-      const bx = x + 60, by = G(), c = '#5a5566', d = '#403c4a';
-      const f = dragonFlash();
-      const win = `rgba(255,213,79,${0.85 + 0.15 * f})`;          // base warm, flares on flash
-      pxRect(bx, by - 70, 120, 70, c);                            // keep
-      for (let t = 0; t < 4; t++) pxRect(bx - 10 + t * 40, by - 92, 20, 26, c); // battlement towers
-      for (let t = 0; t < 4; t++) pxRect(bx - 6 + t * 40, by - 100, 12, 10, d); // tower caps
-      pxRect(bx + 50, by - 40, 20, 40, d);                        // gate
-      ctx.fillStyle = win; ctx.fillRect(bx + 18, by - 56, 8, 8); ctx.fillRect(bx + 94, by - 56, 8, 8); // lit windows
+  // The volcano: a fixed landmark (not tiled — anchored mid-background). Always
+  // simmering (glowing crater + creeping lava rivulets), it periodically erupts
+  // in earnest: a billowing ash column mushrooms upward and ballistic lava bombs
+  // arc out on real parabolic trajectories (gravity-timed off `erupt`, a
+  // monotonic progress value — so they fly forward, not rise-then-rewind the
+  // way the brightness curve `glow` would force them to).
+  { speed: 0.2, draw() {
+      const { glow, erupt } = volcano();
+      const vx = C.W - 260, baseY = G(), peakY = baseY - 230, w = 260;
+      ctx.fillStyle = '#2a1a14';
+      ctx.beginPath();
+      ctx.moveTo(vx - w / 2, baseY);
+      ctx.lineTo(vx - w * 0.18, peakY + 18);
+      ctx.lineTo(vx + w * 0.12, peakY);
+      ctx.lineTo(vx + w * 0.2, peakY + 14);
+      ctx.lineTo(vx + w / 2, baseY);
+      ctx.closePath();
+      ctx.fill();
+      const craterX = vx + w * 0.02, craterY = peakY + 6;
+      // creeping lava down the slopes — traced along the cone's own silhouette
+      // edges (nudged inward) so it hugs the rock face; one full cascade on the
+      // near slope, a thinner glowing fissure on the far one for variety
+      const lerp = (x0, y0, x1, y1, f) => [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f];
+      const [llx0, lly0] = lerp(vx - w / 2, baseY, vx - w * 0.18, peakY + 18, 0.86);
+      const [llx1, lly1] = lerp(vx - w / 2, baseY, vx - w * 0.18, peakY + 18, 0.16);
+      lavaFlow(llx0 + 6, lly0, llx1 + 6, lly1, glow);
+      const [rlx0, rly0] = lerp(vx + w / 2, baseY, vx + w * 0.2, peakY + 14, 0.86);
+      const [rlx1, rly1] = lerp(vx + w / 2, baseY, vx + w * 0.2, peakY + 14, 0.16);
+      lavaCrack(rlx0 - 6, rly0, rlx1 - 6, rly1, glow);
+      // layered crater glow — widens + brightens toward the burst
+      pixelDisc(craterX, craterY, 15 + 18 * glow, `rgba(255,${90 + Math.round(90 * glow)},40,${0.10 + 0.20 * glow})`);
+      pixelDisc(craterX, craterY, 8 + 10 * glow,  `rgba(255,${110 + Math.round(120 * glow)},40,${0.25 + 0.45 * glow})`);
+      pixelDisc(craterX, craterY, 4 + 5 * glow,   `rgba(255,235,170,${0.40 + 0.50 * glow})`);
+      // active eruption: ash column billows up, lava bombs arc out ballistically
+      if (erupt != null) {
+        // billowing ash column — overlapping blooms rising and widening with `erupt`
+        for (let i = 0; i < 5; i++) {
+          const rise = erupt * (44 + i * 36);
+          const r = 9 + i * 7 + erupt * 16;
+          const a = Math.max(0, (0.24 - i * 0.035) * Math.sin(Math.min(1, erupt * 1.4) * Math.PI));
+          pixelDisc(craterX + (i - 2) * 5 * erupt, craterY - rise, r, `rgba(${72 + i * 8},${58 + i * 6},${52 + i * 4},${a})`);
+        }
+        // ballistic lava bombs: launched at the start of the eruption window,
+        // each follows x = x0 + vx·τ, y = y0 + vy·τ + ½g·τ² until it falls away
+        for (let i = 0; i < 6; i++) {
+          const ang = -Math.PI / 2 + (i - 2.5) * 0.24;
+          const speed = 75 + i * 8, g = 260;
+          const tau = erupt * 1.15;                          // bomb's own flight clock
+          const fade = Math.max(0, 1 - tau);
+          if (fade <= 0) continue;
+          const bx = craterX + Math.cos(ang) * speed * tau;
+          const by = craterY + Math.sin(ang) * speed * tau + 0.5 * g * tau * tau;
+          if (by > baseY) continue;                          // landed — stop drawing
+          pixelDisc(bx, by, 3 + (i % 2), `rgba(255,${140 + i * 12},50,${0.9 * fade})`);
+          pixelDisc(bx, by, 1.4, `rgba(255,240,200,${fade})`);
+        }
+        // bright flare wash, peaking mid-eruption
+        ctx.fillStyle = `rgba(255,180,90,${0.20 * Math.sin(erupt * Math.PI)})`;
+        ctx.fillRect(0, 0, C.W, C.GROUND);
+      }
+  } },
+  // Meteor streaks: a sparse rain of fiery debris falling diagonally out of the
+  // ash sky, each with a tapering flame trail and a brief ground-impact flash +
+  // dust puff (meteorFall staggers each one onto its own fall/impact cycle).
+  { speed: 0, draw() {
+      const meteors = [C.W * 0.20, C.W * 0.46, C.W * 0.74];
+      meteors.forEach((mx, i) => {
+        const { y, impact } = meteorFall(i);
+        if (y < 1) {
+          const headX = mx + y * 90, headY = y * (G() - 60);
+          ctx.strokeStyle = 'rgba(255,150,60,0.6)';
+          ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.moveTo(headX, headY); ctx.lineTo(headX - 50, headY - 70); ctx.stroke();
+          ctx.lineWidth = 1;
+          pixelDisc(headX, headY, 5, '#fff3c4');
+          pixelDisc(headX, headY, 3, '#ff8a3c');
+        } else if (impact > 0) {
+          pixelDisc(mx + 90, G() - 60, 16 * impact, `rgba(255,200,120,${0.5 * impact})`);
+          ctx.fillStyle = `rgba(120,100,90,${0.35 * impact})`;
+          ctx.fillRect(mx + 70, G() - 64, 50, 6);
+        }
+      });
+  } },
+  // Lava floor: the ground itself is a molten flow — a string of glowing pools
+  // simmering along the surface line, each on its own staggered pulse so the
+  // floor reads as alive, not a static painted strip.
+  { speed: 0.6, draw(o) { tileMotif(o, 150, (x, tile) => {
+      const ph = ((tile * 257) % 100) / 100;
+      const s = 0.5 + 0.5 * Math.sin(nowSec() * 1.6 + ph * Math.PI * 2);
+      const r = 10 + 8 * s;
+      pixelDisc(x + 60, G() + 4, r, `rgba(255,${130 + Math.round(80*s)},50,${0.18 + 0.22*s})`);
+      pixelDisc(x + 60, G() + 4, r * 0.45, `rgba(255,225,160,${0.25 + 0.35*s})`);
   }); } },
+  // Scattered lava vents: smaller eruptions dotted along the floor and ridge —
+  // the volcano's glow-and-burst language reused at a miniature scale.
+  { speed: 0, draw() {
+      const vents = [C.W * 0.10, C.W * 0.34, C.W * 0.58, C.W * 0.86];
+      vents.forEach((vx, i) => {
+        const { glow, erupt } = ventState(i);
+        const vy = G() - 2;
+        pixelDisc(vx, vy, 6 + 7*glow, `rgba(255,${100 + Math.round(110*glow)},40,${0.18 + 0.35*glow})`);
+        pixelDisc(vx, vy, 3 + 3*glow, `rgba(255,230,160,${0.3 + 0.5*glow})`);
+        if (erupt != null) {
+          for (let j = 0; j < 3; j++) {
+            const ang = -Math.PI/2 + (j - 1) * 0.4;
+            const speed = 36 + j * 8, g = 240;
+            const tau = erupt * 1.1;
+            const fade = Math.max(0, 1 - tau);
+            if (fade <= 0) continue;
+            const bx = vx + Math.cos(ang) * speed * tau;
+            const by = vy + Math.sin(ang) * speed * tau + 0.5*g*tau*tau;
+            if (by > vy + 4) continue;
+            pixelDisc(bx, by, 2, `rgba(255,${150+j*15},60,${0.85*fade})`);
+          }
+        }
+      });
+  } },
 ];
 
 // Straight copy of the dragon level's scenery — parked here for the (hidden,
