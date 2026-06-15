@@ -48,11 +48,11 @@ how `physics-core.ts` is already shared between browser and edge function.
   never affects the replay/score path).
 - New player insert: `{ name, token_hash: h, score, avatar }` (avatar may be
   undefined → column stays NULL).
-- Existing player: `avatar` should always reflect the *latest* submission,
-  independent of whether the score improved. Current logic only `PATCH`es
-  when `score > existing.score`; add a second branch so a non-improving
-  submission still `PATCH`es `{ avatar }` alone (when `avatar` is present and
-  valid) — score is left untouched in that case.
+- Existing player: `avatar` is tied to the high score, not "latest persona" —
+  it only updates in the existing `score > existing.score` branch, alongside
+  `score`, in the same `PATCH`. A non-improving submission leaves `avatar`
+  (and `score`) untouched. So `avatar` always reflects the persona that
+  *achieved* the current high score.
 
 ### 4. `src/scores.ts`
 - `sbLoadScores`: `select=name,score,avatar&score=gt.0&order=score.desc`.
@@ -99,9 +99,10 @@ gold-accent treatment for visual consistency.
 as the rest of `#overlay`.
 
 ## Out of scope
-- No per-score-snapshot avatar history — `avatar` is a single per-player
-  column reflecting their latest submission, not tied to which run earned
-  the high score.
+- No separate avatar-history table — `avatar` is a single per-player column
+  on `scores`, updated only when the high score itself is updated (so it
+  reflects the run that earned the current high score, not necessarily the
+  player's latest cosmetic pick).
 - No retroactive backfill for existing rows (explicit decision — old rows
   show the fallback avatar).
 - No changes to `physics-core.ts`, replay validation, or `npm test` goldens —
