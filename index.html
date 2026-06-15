@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <!-- Required for "Add to Home Screen" to launch as a fullscreen standalone app on iOS
+       (no Safari chrome) instead of just a bookmark that opens in normal Safari. -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Least Privilege Bird</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -39,6 +44,8 @@
       position: absolute;
       top: 50%; left: 50%;
       transform-origin: center center;
+      opacity: 0;
+      transition: opacity 0.15s ease;
     }
 
     #overlay {
@@ -252,6 +259,34 @@
     #avatar-picker-go .avatar-opt img { width: 32px; height: 32px; }
     #avatar-picker-go .avatar-opt span { font-size: 0.46rem; }
     .go-swap-label { font-size: 0.6rem; color: #9fb0c8; margin: 6px 0 4px; text-align: center; }
+
+    #menu-screen {
+      background: rgba(0,0,0,0.55); border-radius: 16px; padding: 32px 40px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 300px;
+    }
+    #menu-screen h1 { display: flex; align-items: center; gap: 12px; justify-content: center; }
+    #title-logo { width: 60px; height: 60px; }
+    .menu-subtitle { font-size: 0.8rem; color: #7ca4f4; letter-spacing: 1px; margin-top: -8px; }
+
+    /* ── MOBILE: shorten the title and tighten the avatar picker so the menu
+       fits a landscape phone viewport without scrolling off-screen ── */
+    body.is-mobile #menu-screen { padding: 14px 22px; gap: 8px; }
+    body.is-mobile #menu-screen h1 { font-size: 0.85rem; gap: 8px; }
+    body.is-mobile #title-logo { width: 30px; height: 30px; }
+    body.is-mobile .menu-subtitle { display: none; }
+    body.is-mobile #avatar-picker { flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 320px; }
+    body.is-mobile .avatar-opt { padding: 4px 6px; gap: 2px; }
+    body.is-mobile .avatar-opt img { width: 26px; height: 26px; }
+    body.is-mobile .avatar-opt span { font-size: 0.52rem; }
+    /* Game-over picker's 300px cap forces a 2-row wrap even on wide landscape
+       phones that have plenty of room for all 9 avatars on one row. Shrink the
+       tiles too so one row reliably fits regardless of device font-size — a
+       wrapped 2nd row gets clipped by #gameover-panel's overflow:hidden and
+       silently disappears instead of visibly wrapping. */
+    body.is-mobile #avatar-picker-go { max-width: min(470px, calc(100vw - 32px)); }
+    body.is-mobile #avatar-picker-go .avatar-opt { padding: 3px 4px; gap: 1px; }
+    body.is-mobile #avatar-picker-go .avatar-opt img { width: 24px; height: 24px; }
+    body.is-mobile #avatar-picker-go .avatar-opt span { font-size: 0.4rem; }
   </style>
 </head>
 <body>
@@ -295,9 +330,9 @@
     <pre id="fortune-cow" class="hidden" aria-hidden="true"></pre>
 
     <!-- ══ MENU ══ -->
-    <div id="menu-screen" style="background:rgba(0,0,0,0.55);border-radius:16px;padding:32px 40px;display:flex;flex-direction:column;align-items:center;gap:14px;min-width:300px;">
-      <h1 style="display:flex;align-items:center;gap:12px;justify-content:center;"><img id="title-logo" src="assets/pixel/penguin.svg" alt="" style="width:60px;height:60px;" /> Least Privilege Bird</h1>
-      <p style="font-size:0.8rem;color:#7ca4f4;letter-spacing:1px;margin-top:-8px;">Authenticated · Verified · Compliant · Audited</p>
+    <div id="menu-screen">
+      <h1><img id="title-logo" src="assets/pixel/penguin.svg" alt="" /> Least Privilege Bird</h1>
+      <p class="menu-subtitle">Authenticated · Verified · Compliant · Audited</p>
       <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.15);" />
       <select id="user-select" class="hidden" style="width:220px;">
         <option value="">— pick user —</option>
@@ -325,7 +360,7 @@
 
     <!-- ══ CLAVE FLOW ══ -->
     <div id="clave-screen" class="hidden">
-      <div class="clave-logo">☁️ <span>CLAVE</span> SSO Amazon Internal</div>
+      <div class="clave-logo">☁️ <span>CLAVE</span> SSO Amazon</div>
 
       <!-- Step 1: CAPTCHA pre-login -->
       <div id="clave-step-captcha-pre">
@@ -395,7 +430,7 @@
 
     <!-- ══ SCORE SUBMIT ══ -->
     <div id="score-submit-screen" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:14px;">
-      <div class="clave-logo">☁️ <span>CLAVE</span> SSO  Amazon Internal</div>
+      <div class="clave-logo">☁️ <span>CLAVE</span> SSO Amazon</div>
       <h2 style="color:#c8d6f8">Submitting score to compliance audit log...</h2>
       <div class="clave-spinner"></div>
       <div id="submit-log" style="width:100%;background:#0d1117;border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:0.5rem;color:#51cf66;height:130px;overflow:hidden;border:1px solid #2e3a55;line-height:2;" data-mono></div>

@@ -35,18 +35,33 @@ gameFrame.style.width  = C.W + 'px';
 gameFrame.style.height = C.H + 'px';
 
 function fitToViewport() {
-  // Reserve space for the fixed disclaimer bar (0 once dismissed).
-  const reserved = devDisclaimer.offsetHeight;
-  const availH = window.innerHeight - reserved;
-  const scale = Math.min(window.innerWidth / C.W, availH / C.H, 1);
+  // On mobile the disclaimer is replaced by a modal and never shown as a banner,
+  // so never reserve space for it — avoids a scale jump on first load.
+  const isMob = Math.min(window.innerWidth, window.innerHeight) < 900;
+  document.body.classList.toggle('is-mobile', isMob);
+  const reserved = isMob ? 0 : devDisclaimer.offsetHeight;
+  // Always treat the larger dimension as width (landscape-first game).
+  // In portrait, the URL bar will eat into innerHeight when the phone rotates to landscape,
+  // so pre-subtract that same chrome height from vh now so the scale matches.
+  // Only applies when the diff is in the "URL bar" range (20–80 px) to avoid
+  // miscorrecting on iOS Safari (full chrome ~120 px) or no-chrome PWA (0 px).
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const chromeDiff  = Math.max(0, screen.height - window.innerHeight);
+  const urlBarEst   = isMob && isPortrait && chromeDiff > 20 && chromeDiff <= 80 ? chromeDiff : 0;
+  const vw = Math.max(window.innerWidth, window.innerHeight);
+  const vh = Math.min(window.innerWidth, window.innerHeight) - urlBarEst - (isMob ? 0 : reserved);
+  const scale = Math.min(vw / C.W, vh / C.H, 1);
   // translate(-50%,-50%) centers the layout box on the anchor point.
   // Shift the anchor down by half the reserved bar height so the game
   // sits centered in the space below the disclaimer.
   gameFrame.style.top = `calc(50% + ${reserved / 2}px)`;
   gameFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
-  // Partial font-size compensation: sqrt dampens the scale-down so UI text
+  // Partial font-size compensation: dampens the scale-down so UI text
   // stays legible without ballooning to full 1/scale size on desktop.
-  document.documentElement.style.fontSize = `${9 / Math.pow(scale, 0.08)}px`;
+  document.documentElement.style.fontSize = `${12 / Math.pow(scale, 0.1)}px`;
+  // Reveal after the correct transform is set — prevents flash of unscaled content
+  // while the JS bundle loads. CSS opacity:0 hides game-frame until this runs.
+  gameFrame.style.opacity = '1';
 }
 fitToViewport();
 window.addEventListener('resize', fitToViewport);
@@ -149,7 +164,6 @@ window.addEventListener('orientationchange', () => {
 
 if (isMobileViewport()) {
   devDisclaimer.style.display = 'none';
-  fitToViewport();
   if (!localStorage.getItem(DISCLAIMER_KEY)) {
     disclaimerModal.style.display = 'flex';
   }

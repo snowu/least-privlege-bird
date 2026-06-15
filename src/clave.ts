@@ -796,7 +796,7 @@ export const Clave = (() => {
       const panel = document.createElement('div');
       panel.className = 'captcha-panel';
       panel.innerHTML = `
-        <h2>🤖 Identity Verification — AWS Knowledge Check</h2>
+        <h2>🤖 Identity Verification</h2>
         <p class="sub" style="font-size:0.62rem;color:#c8d6f8;line-height:1.9;">${q.prompt}</p>
         <div class="captcha-grid" id="${containerId}-grid"></div>
         <div id="${containerId}-feedback" style="width:100%;display:none;flex-direction:column;gap:6px;"></div>
