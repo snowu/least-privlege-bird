@@ -17,6 +17,13 @@ export function _loadLocal() {
 }
 function _saveLocal(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 
+// The player's currently-picked avatar/theme key (set by selectAvatar in
+// game.ts). Sent with every score submission so the leaderboard can show
+// which avatar earned the high score. Defaults to 'penguin' if unset.
+function _currentAvatar() {
+  try { return localStorage.getItem('lpb_avatar') || 'penguin'; } catch { return 'penguin'; }
+}
+
 export function getLocalToken(name)      { const v = _loadLocal()[name]; return v?.token || v || null; }
 export function setLocalToken(name, tok) { const d = _loadLocal(); d[name] = tok; _saveLocal(d); } // always a string
 
@@ -64,8 +71,8 @@ async function _sbFetch(path, opts = {}) {
 async function sbLoadScores() {
   if (!_sb) return null;
   // score=gt.0 hides registered-but-never-played accounts (created at score 0).
-  const res = await _sbFetch('/scores?select=name,score&score=gt.0&order=score.desc');
-  return res.json(); // [{ name, score }, ...]
+  const res = await _sbFetch('/scores?select=name,score,avatar&score=gt.0&order=score.desc');
+  return res.json(); // [{ name, score, avatar }, ...]
 }
 
 // Authoritative best score for a player — read from Supabase, never localStorage.
@@ -160,7 +167,7 @@ export async function fetchFortune() {
 // Submit a run to the edge function, which replays { seed, flapTicks } through the
 // real physics and accepts the score only if it recomputes to the claimed value.
 // `replay` is { seed, flapTicks }; for registration (score 0) an empty run is used.
-async function sbSubmitScore(name, token, score, replay?) {
+async function sbSubmitScore(name, token, score, replay?, avatar?) {
   if (!_sb) return;
   const { seed, flapTicks } = replay || { seed: 0, flapTicks: [] };
   const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-score`, {
@@ -170,7 +177,7 @@ async function sbSubmitScore(name, token, score, replay?) {
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name, token, seed, flapTicks, claimedScore: score }),
+    body: JSON.stringify({ name, token, seed, flapTicks, claimedScore: score, avatar }),
   });
   if (!res.ok) throw new Error(await res.text());
 }
@@ -241,23 +248,23 @@ export async function ensurePlayerToken(name) {
   // so the account is real the moment the token exists, not only after first play.
   const tok = generateToken();
   setLocalToken(name, tok);
-  try { await sbSubmitScore(name, tok, 0); }
+  try { await sbSubmitScore(name, tok, 0, undefined, _currentAvatar()); }
   catch (e) { console.warn('Supabase register failed', e); }
   await showTokenModal(name, tok);
   return tok;
 }
 
-// Load all scores: Supabase if configured, else localStorage fallback
+// Load all scores: Supabase if configured, else empty. Returns rows as
+// [{ name, score, avatar }], pre-sorted by score descending (the DB query
+// orders them). avatar may be null for pre-existing rows.
 export async function loadScores() {
   if (_sb) {
     try {
-      const rows = await sbLoadScores();
-      // return as { name: score } map for compatibility
-      return Object.fromEntries(rows.map(r => [r.name, r.score]));
+      return await sbLoadScores();
     } catch (e) { console.warn('Supabase load failed, using local', e); }
   }
-  // No Supabase → no authoritative scores. localStorage holds tokens only.
-  return {};
+  // No Supabase → no authoritative scores.
+  return [];
 }
 
 // Save score: Supabase only. Scores are NOT cached locally — a client-side
@@ -268,6 +275,6 @@ export async function saveScore(name, score, replay) {
   if (!_sb) return; // _sb already encodes LIVE_DB — no separate localhost check needed
   const tok = getLocalToken(name);
   if (!tok) return;
-  try { await sbSubmitScore(name, tok, score, replay); }
+  try { await sbSubmitScore(name, tok, score, replay, _currentAvatar()); }
   catch (e) { console.warn('Supabase submit failed', e); }
 }
