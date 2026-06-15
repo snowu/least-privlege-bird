@@ -72,13 +72,46 @@
     #overlay button:disabled { background: #555; cursor: not-allowed; }
 
     #scores-panel {
-      background: rgba(0,0,0,.75); border-radius: 12px;
-      padding: 16px 28px; max-height: 220px; overflow-y: auto;
-      font-size: 0.95rem; min-width: 220px;
+      background: rgba(0,0,0,.75); border-radius: var(--radius);
+      padding: 16px 24px; max-height: 560px; min-width: 320px; max-width: 520px;
+      width: 100%; font-size: 0.95rem;
+      display: flex; flex-direction: column; gap: 8px;
     }
-    #scores-panel h2 { margin-bottom: 8px; text-align: center; }
-    #scores-panel ol { padding-left: 20px; }
-    #scores-panel li { padding: 2px 0; }
+    #scores-panel h2 { text-align: center; margin: 0; flex: 0 0 auto; }
+    .scores-list {
+      display: flex; flex-direction: column; gap: 4px;
+      overflow-y: auto; flex: 1 1 auto; min-height: 0;
+    }
+    .scores-empty { text-align: center; padding: 12px 0; color: #aaa; }
+
+    .score-row {
+      display: grid; grid-template-columns: 32px auto 1fr auto;
+      align-items: center; gap: 10px;
+      padding: 6px 10px; border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      border: 2px solid transparent;
+    }
+    .score-row.current-player {
+      border-color: #ffd600; background: rgba(255,214,0,0.12);
+    }
+    .score-avatar { width: 28px; height: 28px; image-rendering: pixelated; }
+    .scores-list.round-gfx .score-avatar { image-rendering: auto; }
+    .score-rank {
+      font-family: var(--font-display); font-size: 0.7rem; color: #aaa; text-align: right;
+    }
+    .score-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .score-value {
+      font-family: var(--font-display); font-size: 0.85rem; color: #76ff03; text-align: right;
+      text-shadow: 2px 2px 0 #0a2a00; /* matches .go-score-num */
+    }
+    .score-badge {
+      font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.5px;
+      padding: 4px 6px; border-radius: var(--radius); text-align: center;
+      white-space: nowrap; color: #1a1a1a;
+    }
+    .tier-admin    { background: #ffd600; } /* gold */
+    .tier-power    { background: #c0c8d0; } /* silver */
+    .tier-readonly { background: #cd8a3c; } /* bronze */
 
     /* ── CLAVE PANEL ── */
     #clave-screen {
@@ -287,6 +320,12 @@
     body.is-mobile #avatar-picker-go .avatar-opt { padding: 3px 4px; gap: 1px; }
     body.is-mobile #avatar-picker-go .avatar-opt img { width: 24px; height: 24px; }
     body.is-mobile #avatar-picker-go .avatar-opt span { font-size: 0.4rem; }
+
+    body.is-mobile #scores-panel {
+      max-width: min(420px, calc(100vw - 32px)); max-height: 420px; padding: 12px 14px;
+    }
+    body.is-mobile .score-badge { font-size: 0.4rem; padding: 3px 4px; }
+    body.is-mobile .score-avatar { width: 22px; height: 22px; }
   </style>
 </head>
 <body>
@@ -353,7 +392,7 @@
     <div id="scores-screen" class="hidden">
       <div id="scores-panel">
         <h2>🏆 High Scores</h2>
-        <ol id="scores-list"></ol>
+        <div id="scores-list" class="scores-list"></div>
       </div>
       <button id="btn-back">Back</button>
     </div>
