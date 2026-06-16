@@ -57,6 +57,8 @@ function fitToViewport() {
   // sits centered in the space below the disclaimer.
   gameFrame.style.top = `calc(50% + ${reserved / 2}px)`;
   gameFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  // Keep the scores corner badge clear of the disclaimer bar.
+  (document.getElementById('btn-scores') as HTMLElement).style.top = `${reserved + 12}px`;
   // Partial font-size compensation: dampens the scale-down so UI text
   // stays legible without ballooning to full 1/scale size on desktop.
   document.documentElement.style.fontSize = `${12 / Math.pow(scale, 0.1)}px`;
