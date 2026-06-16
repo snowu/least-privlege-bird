@@ -3249,7 +3249,10 @@ const RANK_BADGES = [
 // their currently-picked avatar; otherwise the penguin mascot.
 function resolveAvatarKey(row) {
   if (row.avatar && (AVATAR_KEYS as readonly string[]).includes(row.avatar)) return row.avatar;
-  if (row.name === currentPlayer) {
+  // currentPlayer is only set mid-session; lpb_player persists the last-entered
+  // name so the fallback still works when opening the leaderboard from the menu.
+  const myName = currentPlayer || (() => { try { return localStorage.getItem('lpb_player'); } catch { return null; } })();
+  if (myName && row.name === myName) {
     const saved = localStorage.getItem('lpb_avatar');
     if (saved && (AVATAR_KEYS as readonly string[]).includes(saved)) return saved;
   }
