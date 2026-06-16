@@ -25,8 +25,8 @@ Status legend: ✅ done · ⚠️ partial · ❌ not started
 - ✅ I instinctively press High Scores instead of login and play because it's under the avatars. Let's move the high scores to a corner or avatar in a place that feels natural
   for the flow: pick name, avatar and click play.
   *(High Scores is now a corner badge, pulled out of the name → avatar → play flow.)*
-- ❌ Also, high score page is scuffed. Make it look nicer, colored trophy icons near top 3, etc. Lots of space to extend and highlight winners; style should follow pixel/round.
-  *(Still a bare `<ol>` rendering "name: score", no styling.)*
+- ✅ Also, high score page is scuffed. Make it look nicer, colored trophy icons near top 3, etc. Lots of space to extend and highlight winners; style should follow pixel/round.
+  *(Redesigned: avatar icons per row, gold/silver/bronze IAM-tier badges for top 3, current-player highlight, pixel/round-aware.)*
 - ✅ / ❌ Use monkey instead of squid for water level, as a gamer callback to Donkey Kong's water level, the only good water level in existence.
   Whenever we implement HARD mode, we can do it like the Zelda one and make physics all fucked up for that level in hard mode.
   *(Monkey/DK swap is done. Hard mode doesn't exist yet.)*

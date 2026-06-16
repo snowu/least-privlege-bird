@@ -5,6 +5,7 @@
 import {
   C, TICK_MS, createState, step, speedLevel, type GameState,
 } from './physics-core.ts';
+import { AVATAR_KEYS } from './avatars-meta.ts';
 import {
   fetchBest, saveScore, loadScores, ensurePlayerToken, fetchFortune,
   showRecoverModal, _loadLocal,
@@ -3235,19 +3236,73 @@ nameInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('btn-play').click();
 });
 
+// Rank 1-3 get an IAM "privilege tier" badge instead of a plain rank number —
+// the leaderboard's running gag on the game's access-control satire.
+const RANK_BADGES = [
+  { cls: 'tier-admin',    label: 'AdministratorAccess' },
+  { cls: 'tier-power',    label: 'PowerUserAccess' },
+  { cls: 'tier-readonly', label: 'ReadOnlyAccess' },
+];
+
+// Which avatar icon a leaderboard row shows: the avatar the score was
+// achieved with; for the current player's own (pre-existing, avatar=null) row,
+// their currently-picked avatar; otherwise the penguin mascot.
+function resolveAvatarKey(row) {
+  if (row.avatar && (AVATAR_KEYS as readonly string[]).includes(row.avatar)) return row.avatar;
+  if (row.name === currentPlayer) {
+    const saved = localStorage.getItem('lpb_avatar');
+    if (saved && (AVATAR_KEYS as readonly string[]).includes(saved)) return saved;
+  }
+  return 'penguin';
+}
+
+// Build one leaderboard row. Built with DOM methods (not innerHTML) because
+// `row.name` is untrusted player input.
+function renderScoreRow(row, i) {
+  const rank = i + 1;
+  const theme = THEMES[resolveAvatarKey(row)] || THEMES.penguin;
+  const div = document.createElement('div');
+  div.className = 'score-row' + (row.name === currentPlayer ? ' current-player' : '');
+
+  const img = document.createElement('img');
+  img.className = 'score-avatar';
+  img.src = theme.img.src;
+  img.alt = theme.label;
+  div.appendChild(img);
+
+  const rankEl = document.createElement('span');
+  const badge = RANK_BADGES[rank - 1];
+  if (badge) {
+    rankEl.className = `score-badge ${badge.cls}`;
+    rankEl.textContent = badge.label;
+  } else {
+    rankEl.className = 'score-rank';
+    rankEl.textContent = `#${rank}`;
+  }
+  div.appendChild(rankEl);
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'score-name';
+  nameEl.textContent = row.name;
+  div.appendChild(nameEl);
+
+  const valEl = document.createElement('span');
+  valEl.className = 'score-value';
+  valEl.textContent = String(row.score);
+  div.appendChild(valEl);
+
+  return div;
+}
+
 document.getElementById('btn-scores').addEventListener('click', async () => {
-  const scores = await loadScores();
+  const scores = await loadScores(); // [{ name, score, avatar }], pre-sorted desc
   const list = document.getElementById('scores-list');
   list.innerHTML = '';
-  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  if (!sorted.length) {
-    list.innerHTML = '<li>No scores yet.</li>';
+  list.classList.toggle('round-gfx', gfxStyle === 'round');
+  if (!scores.length) {
+    list.innerHTML = '<p class="scores-empty">No scores yet.</p>';
   } else {
-    sorted.forEach(([name, sc]) => {
-      const li = document.createElement('li');
-      li.textContent = `${name}: ${sc}`;
-      list.appendChild(li);
-    });
+    scores.forEach((row, i) => list.appendChild(renderScoreRow(row, i)));
   }
   showScreen('scores');
 });
