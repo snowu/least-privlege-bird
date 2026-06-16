@@ -3241,9 +3241,9 @@ nameInput.addEventListener('keydown', e => {
 // Rank 1-3 get an IAM "privilege tier" badge instead of a plain rank number —
 // the leaderboard's running gag on the game's access-control satire.
 const RANK_BADGES = [
-  { cls: 'tier-admin',    label: 'AdministratorAccess' },
-  { cls: 'tier-power',    label: 'PowerUserAccess' },
-  { cls: 'tier-readonly', label: 'ReadOnlyAccess' },
+  { cls: 'tier-admin',    label: 'Admin' },
+  { cls: 'tier-power',    label: 'PowerUser' },
+  { cls: 'tier-readonly', label: 'ReadOnly' },
 ];
 
 // Returns the avatar key to show for a leaderboard row, or null if none should
