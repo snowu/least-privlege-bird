@@ -35,6 +35,11 @@ const devDisclaimer = document.getElementById('dev-disclaimer') as HTMLElement;
 gameFrame.style.width  = C.W + 'px';
 gameFrame.style.height = C.H + 'px';
 
+// Updated by applyStyle() once STYLE is initialised. Default matches pixel fontScale.
+// Used by fitToViewport() which is called before STYLE is defined, so it can't
+// reference activeStyle() directly.
+let _baseFontPx = 16;
+
 function fitToViewport() {
   // On mobile the disclaimer is replaced by a modal and never shown as a banner,
   // so never reserve space for it — avoids a scale jump on first load.
@@ -61,9 +66,8 @@ function fitToViewport() {
   (document.getElementById('btn-scores') as HTMLElement).style.top = `${reserved + 12}px`;
   // Partial font-size compensation: dampens the scale-down so UI text stays
   // legible on small screens without fully undoing the scale transform.
-  // Base matches applyStyle() so desktop (scale=1) is unaffected.
-  const baseFontPx = 16 * activeStyle().fontScale;
-  document.documentElement.style.fontSize = `${baseFontPx / Math.pow(scale, 0.1)}px`;
+  // _baseFontPx is kept in sync by applyStyle() so desktop (scale=1) is unaffected.
+  document.documentElement.style.fontSize = `${_baseFontPx / Math.pow(scale, 0.1)}px`;
   // Reveal after the correct transform is set — prevents flash of unscaled content
   // while the JS bundle loads. CSS opacity:0 hides game-frame until this runs.
   gameFrame.style.opacity = '1';
@@ -283,8 +287,9 @@ function applyStyle() {
   root.setProperty('--radius', s.radius);
   root.setProperty('--text-shadow', s.textShadow);
   root.setProperty('--letter-spacing', s.letterSpacing);
-  // Scale every rem-based size at once by setting the root font-size (16px × scale).
-  document.documentElement.style.fontSize = (16 * s.fontScale) + 'px';
+  // Keep _baseFontPx in sync so fitToViewport() uses the right base on next call.
+  _baseFontPx = 16 * s.fontScale;
+  fitToViewport(); // recompute font-size and scale with updated base
   // Swap the title logo to match the art style.
   const logoEl = document.getElementById('title-logo');
   if (logoEl) { logoEl.src = s.logo; logoEl.style.imageRendering = s.logoRendering; }
