@@ -59,9 +59,11 @@ function fitToViewport() {
   gameFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
   // Keep the scores corner badge clear of the disclaimer bar.
   (document.getElementById('btn-scores') as HTMLElement).style.top = `${reserved + 12}px`;
-  // Partial font-size compensation: dampens the scale-down so UI text
-  // stays legible without ballooning to full 1/scale size on desktop.
-  document.documentElement.style.fontSize = `${12 / Math.pow(scale, 0.1)}px`;
+  // Partial font-size compensation: dampens the scale-down so UI text stays
+  // legible on small screens without fully undoing the scale transform.
+  // Base matches applyStyle() so desktop (scale=1) is unaffected.
+  const baseFontPx = 16 * activeStyle().fontScale;
+  document.documentElement.style.fontSize = `${baseFontPx / Math.pow(scale, 0.1)}px`;
   // Reveal after the correct transform is set — prevents flash of unscaled content
   // while the JS bundle loads. CSS opacity:0 hides game-frame until this runs.
   gameFrame.style.opacity = '1';
