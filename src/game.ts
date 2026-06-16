@@ -3246,33 +3246,39 @@ const RANK_BADGES = [
   { cls: 'tier-readonly', label: 'ReadOnlyAccess' },
 ];
 
-// Which avatar icon a leaderboard row shows: the avatar the score was
-// achieved with; for the current player's own (pre-existing, avatar=null) row,
-// their currently-picked avatar; otherwise the penguin mascot.
-function resolveAvatarKey(row) {
+// Returns the avatar key to show for a leaderboard row, or null if none should
+// be shown. DB avatar always wins; for the current player's own row with no DB
+// avatar, fall back to their localStorage pick; everyone else gets nothing.
+function resolveAvatarKey(row): string | null {
   if (row.avatar && (AVATAR_KEYS as readonly string[]).includes(row.avatar)) return row.avatar;
-  // No avatar stored for this score (pre-migration rows) — fall back to whatever
-  // the viewer has selected, so the leaderboard doesn't look like a penguin farm.
   try {
-    const saved = localStorage.getItem('lpb_avatar');
-    if (saved && (AVATAR_KEYS as readonly string[]).includes(saved)) return saved;
+    const myName = currentPlayer || localStorage.getItem('lpb_player');
+    if (myName && row.name === myName) {
+      const saved = localStorage.getItem('lpb_avatar');
+      if (saved && (AVATAR_KEYS as readonly string[]).includes(saved)) return saved;
+    }
   } catch {}
-  return 'penguin';
+  return null;
 }
 
 // Build one leaderboard row. Built with DOM methods (not innerHTML) because
 // `row.name` is untrusted player input.
 function renderScoreRow(row, i) {
   const rank = i + 1;
-  const theme = THEMES[resolveAvatarKey(row)] || THEMES.penguin;
+  const avatarKey = resolveAvatarKey(row);
   const div = document.createElement('div');
   div.className = 'score-row' + (row.name === currentPlayer ? ' current-player' : '');
 
-  const img = document.createElement('img');
-  img.className = 'score-avatar';
-  img.src = theme.img.src;
-  img.alt = theme.label;
-  div.appendChild(img);
+  if (avatarKey) {
+    const theme = THEMES[avatarKey] || THEMES.penguin;
+    const img = document.createElement('img');
+    img.className = 'score-avatar';
+    img.src = theme.img.src;
+    img.alt = theme.label;
+    div.appendChild(img);
+  } else {
+    div.appendChild(document.createElement('span')); // empty placeholder keeps grid alignment
+  }
 
   const rankEl = document.createElement('span');
   const badge = RANK_BADGES[rank - 1];
