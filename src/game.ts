@@ -3249,13 +3249,12 @@ const RANK_BADGES = [
 // their currently-picked avatar; otherwise the penguin mascot.
 function resolveAvatarKey(row) {
   if (row.avatar && (AVATAR_KEYS as readonly string[]).includes(row.avatar)) return row.avatar;
-  // currentPlayer is only set mid-session; lpb_player persists the last-entered
-  // name so the fallback still works when opening the leaderboard from the menu.
-  const myName = currentPlayer || (() => { try { return localStorage.getItem('lpb_player'); } catch { return null; } })();
-  if (myName && row.name === myName) {
+  // No avatar stored for this score (pre-migration rows) — fall back to whatever
+  // the viewer has selected, so the leaderboard doesn't look like a penguin farm.
+  try {
     const saved = localStorage.getItem('lpb_avatar');
     if (saved && (AVATAR_KEYS as readonly string[]).includes(saved)) return saved;
-  }
+  } catch {}
   return 'penguin';
 }
 
