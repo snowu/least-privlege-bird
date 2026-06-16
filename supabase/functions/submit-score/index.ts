@@ -7,6 +7,7 @@
 // in src/physics-core.ts. No local sim copy to drift; the golden tests + the
 // browser game both exercise this exact module.
 import { simulate } from "../../../src/physics-core.ts";
+import { AVATAR_KEYS } from "../../../src/avatars-meta.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -48,11 +49,17 @@ Deno.serve(async (req) => {
 
   let payload: {
     name?: string; token?: string; seed?: number;
-    flapTicks?: number[]; claimedScore?: number;
+    flapTicks?: number[]; claimedScore?: number; avatar?: string;
   };
   try { payload = await req.json(); } catch { return json({ error: "bad json" }, 400); }
 
-  const { name, token, seed, flapTicks, claimedScore } = payload;
+  const { name, token, seed, flapTicks, claimedScore, avatar } = payload;
+
+  // Cosmetic field — never affects the replay/score path. Unknown/missing
+  // values are dropped silently rather than rejecting the whole request.
+  const validAvatar = typeof avatar === "string" && (AVATAR_KEYS as readonly string[]).includes(avatar)
+    ? avatar
+    : undefined;
 
   // ── Input validation (cheap rejects before replay) ──
   if (typeof name !== "string" || !name.trim() || name.length > 64) return json({ error: "bad name" }, 400);
@@ -84,7 +91,7 @@ Deno.serve(async (req) => {
     const ins = await db(`/scores`, {
       method: "POST",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ name, token_hash: h, score }),
+      body: JSON.stringify({ name, token_hash: h, score, ...(validAvatar ? { avatar: validAvatar } : {}) }),
     });
     if (!ins.ok) return json({ error: "db insert failed" }, 502);
     return json({ ok: true, score });
@@ -96,7 +103,7 @@ Deno.serve(async (req) => {
     const upd = await db(`/scores?name=eq.${encodeURIComponent(name)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ score }),
+      body: JSON.stringify({ score, ...(validAvatar ? { avatar: validAvatar } : {}) }),
     });
     if (!upd.ok) return json({ error: "db update failed" }, 502);
   }
