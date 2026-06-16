@@ -801,9 +801,9 @@ export const Clave = (() => {
         <div class="captcha-grid" id="${containerId}-grid"></div>
         <div id="${containerId}-feedback" style="width:100%;display:none;flex-direction:column;gap:6px;"></div>
         <p class="captcha-error" id="${containerId}-err"></p>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;gap:10px;align-items:center;justify-content:center;width:100%;">
           <button id="${containerId}-btn">Verify</button>
-          <button id="${containerId}-reroll" style="font-family:var(--font-display);font-size:0.56rem;background:transparent;border:1px solid #4a6a9a;color:#8aa0c8;padding:6px 10px;cursor:pointer;border-radius:var(--radius);">🔄 Request a different challenge</button>
+          <button id="${containerId}-reroll" title="Request a different challenge" style="font-size:1.3rem;background:transparent;border:none;padding:4px 6px;cursor:pointer;line-height:1;">🎲</button>
         </div>
       `;
       container.appendChild(panel);

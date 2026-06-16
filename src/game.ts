@@ -67,7 +67,9 @@ function fitToViewport() {
   // Partial font-size compensation: dampens the scale-down so UI text stays
   // legible on small screens without fully undoing the scale transform.
   // _baseFontPx is kept in sync by applyStyle() so desktop (scale=1) is unaffected.
-  document.documentElement.style.fontSize = `${_baseFontPx / Math.pow(scale, 0.1)}px`;
+  // Desktop gets a 25% boost since the canvas never scales down on large screens.
+  const desktopBoost = scale >= 0.95 ? 1.25 : 1;
+  document.documentElement.style.fontSize = `${_baseFontPx * desktopBoost / Math.pow(scale, 0.1)}px`;
   // Reveal after the correct transform is set — prevents flash of unscaled content
   // while the JS bundle loads. CSS opacity:0 hides game-frame until this runs.
   gameFrame.style.opacity = '1';
