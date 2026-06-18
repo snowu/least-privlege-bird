@@ -2387,8 +2387,8 @@ function showScreen(name) {
   overlay.classList.remove('hidden');
   if (name) screens[name].classList.remove('hidden');
   else overlay.classList.add('hidden');
-  // Fortune cow rides the idle screens (menu, game over) — not during play.
-  if (name === 'menu' || name === 'gameover') showFortuneCow();
+  // Fortune cow rides the idle screens (menu only) — not during play or game over.
+  if (name === 'menu') showFortuneCow();
   else hideFortuneCow();
 }
 
@@ -3106,11 +3106,20 @@ const GO_ERRORS = [
   'PolicyEvaluation: NotAuthorized to continue',
 ];
 
-// Reveal the game-over screen: count the score up, set a fake error code, show msg.
-function showGameOver(msg) {
+// Reveal the game-over screen: count the score up, display a fortune, show msg.
+async function showGameOver(msg) {
   document.getElementById('gameover-msg').textContent = msg;
-  document.getElementById('go-errcode').textContent =
-    GO_ERRORS[gs.score % GO_ERRORS.length] + ` (req ${(gs.score * 7919 + 1009).toString(16)})`;
+
+  // Fortune replaces the fake AWS error — falls back to an error if fetch fails.
+  let flavor: string;
+  try {
+    flavor = await fetchFortune();
+  } catch {
+    flavor = GO_ERRORS[gs.score % GO_ERRORS.length]
+           + ` (req ${(gs.score * 7919 + 1009).toString(16)})`;
+  }
+  document.getElementById('go-errcode').textContent = flavor;
+
   overlay.classList.remove('hidden');
   showScreen('gameover');
 
