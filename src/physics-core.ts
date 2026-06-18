@@ -144,7 +144,13 @@ export function speedLevel(s: GameState): number {
   return Math.round((s.pipeSpeed - C.PIPE_SPEED) / C.SPEED_UP_AMOUNT);
 }
 export function currentGap(s: GameState): number {
-  return Math.max(C.PIPE_GAP_MIN, C.PIPE_GAP_MAX - speedLevel(s) * C.PIPE_GAP_STEP);
+  const baseGap = Math.max(C.PIPE_GAP_MIN, C.PIPE_GAP_MAX - speedLevel(s) * C.PIPE_GAP_STEP);
+  let gapMul = 1;
+  for (const e of s.activeEffects) {
+    const d = POWERUP_DEFS.find(p => p.id === e.defId);
+    if (d?.gapMul) gapMul *= d.gapMul;
+  }
+  return baseGap * gapMul;
 }
 function currentInterval(s: GameState): number {
   return Math.max(C.PIPE_INTERVAL_MIN, C.PIPE_INTERVAL_MAX - speedLevel(s) * C.PIPE_INTERVAL_STEP);
@@ -159,8 +165,26 @@ function spawnPipe(s: GameState, x: number = C.W): void {
   s.lastPipeTick = s.tick;
 }
 
+function spawnPowerUp(s: GameState, pipeX: number): void {
+  const eligible = POWERUP_DEFS.filter(d => !d.minSpeedLevel || speedLevel(s) >= d.minSpeedLevel);
+  if (eligible.length === 0) return;
+
+  // Weighted random selection
+  const totalWeight = eligible.reduce((sum, d) => sum + (d.weight ?? 1), 0);
+  let roll = s.rng() * totalWeight;
+  let chosen = eligible[0];
+  for (const d of eligible) {
+    roll -= d.weight ?? 1;
+    if (roll <= 0) { chosen = d; break; }
+  }
+
+  const y = 60 + s.rng() * (C.GROUND - 120);
+  s.powerUps.push({ x: pipeX + C.POWERUP_AHEAD_PX, y, defId: chosen.id, collected: false });
+}
+
 function collides(s: GameState): boolean {
-  const r = C.PLAYER_SIZE / 2 - 4;
+  const eff = getEffective(s);
+  const r = (C.PLAYER_SIZE * eff.size) / 2 - 4;
   const px = C.PLAYER_X, py = s.player.y;
   if (py - r <= 0 || py + r >= C.GROUND) return true;
   for (const p of s.pipes) {
@@ -202,11 +226,56 @@ export function getEffective(s: GameState): {
 // stepPhysics). Returns whether a pipe was passed this tick (for the score SFX,
 // fired by the caller — the core stays side-effect-free) and whether the player
 // died. Score is already incremented in state when `scored` is true.
-export interface StepResult { scored: boolean; dead: boolean; }
+export interface StepResult {
+  scored: boolean;
+  dead: boolean;
+  collected?: string;
+  destroyedPipes?: number;
+  expiredEffects?: string[];
+}
 
 export function step(s: GameState, flapped: boolean): StepResult {
-  // INPUT before physics — mirrors event-driven flap landing before stepPhysics.
-  if (flapped) s.player.vy = C.FLAP;
+  // ── Expire effects (before input, so getEffective reflects current state) ──
+  const expiredEffects: string[] = [];
+  s.activeEffects = s.activeEffects.filter(e => {
+    if (s.tick < e.expiryTick) return true;
+    // Safe expiry: if this effect has invincible or sizeMul, check if removing
+    // it would cause instant death. If so, extend by grace window.
+    const def = POWERUP_DEFS.find(d => d.id === e.defId);
+    if (def && (def.invincible || def.sizeMul)) {
+      // Temporarily compute what collision would look like without this effect
+      const testEffects = s.activeEffects.filter(ae => ae !== e);
+      let testSize = C.PLAYER_SIZE / 2 - 4;
+      for (const te of testEffects) {
+        const td = POWERUP_DEFS.find(d => d.id === te.defId);
+        if (td?.sizeMul) testSize = (C.PLAYER_SIZE * td.sizeMul) / 2 - 4;
+      }
+      // Check if player would collide with restored size
+      const py = s.player.y;
+      let wouldCollide = py - testSize <= 0 || py + testSize >= C.GROUND;
+      if (!wouldCollide) {
+        for (const p of s.pipes) {
+          if (C.PLAYER_X + testSize > p.x && C.PLAYER_X - testSize < p.x + C.PIPE_W) {
+            if (py - testSize < p.topH || py + testSize > p.topH + p.gap) {
+              wouldCollide = true;
+              break;
+            }
+          }
+        }
+      }
+      if (wouldCollide) {
+        e.expiryTick = s.tick + C.POWERUP_GRACE_TICKS;
+        return true; // keep it alive
+      }
+    }
+    expiredEffects.push(e.defId);
+    return false;
+  });
+
+  const eff = getEffective(s);
+
+  // INPUT — before physics, matching original ordering (flap sets vy, then gravity adds)
+  if (flapped) s.player.vy = eff.flap;
 
   // Start the speed-ramp clock on the first active tick. The pipe field is already
   // pre-filled at construction (see prefillField), so nothing to spawn here.
@@ -218,23 +287,78 @@ export function step(s: GameState, flapped: boolean): StepResult {
     s.lastSpeedUpTick = s.tick;
   }
 
-  // Spawn pipes (interval in ms → ticks).
-  if ((s.tick - (s.lastPipeTick as number)) * TICK_MS >= currentInterval(s)) spawnPipe(s);
+  // Spawn pipes + maybe power-ups (interval in ms → ticks).
+  if ((s.tick - (s.lastPipeTick as number)) * TICK_MS >= currentInterval(s)) {
+    spawnPipe(s);
+    // Power-up spawn check — only after enough pipes scored, and only if no
+    // uncollected power-up is already on the field.
+    if (s.score >= C.POWERUP_FIRST_PIPE
+        && s.powerUps.every(p => p.collected)
+    ) {
+      const chance = Math.min(
+        C.POWERUP_CHANCE_CAP,
+        C.POWERUP_BASE_CHANCE + speedLevel(s) * C.POWERUP_CHANCE_PER_LEVEL,
+      );
+      if (s.rng() < chance) spawnPowerUp(s, s.pipes[s.pipes.length - 1].x);
+    }
+  }
 
-  // Update pipes + scoring.
+  // Update pipes + scoring (with effective speed).
   let scored = false;
+  const effectiveSpeed = s.pipeSpeed * eff.speed;
+  let destroyedPipes = 0;
   for (const p of s.pipes) {
-    p.x -= s.pipeSpeed;
+    p.x -= effectiveSpeed;
     if (!p.scored && p.x + C.PIPE_W < C.PLAYER_X) { s.score++; p.scored = true; scored = true; }
   }
-  s.pipes = s.pipes.filter(p => p.x + C.PIPE_W > 0);
 
-  // Update player physics.
-  s.player.vy += C.GRAVITY;
+  // Move uncollected power-ups with pipe speed
+  for (const pu of s.powerUps) {
+    if (!pu.collected) pu.x -= effectiveSpeed;
+  }
+
+  // Pipe destruction (star)
+  if (eff.destroysPipes) {
+    const r = C.PLAYER_SIZE / 2 - 4;
+    for (const p of s.pipes) {
+      if (C.PLAYER_X + r > p.x && C.PLAYER_X - r < p.x + C.PIPE_W) {
+        destroyedPipes++;
+      }
+    }
+    s.pipes = s.pipes.filter(p => {
+      if (C.PLAYER_X + (C.PLAYER_SIZE / 2 - 4) > p.x && C.PLAYER_X - (C.PLAYER_SIZE / 2 - 4) < p.x + C.PIPE_W) return false;
+      return true;
+    });
+  }
+
+  s.pipes = s.pipes.filter(p => p.x + C.PIPE_W > 0);
+  s.powerUps = s.powerUps.filter(pu => pu.collected || pu.x + C.POWERUP_RADIUS > 0);
+
+  // Power-up collection
+  let collected: string | undefined;
+  const pr = C.POWERUP_RADIUS;
+  const playerR = C.PLAYER_SIZE / 2 - 4;
+  for (const pu of s.powerUps) {
+    if (pu.collected) continue;
+    const dx = C.PLAYER_X - pu.x, dy = s.player.y - pu.y;
+    if (dx * dx + dy * dy < (playerR + pr) * (playerR + pr)) {
+      pu.collected = true;
+      collected = pu.defId;
+      const def = POWERUP_DEFS.find(d => d.id === pu.defId)!;
+      s.activeEffects.push({ defId: pu.defId, expiryTick: s.tick + def.durationTicks });
+    }
+  }
+
+  // Update player physics with effective values.
+  s.player.vy += eff.gravity;
   s.player.y += s.player.vy;
 
   s.tick++;
-  return { scored, dead: collides(s) };
+
+  // Collision (skip if invincible)
+  const dead = eff.invincible ? false : collides(s);
+
+  return { scored, dead, collected, destroyedPipes: destroyedPipes || undefined, expiredEffects: expiredEffects.length ? expiredEffects : undefined };
 }
 
 const MAX_TICKS = 200000; // ~55min at 60Hz — runaway guard
