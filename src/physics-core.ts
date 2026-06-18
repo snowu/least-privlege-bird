@@ -40,6 +40,15 @@ export const C: { [k: string]: number } = {
 };
 C.GROUND = C.H - C.HUD;
 
+// ── Power-Up System ──────────────────────────────────────────────────────────
+C.POWERUP_RADIUS = 20;
+C.POWERUP_FIRST_PIPE = 3;
+C.POWERUP_BASE_CHANCE = 0.15;
+C.POWERUP_CHANCE_PER_LEVEL = 0.05;
+C.POWERUP_CHANCE_CAP = 0.40;
+C.POWERUP_AHEAD_PX = 180;
+C.POWERUP_GRACE_TICKS = 30;
+
 export const TICK_MS = 1000 / 60;                          // fixed physics step
 export const SPEED_UP_TICKS = C.SPEED_UP_INTERVAL / TICK_MS; // ticks between speed bumps
 
@@ -54,8 +63,34 @@ export function mulberry32(a: number): () => number {
   };
 }
 
+// ── Power-Up Definitions ────────────────────────────────────────────────────
+export interface PowerUpDef {
+  id: string;
+  durationTicks: number;
+  gravityMul?: number;
+  flapMul?: number;
+  speedMul?: number;
+  gapMul?: number;
+  sizeMul?: number;
+  invincible?: boolean;
+  destroysPipes?: boolean;
+  weight?: number;
+  minSpeedLevel?: number;
+}
+
+export const POWERUP_DEFS: readonly PowerUpDef[] = [
+  { id: 'wildcard',        durationTicks: 240, sizeMul: 2.0, invincible: true },
+  { id: 'autoscaling',     durationTicks: 300, sizeMul: 0.6, flapMul: 1.8 },
+  { id: 'cloudfront',      durationTicks: 300, speedMul: 0.5 },
+  { id: 'role-assumption', durationTicks: 240, gapMul: 1.4 },
+  { id: 'elb',             durationTicks: 300, gravityMul: 0.5 },
+  { id: 'star',            durationTicks: 210, speedMul: 1.5, invincible: true, destroysPipes: true, weight: 0.5, minSpeedLevel: 2 },
+];
+
 // ── State ───────────────────────────────────────────────────────────────────
 export interface Pipe { x: number; topH: number; gap: number; scored: boolean; }
+export interface PowerUpItem { x: number; y: number; defId: string; collected: boolean; }
+export interface ActiveEffect { defId: string; expiryTick: number; }
 
 // The full gameplay state. The renderer reads y/vy/pipes/score/pipeSpeed to draw,
 // but never mutates them — only step() does.
@@ -68,6 +103,8 @@ export interface GameState {
   lastSpeedUpTick: number | null;  // null until the first active tick
   lastPipeTick: number | null;
   rng: () => number;
+  powerUps: PowerUpItem[];
+  activeEffects: ActiveEffect[];
 }
 
 export function createState(seed: number): GameState {
@@ -80,6 +117,8 @@ export function createState(seed: number): GameState {
     lastSpeedUpTick: null,
     lastPipeTick: null,
     rng: mulberry32(seed),
+    powerUps: [],
+    activeEffects: [],
   };
   prefillField(s);   // pipes exist from construction so they render during the countdown
   return s;
@@ -130,6 +169,28 @@ function collides(s: GameState): boolean {
     }
   }
   return false;
+}
+
+// ── Effective multipliers ───────────────────────────────────────────────────
+// Compute the effective physics multipliers by stacking all active effects.
+// Returns absolute values for gravity/flap (already multiplied), multipliers for speed/size.
+export function getEffective(s: GameState): {
+  gravity: number; flap: number; speed: number; size: number;
+  invincible: boolean; destroysPipes: boolean;
+} {
+  let gravity = C.GRAVITY, flap = C.FLAP, speed = 1, size = 1;
+  let invincible = false, destroysPipes = false;
+  for (const e of s.activeEffects) {
+    const d = POWERUP_DEFS.find(p => p.id === e.defId);
+    if (!d) continue;
+    if (d.gravityMul)    gravity *= d.gravityMul;
+    if (d.flapMul)       flap *= d.flapMul;
+    if (d.speedMul)      speed *= d.speedMul;
+    if (d.sizeMul)       size *= d.sizeMul;
+    if (d.invincible)    invincible = true;
+    if (d.destroysPipes) destroysPipes = true;
+  }
+  return { gravity, flap, speed, size, invincible, destroysPipes };
 }
 
 // ── The one physics tick ──────────────────────────────────────────────────────

@@ -8,6 +8,7 @@
     "dev": "esbuild src/main.ts --bundle --outfile=dist/bundle.js --format=iife --sourcemap --servedir=. --watch=forever --serve=8003",
     "build": "esbuild src/main.ts --bundle --outfile=dist/bundle.js --format=iife --sourcemap --minify",
     "test": "esbuild scripts/test-replay.ts --bundle --platform=node --format=esm --outfile=dist/test-replay.mjs && node dist/test-replay.mjs",
+    "test:powerups": "esbuild scripts/test-powerups.ts --bundle --platform=node --format=esm --outfile=dist/test-powerups.mjs && node dist/test-powerups.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
