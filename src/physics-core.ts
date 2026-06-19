@@ -245,11 +245,12 @@ export function step(s: GameState, flapped: boolean): StepResult {
     if (def && (def.invincible || def.sizeMul)) {
       // Temporarily compute what collision would look like without this effect
       const testEffects = s.activeEffects.filter(ae => ae !== e);
-      let testSize = C.PLAYER_SIZE / 2 - 4;
+      let testSizeMul = 1;
       for (const te of testEffects) {
         const td = POWERUP_DEFS.find(d => d.id === te.defId);
-        if (td?.sizeMul) testSize = (C.PLAYER_SIZE * td.sizeMul) / 2 - 4;
+        if (td?.sizeMul) testSizeMul *= td.sizeMul;
       }
+      const testSize = (C.PLAYER_SIZE * testSizeMul) / 2 - 4;
       // Check if player would collide with restored size
       const py = s.player.y;
       let wouldCollide = py - testSize <= 0 || py + testSize >= C.GROUND;
@@ -319,14 +320,14 @@ export function step(s: GameState, flapped: boolean): StepResult {
 
   // Pipe destruction (star)
   if (eff.destroysPipes) {
-    const r = C.PLAYER_SIZE / 2 - 4;
+    const r = (C.PLAYER_SIZE * eff.size) / 2 - 4;
     for (const p of s.pipes) {
       if (C.PLAYER_X + r > p.x && C.PLAYER_X - r < p.x + C.PIPE_W) {
         destroyedPipes++;
       }
     }
     s.pipes = s.pipes.filter(p => {
-      if (C.PLAYER_X + (C.PLAYER_SIZE / 2 - 4) > p.x && C.PLAYER_X - (C.PLAYER_SIZE / 2 - 4) < p.x + C.PIPE_W) return false;
+      if (C.PLAYER_X + r > p.x && C.PLAYER_X - r < p.x + C.PIPE_W) return false;
       return true;
     });
   }
