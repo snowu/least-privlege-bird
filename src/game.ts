@@ -3,7 +3,9 @@
 // and the anti-cheat validation can never drift. C holds all constants (incl.
 // render-only ones like HUD/SPRITE_SCALE/COUNTDOWN_SEC).
 import {
-  C, TICK_MS, createState, step, speedLevel, type GameState,
+  C, TICK_MS, createState, step, speedLevel,
+  POWERUP_DEFS, getEffective,
+  type GameState, type StepResult, type PowerUpItem, type ActiveEffect,
 } from './physics-core.ts';
 import { AVATAR_KEYS } from './avatars-meta.ts';
 import {
@@ -2586,6 +2588,13 @@ let pendingFlap = false;
 // pixel-art regardless of gfxStyle (the parallax is its own world).
 let bgScroll = 0;
 
+// ── Power-up render state (purely visual, never feeds replay) ──
+let puCollectedFlash = '';       // defId of last collected power-up (for pickup flash)
+let puCollectedAt = -1e9;        // timestamp of last pickup
+let puDestroyedPipes: Array<{ x: number; topH: number; gap: number; tick: number }> = [];
+let puRoleSwapTheme: any = null; // random theme for role-assumption visual
+let puScreenShake = 0;           // remaining screen-shake frames
+
 function initGame(playerName) {
   currentPlayer = playerName;
   // seed drives all gameplay-affecting randomness; createState seeds the core PRNG.
@@ -2597,6 +2606,11 @@ function initGame(playerName) {
   countdownStart = performance.now();
   acc = 0;
   lastFrameTime = null;
+  puCollectedFlash = '';
+  puCollectedAt = -1e9;
+  puDestroyedPipes = [];
+  puRoleSwapTheme = null;
+  puScreenShake = 0;
 }
 
 // ─── DRAWING ──────────────────────────────────────────────────────────────────
@@ -2887,34 +2901,87 @@ function beamEndX(x0, y) {
 }
 
 function drawPlayer() {
-  // Render LARGER than the hitbox so the sprite looks meaty. The collision radius
-  // (PLAYER_SIZE/2 - 4) is unchanged and stays mirrored in sim.ts — this is a
-  // draw-only scale, so replay validation is unaffected. The pixel-art SVGs also
-  // carry transparent padding, so the visible body roughly matches the hitbox.
-  const s = C.PLAYER_SIZE * C.SPRITE_SCALE;
-  // 2-frame avatars show frame 2 (the "push") for a beat after each flap; others
-  // (img2 == null) always render frame 1. Render-only, so replay is unaffected.
+  const eff = getEffective(gs);
   const now = performance.now();
-  const inFlap = (now - lastFlapAt) < FLAP_FRAME_MS;
-  const sprite = (inFlap && currentTheme.img2) ? currentTheme.img2 : currentTheme.img;
-  const fxMane = fxActiveForStyle(currentTheme);
+
+  // Screen shake (star pipe destruction)
+  let shakeX = 0, shakeY = 0;
+  if (puScreenShake > 0) {
+    shakeX = (Math.random() - 0.5) * 8;
+    shakeY = (Math.random() - 0.5) * 8;
+    puScreenShake--;
+  }
+
+  // Effective sprite scale (size multiplier from power-ups)
+  let drawScale = C.SPRITE_SCALE;
+  const isFlickering = gs.activeEffects.some(e => {
+    const d = POWERUP_DEFS.find(p => p.id === e.defId);
+    return (d?.invincible || d?.sizeMul) && (e.expiryTick - gs.tick) <= 90;
+  });
+  if (isFlickering && Math.floor(gs.tick / 6) % 2 === 0) {
+    drawScale = C.SPRITE_SCALE; // flash to normal size
+  } else {
+    drawScale = C.SPRITE_SCALE * eff.size;
+  }
+
+  const s = C.PLAYER_SIZE * drawScale;
+  // CloudFront: stutter flap animation (skip every 3rd frame)
+  const cfActive = gs.activeEffects.some(e => e.defId === 'cloudfront');
+  const flapSuppressed = cfActive && gs.tick % 3 === 0;
+  const inFlap = !flapSuppressed && (now - lastFlapAt) < FLAP_FRAME_MS;
+
+  // Role Assumption: swap sprite
+  const displayTheme = puRoleSwapTheme || currentTheme;
+  const sprite = (inFlap && displayTheme.img2) ? displayTheme.img2 : displayTheme.img;
+
+  // CloudFront: afterimage trail
+  if (gs.activeEffects.some(e => e.defId === 'cloudfront')) {
+    const trail = [0.1, 0.18, 0.26, 0.34];
+    for (let i = 0; i < trail.length; i++) {
+      ctx.save();
+      ctx.globalAlpha = trail[i];
+      const offset = (trail.length - i) * 12;
+      ctx.translate(C.PLAYER_X - offset + shakeX, gs.player.y + shakeY);
+      ctx.rotate(Math.max(-0.4, Math.min(0.4, gs.player.vy * 0.05)));
+      ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
+      ctx.restore();
+    }
+  }
+
   ctx.save();
-  ctx.translate(C.PLAYER_X, gs.player.y);
+
+  // ELB: horizontal wobble
+  let wobbleX = 0;
+  if (gs.activeEffects.some(e => e.defId === 'elb')) {
+    wobbleX = Math.sin(gs.tick * 0.15) * 8;
+  }
+
+  ctx.translate(C.PLAYER_X + wobbleX + shakeX, gs.player.y + shakeY);
   ctx.rotate(Math.max(-0.4, Math.min(0.4, gs.player.vy * 0.05)));
+
+  // Star: rainbow hue-rotate
+  if (gs.activeEffects.some(e => e.defId === 'star')) {
+    const hue = (gs.tick * 12) % 360;
+    ctx.filter = `hue-rotate(${hue}deg) saturate(1.5)`;
+  }
+
   // Mane + tail streamers (horse): rippling hair drawn BEHIND the body so it trails the
   // neck crest and rump. Continuous sine flutter via nowSec → always blowing, not just
   // on flap. Render-only, no sim touch.
+  const fxMane = fxActiveForStyle(displayTheme);
   if (fxMane && fxMane.kind === 'mane') drawMane(s, fxMane.color);
   ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
   // Sprite effect (theme.fx with fx.sprite): a transparent FX image drawn relative to the
   // avatar for fx.durationMs after it fired. Inside the same translate/rotate so it tracks
   // + tilts with the body; drawn past the sprite box so it isn't clipped. Render-only.
-  const fx = fxActiveForStyle(currentTheme);
+  const fx = fxActiveForStyle(displayTheme);
   const fxOn = fx && (now - fxFiredAt) < fx.durationMs;
   if (fx && fx.sprite && fxOn) {
     const fw = s * fx.scale, fh = fw * 0.5;          // fire.svg viewBox aspect = 0.5
-    ctx.drawImage(currentTheme.fxImg, s * fx.anchorX, s * fx.anchorY - fh / 2, fw, fh);
+    ctx.drawImage(displayTheme.fxImg, s * fx.anchorX, s * fx.anchorY - fh / 2, fw, fh);
   }
+
+  ctx.filter = 'none';
   ctx.restore();
 
   // Bolt effect (theme.fx kind 'bolt'): a projectile that LEFT the pincer at fire time
@@ -3008,6 +3075,124 @@ function drawBoltImpact(x, y, fx) {
   ctx.restore();
 }
 
+// ── Power-up drawing helpers ────────────────────────────────────────────────
+
+function puColor(id: string): string {
+  switch (id) {
+    case 'wildcard':        return '#f59e0b'; // amber
+    case 'autoscaling':     return '#10b981'; // emerald
+    case 'cloudfront':      return '#6366f1'; // indigo
+    case 'role-assumption': return '#ec4899'; // pink
+    case 'elb':             return '#06b6d4'; // cyan
+    case 'star':            return '#ef4444'; // red
+    default:                return '#888';
+  }
+}
+
+function puIcon(id: string): string {
+  switch (id) {
+    case 'wildcard':        return '*';
+    case 'autoscaling':     return 'S';
+    case 'cloudfront':      return 'C';
+    case 'role-assumption': return 'R';
+    case 'elb':             return 'E';
+    case 'star':            return '!';
+    default:                return '?';
+  }
+}
+
+function drawPowerUps() {
+  const now = performance.now();
+  for (const pu of gs.powerUps) {
+    if (pu.collected) continue;
+    const def = POWERUP_DEFS.find(d => d.id === pu.defId);
+    if (!def) continue;
+
+    // Gentle bob animation
+    const bobY = pu.y + Math.sin(gs.tick * 0.08) * 4;
+    const r = C.POWERUP_RADIUS;
+
+    ctx.save();
+    ctx.translate(pu.x, bobY);
+
+    // Glow pulse
+    const pulse = 0.3 + 0.15 * Math.sin(gs.tick * 0.12);
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = puColor(pu.defId);
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2); ctx.fill();
+
+    // Core circle
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = puColor(pu.defId);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+
+    // Icon (simple text symbol)
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${r}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(puIcon(pu.defId), 0, 1);
+
+    ctx.restore();
+  }
+}
+
+function drawPipeDestruction() {
+  const now = gs.tick;
+  puDestroyedPipes = puDestroyedPipes.filter(d => now - d.tick < 30); // ~0.5s
+  for (const d of puDestroyedPipes) {
+    const age = now - d.tick;
+    const t = age / 30; // 0..1
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    // Spray fragments outward
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const dist = t * 40;
+      const fx = d.x + Math.cos(angle) * dist;
+      const fy = d.topH + Math.sin(angle) * dist + t * t * 30; // gravity on fragments
+      ctx.fillStyle = currentTheme.pipeFill || '#4a7';
+      ctx.fillRect(fx - 3, fy - 3, 6, 6);
+    }
+    ctx.restore();
+  }
+}
+
+function drawPowerUpHUD() {
+  const effects = gs.activeEffects;
+  if (effects.length === 0) return;
+
+  const barW = 60, barH = 8, gap = 14, startY = 10, startX = C.W - barW - 45;
+
+  for (let i = 0; i < effects.length; i++) {
+    const e = effects[i];
+    const def = POWERUP_DEFS.find(d => d.id === e.defId);
+    if (!def) continue;
+
+    const y = startY + i * (barH + gap);
+    const remaining = Math.max(0, e.expiryTick - gs.tick);
+    const pct = remaining / def.durationTicks;
+
+    // Flicker warning in last 90 ticks for invincible/size effects
+    const isWarning = (def.invincible || def.sizeMul) && remaining <= 90;
+    if (isWarning && Math.floor(gs.tick / 6) % 2 === 0) continue; // blink off
+
+    // Icon
+    ctx.fillStyle = puColor(e.defId);
+    ctx.font = `bold 11px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(puIcon(e.defId), startX - 4, y + barH - 1);
+
+    // Bar background
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(startX, y, barW, barH);
+
+    // Bar fill
+    ctx.fillStyle = puColor(e.defId);
+    ctx.fillRect(startX, y, barW * pct, barH);
+  }
+}
+
 function drawHUD() {
   ctx.font = `14px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'center';
@@ -3034,17 +3219,44 @@ function drawHUD() {
 function stepOnce() {
   const flapped = pendingFlap;
   if (flapped) { flapTicks.push(gs.tick); pendingFlap = false; }
-  const { scored, dead } = step(gs, flapped);
-  if (scored) AudioFX.score();       // side-effect kept in the render layer, not the core
-  return dead;
+  const result: StepResult = step(gs, flapped);
+  if (result.scored) AudioFX.score();
+
+  // Power-up pickup
+  if (result.collected) {
+    puCollectedFlash = result.collected;
+    puCollectedAt = performance.now();
+    // Role Assumption: pick a random display theme (render-only)
+    if (result.collected === 'role-assumption') {
+      const keys = Object.keys(THEMES).filter(k => THEMES[k] !== currentTheme);
+      puRoleSwapTheme = THEMES[keys[Math.floor(Math.random() * keys.length)]];
+    }
+  }
+
+  // Pipe destruction visual
+  if (result.destroyedPipes && result.destroyedPipes > 0) {
+    puScreenShake = 4;
+    // Capture destroyed pipe positions for particle burst
+    puDestroyedPipes.push({ x: C.PLAYER_X, topH: gs.player.y - 50, gap: 100, tick: gs.tick });
+  }
+
+  // Effect expiry — clear role-swap theme if role-assumption expired
+  if (result.expiredEffects?.includes('role-assumption')) {
+    puRoleSwapTheme = null;
+  }
+
+  return result.dead;
 }
 
 function loop(now) {
   ctx.clearRect(0, 0, C.W, C.H);
   drawBackground();
   for (const p of gs.pipes) drawPipe(p.x, p.topH, p.gap);
+  drawPowerUps();
+  drawPipeDestruction();
   drawPlayer();
   drawHUD();
+  drawPowerUpHUD();
 
   // ── Countdown phase: freeze physics, show number ──
   // Countdown is purely cosmetic, so wall-clock timing is fine here.

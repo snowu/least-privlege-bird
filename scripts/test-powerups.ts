@@ -86,5 +86,35 @@ const ae1 = JSON.stringify(run1.activeEffects);
 const ae2 = JSON.stringify(run2.activeEffects);
 assert(ae1 === ae2, `active effects deterministic across identical runs`);
 
+// ── Safe expiry test ──
+// Wildcard expiry should NOT kill the player if they're inside a pipe
+const s4 = createState(42);
+for (let t = 0; t < 600; t++) step(s4, t % 30 === 0);
+// Force a wildcard effect that expires next tick, with player inside a pipe
+s4.activeEffects = [{ defId: 'wildcard', expiryTick: s4.tick + 1 }];
+const nearPipe = s4.pipes.find(p => p.x <= C.PLAYER_X + C.PIPE_W && p.x + C.PIPE_W >= C.PLAYER_X);
+if (nearPipe) {
+  s4.player.y = nearPipe.topH - 10; // inside the top pipe
+  const result = step(s4, false);
+  assert(!result.dead, `safe expiry: player not killed when wildcard expires inside pipe`);
+  assert(s4.activeEffects.length > 0, `safe expiry: effect extended by grace window`);
+} else {
+  console.log(`⊘ safe expiry: no pipe near player to test (non-critical, geometry-dependent)`);
+}
+
+// ── Stacking test ──
+const s5 = createState(1);
+s5.activeEffects = [
+  { defId: 'elb', expiryTick: 9999 },       // gravityMul: 0.5
+  { defId: 'cloudfront', expiryTick: 9999 }, // speedMul: 0.5
+  { defId: 'wildcard', expiryTick: 9999 },   // sizeMul: 2.0, invincible
+];
+const stacked2 = getEffective(s5);
+assert(stacked2.gravity === C.GRAVITY * 0.5, `stacked: gravity = base * 0.5`);
+assert(stacked2.speed === 0.5, `stacked: speed = 0.5`);
+assert(stacked2.size === 2.0, `stacked: size = 2.0`);
+assert(stacked2.invincible === true, `stacked: invincible`);
+assert(stacked2.destroysPipes === false, `stacked: no pipe destruction without star`);
+
 if (failed > 0) { console.error(`\n${failed} test(s) FAILED`); process.exit(1); }
 console.log(`\nAll power-up tests passed.`);
