@@ -43,9 +43,9 @@ C.GROUND = C.H - C.HUD;
 // ── Power-Up System ──────────────────────────────────────────────────────────
 C.POWERUP_RADIUS = 20;
 C.POWERUP_FIRST_PIPE = 3;
-C.POWERUP_BASE_CHANCE = 0.15;
+C.POWERUP_BASE_CHANCE = 0.35;
 C.POWERUP_CHANCE_PER_LEVEL = 0.05;
-C.POWERUP_CHANCE_CAP = 0.40;
+C.POWERUP_CHANCE_CAP = 0.60;
 C.POWERUP_AHEAD_PX = 180;
 C.POWERUP_GRACE_TICKS = 30;
 
@@ -178,7 +178,10 @@ function spawnPowerUp(s: GameState, pipeX: number): void {
     if (roll <= 0) { chosen = d; break; }
   }
 
-  const y = 60 + s.rng() * (C.GROUND - 120);
+  const pipe = s.pipes[s.pipes.length - 1];
+  const gapCenter = pipe.topH + pipe.gap / 2;
+  const offset = (s.rng() - 0.5) * 60;
+  const y = Math.max(60, Math.min(C.GROUND - 60, gapCenter + offset));
   s.powerUps.push({ x: pipeX + C.POWERUP_AHEAD_PX, y, defId: chosen.id, collected: false });
 }
 
