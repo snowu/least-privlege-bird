@@ -3407,6 +3407,42 @@ function flap() {
   const key = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
   AudioFX.flap(key);
 }
+function devInjectPowerUp(idx: number) {
+  if (!gs) return;
+  const def = POWERUP_DEFS[idx];
+  if (!def) return;
+  gs.activeEffects.push({ defId: def.id, expiryTick: gs.tick + def.durationTicks });
+  if (def.id === 'role-assumption') {
+    const ks = Object.keys(THEMES).filter(k => THEMES[k] !== currentTheme);
+    puRoleSwapTheme = THEMES[ks[Math.floor(Math.random() * ks.length)]];
+  }
+}
+
+// DEV_MODE floating panel — HTML buttons so we skip all keyboard-event voodoo.
+if (window.DEV_MODE) {
+  (window as any).devPU = devInjectPowerUp; // also accessible from console
+  const panel = document.createElement('div');
+  panel.id = 'dev-pu-panel';
+  Object.assign(panel.style, {
+    position: 'fixed', bottom: '8px', left: '8px', zIndex: '9999',
+    display: 'flex', flexDirection: 'column', gap: '4px',
+    fontFamily: 'monospace', fontSize: '11px',
+  });
+  POWERUP_DEFS.forEach((def, i) => {
+    const btn = document.createElement('button');
+    btn.textContent = `${puIcon(def.id)} ${def.id}`;
+    Object.assign(btn.style, {
+      background: puColor(def.id), color: '#fff', border: 'none',
+      borderRadius: '3px', padding: '2px 7px', cursor: 'pointer',
+      fontFamily: 'monospace', fontSize: '11px', fontWeight: 'bold',
+      opacity: '0.85', textAlign: 'left',
+    });
+    btn.addEventListener('click', () => devInjectPowerUp(i));
+    panel.appendChild(btn);
+  });
+  document.body.appendChild(panel);
+}
+
 document.addEventListener('keydown', e => {
   // e.repeat is true for OS auto-repeat while the key is held — ignore it so one
   // physical press = exactly one flap (must release + press again to flap again).
