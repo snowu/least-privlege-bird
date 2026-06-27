@@ -80,7 +80,7 @@ export interface PowerUpDef {
 
 export const POWERUP_DEFS: readonly PowerUpDef[] = [
   { id: 'wildcard',        durationTicks: 240, sizeMul: 2.0, invincible: true },
-  { id: 'autoscaling',     durationTicks: 300, sizeMul: 0.6, flapMul: 1.8 },
+  { id: 'autoscaling',     durationTicks: 300, sizeMul: 0.6, flapMul: 1.3 },
   { id: 'cloudfront',      durationTicks: 300, speedMul: 0.5 },
   { id: 'role-assumption', durationTicks: 240, gapMul: 1.4 },
   { id: 'elb',             durationTicks: 300, gravityMul: 0.5 },

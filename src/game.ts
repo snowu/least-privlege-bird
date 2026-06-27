@@ -3228,8 +3228,11 @@ function stepOnce() {
     puCollectedAt = performance.now();
     // Role Assumption: pick a random display theme (render-only)
     if (result.collected === 'role-assumption') {
-      const keys = Object.keys(THEMES).filter(k => THEMES[k] !== currentTheme);
-      puRoleSwapTheme = THEMES[keys[Math.floor(Math.random() * keys.length)]];
+      const keys = Object.keys(THEMES).filter(k => {
+        const t = THEMES[k];
+        return t !== currentTheme && t.img && t.img.complete && t.img.naturalWidth > 0;
+      });
+      puRoleSwapTheme = keys.length ? THEMES[keys[Math.floor(Math.random() * keys.length)]] : null;
     }
   }
 
@@ -3240,8 +3243,9 @@ function stepOnce() {
     puDestroyedPipes.push({ x: C.PLAYER_X, topH: gs.player.y - 50, gap: 100, tick: gs.tick });
   }
 
-  // Effect expiry — clear role-swap theme if role-assumption expired
-  if (result.expiredEffects?.includes('role-assumption')) {
+  // Effect expiry — only revert swap theme when no role-assumption remains active
+  if (result.expiredEffects?.includes('role-assumption')
+      && !gs.activeEffects.some(e => e.defId === 'role-assumption')) {
     puRoleSwapTheme = null;
   }
 
@@ -3254,7 +3258,7 @@ function loop(now) {
   for (const p of gs.pipes) drawPipe(p.x, p.topH, p.gap);
   drawPowerUps();
   drawPipeDestruction();
-  drawPlayer();
+  try { drawPlayer(); } catch (e) { console.error('[drawPlayer]', e); }
   drawHUD();
   drawPowerUpHUD();
 
@@ -3289,6 +3293,16 @@ function loop(now) {
   while (acc >= TICK_MS) {
     if (stepOnce()) { endGame(); return; }
     acc -= TICK_MS;
+  }
+
+  // Role-assumption: cycle avatar every 40 ticks while active
+  const hasRoleAssumption = gs.activeEffects.some(e => e.defId === 'role-assumption');
+  if (hasRoleAssumption && gs.tick % 40 === 0) {
+    const ks = Object.keys(THEMES).filter(k => {
+      const t = THEMES[k];
+      return t !== currentTheme && t !== puRoleSwapTheme && t.img && t.img.complete && t.img.naturalWidth > 0;
+    });
+    if (ks.length) puRoleSwapTheme = THEMES[ks[Math.floor(Math.random() * ks.length)]];
   }
 
   animId = requestAnimationFrame(loop);
@@ -3413,8 +3427,11 @@ function devInjectPowerUp(idx: number) {
   if (!def) return;
   gs.activeEffects.push({ defId: def.id, expiryTick: gs.tick + def.durationTicks });
   if (def.id === 'role-assumption') {
-    const ks = Object.keys(THEMES).filter(k => THEMES[k] !== currentTheme);
-    puRoleSwapTheme = THEMES[ks[Math.floor(Math.random() * ks.length)]];
+    const ks = Object.keys(THEMES).filter(k => {
+      const t = THEMES[k];
+      return t !== currentTheme && t.img && t.img.complete && t.img.naturalWidth > 0;
+    });
+    puRoleSwapTheme = ks.length ? THEMES[ks[Math.floor(Math.random() * ks.length)]] : null;
   }
 }
 
