@@ -30,6 +30,7 @@ Built for an AWS workshop, now a (cursed) internal fun tool. Vanilla JS, no buil
 
 </div>
 
+
 ## Stack
 
 - **Frontend** — vanilla JS + HTML5 Canvas, deployed on GitHub Pages. No bundler.
