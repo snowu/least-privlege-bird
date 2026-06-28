@@ -3454,7 +3454,7 @@ if (window.DEV_MODE) {
       fontFamily: 'monospace', fontSize: '11px', fontWeight: 'bold',
       opacity: '0.85', textAlign: 'left',
     });
-    btn.addEventListener('click', () => devInjectPowerUp(i));
+    btn.addEventListener('click', () => { devInjectPowerUp(i); btn.blur(); });
     panel.appendChild(btn);
   });
   document.body.appendChild(panel);
