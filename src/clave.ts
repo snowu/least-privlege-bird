@@ -1159,5 +1159,5 @@ export const Clave = (() => {
     onSuccess();
   }
 
-  return { startLogin, startScoreSubmit };
+  return { startLogin, startScoreSubmit, QUESTIONS };
 })();

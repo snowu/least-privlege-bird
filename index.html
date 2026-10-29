@@ -305,7 +305,64 @@
     .mp-room { font-family: var(--font-display); font-size: 0.7rem; display: flex; align-items: center; gap: 10px; }
     #mp-code { color: #ffd600; letter-spacing: 0.2em; font-size: 1rem; }
     #overlay #btn-mp-copy { padding: 6px 10px; font-size: 0.5rem; }
-    #mp-players { display: flex; flex-direction: column; gap: 4px; width: 100%; max-height: 280px; overflow-y: auto; }
+    #mp-players, .mp-players { display: flex; flex-direction: column; gap: 4px; width: 100%; max-height: 280px; overflow-y: auto; }
+    #mp-race { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+    #mp-race .mp-row { grid-template-columns: 32px 1fr auto 72px; }
+    #overlay .mp-hex-btn { padding: 4px 8px; font-size: 0.5rem; background: #9333ea; }
+    #overlay .mp-hex-btn:hover { background: #7e22ce; }
+    #overlay .mp-hex-btn:disabled { background: #555; }
+    .mp-host { align-items: center; }
+    #overlay #mp-length { width: auto; padding: 8px 10px; }
+    #overlay .mp-host button { padding: 8px 12px; font-size: 0.6rem; }
+
+    /* Crash quiz */
+    #mp-quiz-panel {
+      background: rgba(10,12,30,0.92); border: 2px solid #ff6b6b; border-radius: 16px;
+      padding: 22px 28px; display: flex; flex-direction: column; align-items: center; gap: 12px;
+      width: min(620px, calc(100vw - 32px));
+    }
+    #mp-quiz-prompt { font-family: var(--font-display); font-size: 0.7rem; line-height: 1.8; color: #fff; text-align: center; }
+    #mp-quiz-opts { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    #overlay .mp-quiz-opt {
+      background: #24304f; text-align: left; white-space: normal; font-size: 0.58rem; line-height: 1.6;
+      border: 2px solid transparent;
+    }
+    #overlay .mp-quiz-opt:hover { background: #31406a; }
+    #overlay .mp-quiz-opt.selected { border-color: #ffd600; background: #3d4a2a; }
+    .mp-quiz-timer-track { width: 100%; height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden; }
+    #mp-quiz-timer { height: 100%; width: 100%; background: linear-gradient(90deg, #ef4444, #facc15); }
+    .mp-quiz-msg { font-family: var(--font-display); font-size: 0.55rem; line-height: 1.8; text-align: center; min-height: 1.2em; }
+    .mp-quiz-msg.ok { color: #51cf66; }
+    .mp-quiz-msg.bad { color: #ffb3b3; }
+
+    /* Race map */
+    #mp-map {
+      position: fixed; top: 4px; left: 50%; transform: translateX(-50%); z-index: 30;
+      width: min(640px, calc(100vw - 32px)); height: 72px; padding: 0 14px; box-sizing: border-box;
+      background: rgba(0,0,0,0.45); border-radius: 10px;
+      display: flex; align-items: center; gap: 10px; pointer-events: none;
+      font-family: var(--font-display); font-size: 0.5rem; color: #fff;
+      text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+    }
+    .mp-track {
+      position: relative; flex: 1; height: 4px; border-radius: 2px;
+      background: repeating-linear-gradient(90deg, #fff 0 10px, #888 10px 20px);
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.6);
+    }
+    .mp-pin {
+      position: absolute; bottom: 4px; transform: translateX(-50%);
+      display: flex; flex-direction: column-reverse; align-items: center;
+      transition: left 0.1s linear;
+    }
+    .mp-pin.below { bottom: auto; top: 4px; flex-direction: column; }
+    .mp-pin img { width: 20px; height: 20px; image-rendering: pixelated; }
+    .mp-pin span { font-size: 0.4rem; white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+    .mp-pin.me { z-index: 2; }
+    .mp-pin.me img { width: 26px; height: 26px; filter: drop-shadow(0 0 3px #ffd600); }
+    .mp-pin.me span { color: #ffd600; }
+    .mp-pin.quiz img { opacity: 0.45; }
+    .mp-pin.gone { opacity: 0.25; }
+    .mp-map-end { flex: none; }
     .mp-row {
       display: grid; grid-template-columns: 32px 1fr auto auto; align-items: center; gap: 10px;
       padding: 4px 10px; border-radius: var(--radius); background: rgba(255,255,255,0.06);
@@ -398,6 +455,13 @@
   <canvas id="canvas"></canvas>
   </div><!-- #game-frame -->
 
+  <!-- Race map: pinned to the top of the viewport while a multiplayer race runs. -->
+  <div id="mp-map" class="hidden">
+    <span class="mp-map-end">START</span>
+    <div class="mp-track"></div>
+    <span class="mp-map-end">🏁</span>
+  </div>
+
   <div id="overlay">
 
     <!-- ══ FORTUNE COW ══ -->
@@ -415,7 +479,7 @@
       <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.1);" />
       <div id="avatar-picker"></div>
       <button id="btn-play" style="width:220px;">Login &amp; Play</button>
-      <button id="btn-mp" class="secondary" style="width:220px;">👥 Multiplayer</button>
+      <button id="btn-mp" class="secondary" style="min-width:220px;">👥 Multiplayer</button>
       <a id="btn-recover-home" href="#" style="font-family:var(--font-display);color:#7ca4f4;font-size:0.55rem;margin-top:4px;">🔑 Recover account with token</a>
 
       <!-- High Scores: corner badge (see #btn-scores rule below) — pulled out of the
@@ -429,7 +493,7 @@
       <div id="mp-panel">
         <h2>👥 sts:AssumeRole — party</h2>
         <div id="mp-join">
-          <p class="mp-hint">Same pipes for everyone. Last bird with permissions wins.</p>
+          <p class="mp-hint">Race on the same pipes. Thread ⚡ coins to afterburn through pipes, grab 🔮 orbs to hex the racer ahead (E). Crash → answer an AWS question to respawn.</p>
           <input id="mp-code-input" type="text" maxlength="4" placeholder="ROOM CODE" autocomplete="off" />
           <div class="go-btns">
             <button id="btn-mp-join">Join</button>
@@ -444,11 +508,38 @@
           <div id="mp-players"></div>
           <p class="go-swap-label">Avatar:</p>
           <div id="avatar-picker-mp"></div>
+          <div class="go-btns mp-host">
+            <select id="mp-length" title="Race length">
+              <option value="sprint">Sprint · 30s</option>
+              <option value="standard" selected>Standard · 45s</option>
+              <option value="marathon">Marathon · 75s</option>
+            </select>
+            <button id="btn-mp-bot-add" class="secondary" title="Add an AI racer">🤖 +</button>
+            <button id="btn-mp-bot-remove" class="secondary" title="Remove an AI racer">🤖 −</button>
+          </div>
           <div class="go-btns">
-            <button id="btn-mp-start">Start round</button>
+            <button id="btn-mp-start">Start race</button>
             <button id="btn-mp-leave" class="secondary">Leave</button>
           </div>
         </div>
+        <div id="mp-race" class="hidden">
+          <p id="mp-race-status" class="mp-hint"></p>
+          <div id="mp-race-rows" class="mp-players"></div>
+          <p id="mp-race-hint" class="mp-hint"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CRASH QUIZ (multiplayer respawn) ══ -->
+    <div id="mp-quiz-screen" class="hidden">
+      <div id="mp-quiz-panel">
+        <h2>💥 Crashed! Answer to respawn</h2>
+        <p id="mp-quiz-prompt"></p>
+        <p id="mp-quiz-kind" class="mp-hint"></p>
+        <div class="mp-quiz-timer-track"><div id="mp-quiz-timer"></div></div>
+        <div id="mp-quiz-opts"></div>
+        <button id="btn-mp-quiz-submit" class="hidden">Submit</button>
+        <p id="mp-quiz-msg" class="mp-quiz-msg"></p>
       </div>
     </div>
 

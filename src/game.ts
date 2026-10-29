@@ -4,7 +4,7 @@
 // render-only ones like HUD/SPRITE_SCALE/COUNTDOWN_SEC).
 import {
   C, TICK_MS, createState, step, speedLevel,
-  POWERUP_DEFS, getEffective,
+  POWERUP_DEFS, getEffective, defOf,
   type GameState, type StepResult, type PowerUpItem, type ActiveEffect,
 } from './physics-core.ts';
 import { AVATAR_KEYS } from './avatars-meta.ts';
@@ -14,6 +14,7 @@ import {
 } from './scores.ts';
 import { Clave } from './clave.ts';
 import * as MP from './multiplayer.ts';
+import * as Bots from './bots.ts';
 
 // ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -233,6 +234,14 @@ const AudioFX = (() => {
     unlock() { const a = ctxAudio(); if (a.state === 'suspended') a.resume(); },
     flap(key) { (FLAPS[key] || FLAPS.bird)(); },
     score() { beep(1200, 1600, 0.06, 'square', 0.13); },
+    // Multiplayer hexes: a zap when you throw one, a sad warble when one lands on you.
+    zap() { beep(1800, 200, 0.14, 'sawtooth', 0.12); },
+    hexed() { beep(300, 600, 0.12, 'square', 0.16); beep(600, 150, 0.25, 'square', 0.14, 0.1); },
+    denied() { beep(180, 160, 0.12, 'square', 0.14); },
+    boost() { beep(400, 1400, 0.18, 'sawtooth', 0.12); },
+    orb() { beep(700, 700, 0.06, 'triangle', 0.16); beep(1050, 1050, 0.1, 'triangle', 0.16, 0.07); },
+    takedown() { beep(150, 60, 0.3, 'sawtooth', 0.18); beep(900, 1800, 0.12, 'square', 0.1, 0.12); },
+    finish() { [523, 659, 784, 1047].forEach((f, i) => beep(f, f, 0.14, 'square', 0.15, i * 0.1)); },
     // Descending minor jingle — that N64/PS1 "you died" sting.
     gameOver() {
       const seq = [660, 550, 440, 330, 220];
@@ -2385,6 +2394,7 @@ const screens = {
   scores:   document.getElementById('scores-screen'),
   gameover: document.getElementById('gameover-screen'),
   mp:       document.getElementById('mp-screen'),
+  mpquiz:   document.getElementById('mp-quiz-screen'),
 };
 function showScreen(name) {
   Object.values(screens).forEach(s => s.classList.add('hidden'));
@@ -2598,22 +2608,50 @@ let puRoleSwapTheme: any = null; // random theme for role-assumption visual
 let puScreenShake = 0;           // remaining screen-shake frames
 
 // ── Multiplayer run state ──
-// After dying in a room round you keep watching: the sim keeps stepping (pipes keep
-// scrolling for everyone else's ghosts) but your bird is hidden and inputs ignored.
+// Rounds are races (see multiplayer.ts). Crashing freezes your sim behind a quiz
+// card and a right answer respawns you where you fell; finishing ends your run and
+// drops you on the race screen to heckle (hex) whoever's still flying.
 let mpRun = false;               // this run is a multiplayer round
-let mpSpectating = false;
-let mpFinalScore = 0;
+let mpPhase: 'fly' | 'quiz' | 'fin' = 'fly';
 
-// mpSeed: a multiplayer round's shared seed. Splits the power-up rng off so the pipe
-// course stays identical for every player regardless of who grabs which power-up.
+// ── Hexes (multiplayer interference) ──
+// Thrown by other players; applied by the target to its own sim/render. Wall-clock
+// timers are fine here: MP runs are never replay-validated.
+const HEXES = {
+  yank:      { icon: '⬇', title: 'AccessDenied' },
+  throttled: { icon: '🐌', title: 'ThrottlingException' },
+  bloat:     { icon: '🎈', title: 'PolicySizeExceeded' },
+  failover:  { icon: '🙃', title: 'RegionFailover' },
+  outage:    { icon: '🌑', title: 'us-east-1 outage' },
+  mfa:       { icon: '🔐', title: 'MFARequired' },
+};
+const HECKLE_CD_MS = 4000;       // finished racers heckle on a cooldown (racers spend orbs)
+let hexReadyAt = 0;
+let hexCharges = 0;              // 🔮 orbs banked from gaps (racing hexes cost one each)
+let mpSeen = new WeakSet<any>(); // pipes whose gap item has been judged (MP.passItems)
+let pickupPop: { text: string; color: string; at: number } | null = null;
+let hexFlipUntil = 0, hexBlackoutUntil = 0, hexMfaUntil = 0;
+let mfaEaten = false, mfaPromptAt = -1e9;
+let hexToast: { icon: string; title: string; from: string; at: number } | null = null;
+let hexFeed: Array<{ text: string; at: number }> = [];
+const hexMarks = new Map<string, { icon: string; at: number }>(); // bird id → last hex taken
+
+// mpSeed: a multiplayer round's shared seed. Races use MP.raceState (race pacing,
+// power-up rng split off so the course is identical for everyone).
 function initGame(playerName, mpSeed?: number) {
   currentPlayer = playerName;
   mpRun = mpSeed != null;
-  mpSpectating = false;
-  mpFinalScore = 0;
+  mpPhase = 'fly';
+  hexCharges = 0;
+  mpSeen = new WeakSet();
+  pickupPop = null;
+  hexReadyAt = 0;
+  clearHexes();
+  hexFeed = [];
+  hexMarks.clear();
   // seed drives all gameplay-affecting randomness; createState seeds the core PRNG.
   seed = mpSeed ?? crypto.getRandomValues(new Uint32Array(1))[0];
-  gs = createState(seed, { splitPowerUpRng: mpRun });
+  gs = mpRun ? MP.raceState(seed) : createState(seed);
   flapTicks = [];
   pendingFlap = false;
   bgScroll = 0;
@@ -2929,7 +2967,7 @@ function drawPlayer() {
   // Effective sprite scale (size multiplier from power-ups)
   let drawScale = C.SPRITE_SCALE;
   const isFlickering = gs.activeEffects.some(e => {
-    const d = POWERUP_DEFS.find(p => p.id === e.defId);
+    const d = defOf(e.defId);
     return (d?.invincible || d?.sizeMul) && (e.expiryTick - gs.tick) <= 90;
   });
   if (isFlickering && Math.floor(gs.tick / 6) % 2 === 0) {
@@ -3099,6 +3137,8 @@ function puColor(id: string): string {
     case 'role-assumption': return '#ec4899'; // pink
     case 'elb':             return '#06b6d4'; // cyan
     case 'star':            return '#ef4444'; // red
+    case 'hex-throttled':   return '#a16207'; // mud
+    case 'hex-bloat':       return '#c026d3'; // fuchsia
     default:                return '#888';
   }
 }
@@ -3111,6 +3151,8 @@ function puIcon(id: string): string {
     case 'role-assumption': return 'R';
     case 'elb':             return 'E';
     case 'star':            return '!';
+    case 'hex-throttled':   return '🐌';
+    case 'hex-bloat':       return '🎈';
     default:                return '?';
   }
 }
@@ -3180,7 +3222,7 @@ function drawPowerUpHUD() {
 
   for (let i = 0; i < effects.length; i++) {
     const e = effects[i];
-    const def = POWERUP_DEFS.find(d => d.id === e.defId);
+    const def = defOf(e.defId);
     if (!def) continue;
 
     const y = startY + i * (barH + gap);
@@ -3212,8 +3254,14 @@ function drawHUD() {
   ctx.textAlign = 'center';
   const sl = speedLevel(gs) + 1;
   if (mpRun) {
-    const tail = mpSpectating ? `☠ ${mpFinalScore}  |  spectating` : `Score: ${gs.score}`;
-    strokedText(`Room ${MP.room.code}  |  ${currentPlayer}  |  ${tail}  |  Spd ${sl}`, C.W / 2, C.GROUND + 32, 4);
+    const now = performance.now();
+    const t = Math.max(0, (now - MP.room.raceStartAt) / 1000).toFixed(1);
+    const pct = Math.floor(Math.min(1, gs.dist / MP.room.finishDist) * 100);
+    const hex = hexCharges ? `[E] 🔮×${hexCharges}` : '🔮 0';
+    const boost = gs.activeEffects.some(e => e.defId === 'boost') ? '  |  ⚡AFTERBURNER' : '';
+    strokedText(
+      `Room ${MP.room.code}  |  ${currentPlayer}  |  ⏱ ${t}s  |  ${pct}%  |  ${hex}${boost}  |  Spd ${sl}`,
+      C.W / 2, C.GROUND + 32, 4);
     return;
   }
   // High is shown only when we have an authoritative value from Supabase.
@@ -3225,40 +3273,120 @@ function drawHUD() {
   );
 }
 
-// Other players in a multiplayer round: translucent, name-tagged, dead-reckoned
-// between their snapshots (see multiplayer.ts). Everyone shares PLAYER_X, so this
-// reads as a ghost race — whoever's still on screen is still in it.
+// Other racers: translucent, name-tagged, dead-reckoned between snapshots (see
+// multiplayer.ts). Placed by course position — a racer 300px further down the
+// course flies 300px to your right, and a crashed one stays frozen where they fell
+// while you fly past.
 function drawGhosts(now) {
   for (const b of MP.remoteBirds()) {
-    if (!b.alive) continue;
-    const { y, vy } = MP.extrapolate(b, now);
-    b.dispY += (y - b.dispY) * 0.5;   // soften snapshot corrections
+    if (b.st === 'fin' || b.st === 'gone') continue;
+    const e = MP.extrapolate(b, now);
+    const x = C.PLAYER_X + (e.dist - gs.dist);
+    if (x < -60 || x > C.W + 60) continue;
+    b.dispY += (e.y - b.dispY) * 0.5;   // soften snapshot corrections
     const theme = THEMES[b.avatar] || THEMES.penguin;
     const s = C.PLAYER_SIZE * C.SPRITE_SCALE * b.size;
     ctx.save();
-    ctx.globalAlpha = 0.45;
-    ctx.translate(C.PLAYER_X, b.dispY);
-    ctx.rotate(Math.max(-0.4, Math.min(0.4, vy * 0.05)));
+    ctx.globalAlpha = b.st === 'quiz' ? 0.25 : 0.45;
+    ctx.translate(x, b.dispY);
+    ctx.rotate(Math.max(-0.4, Math.min(0.4, e.vy * 0.05)));
     if (theme.img?.complete) ctx.drawImage(theme.img, -s / 2, -s / 2, s, s);
     ctx.restore();
     ctx.save();
     ctx.globalAlpha = 0.8;
     ctx.font = `9px ${activeStyle().fontDisplay}`;
     ctx.textAlign = 'center';
-    strokedText(b.name, C.PLAYER_X, b.dispY - s / 2 - 6, 3);
+    const mark = hexMarks.get(b.id);
+    const badge = b.st === 'quiz' ? ' 📝' : mark && now - mark.at < 2500 ? ` ${mark.icon}` : '';
+    strokedText(b.name + badge, x, b.dispY - s / 2 - 6, 3);
     ctx.restore();
   }
 }
 
+// Checkered finish banner, scrolling in at the course position where the race ends.
+function drawFinishLine() {
+  const x = C.PLAYER_X + (MP.room.finishDist - gs.dist);
+  if (x > C.W + 40) return;
+  const sq = 16;
+  for (let row = 0; row * sq < C.GROUND; row++) {
+    for (let col = 0; col < 2; col++) {
+      ctx.fillStyle = (row + col) % 2 ? '#111' : '#fff';
+      ctx.fillRect(x + col * sq, row * sq, sq, sq);
+    }
+  }
+}
+
+// Gap items: gold ⚡ coins (thread the gap centre for an afterburner dash) and purple 🔮 orbs
+// (a hex charge). Drawn until the pipe's centre passes the bird and it's judged.
+function drawItems(now) {
+  for (const p of gs.pipes) {
+    const item = MP.itemFor(p.n);
+    if (!item || mpSeen.has(p)) continue;
+    const x = p.x + C.PIPE_W / 2, y = p.topH + p.gap / 2 + Math.sin(now / 200 + p.n) * 4;
+    ctx.save();
+    ctx.fillStyle = item === 'coin' ? '#facc15' : '#a855f7';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = `bold 15px ${activeStyle().fontDisplay}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = item === 'coin' ? '#7c2d12' : '#fff';
+    ctx.fillText(item === 'coin' ? '⚡' : '✦', x, y + 1);
+    ctx.restore();
+  }
+}
+
+// Boost speed lines + the little "+BOOST / +HEX / TAKEDOWN" pop over the bird.
+function drawBoostFx(now) {
+  if (gs.activeEffects.some(e => e.defId === 'boost')) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 14; i++) {
+      const y = (hash01(i * 7.3) * C.GROUND) | 0;
+      const x = C.W - ((now * 2.2 + hash01(i) * C.W) % (C.W + 200));
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 80 + hash01(i * 3.1) * 80, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (pickupPop && now - pickupPop.at < 800) {
+    const t = (now - pickupPop.at) / 800;
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.font = `16px ${activeStyle().fontDisplay}`;
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = pickupPop.color;
+    const y = gs.player.y - 44 - t * 30;
+    ctx.strokeText(pickupPop.text, C.PLAYER_X + 30, y);
+    ctx.fillText(pickupPop.text, C.PLAYER_X + 30, y);
+    ctx.restore();
+  }
+}
+
+function raceLabel(b: MP.Bird, now: number): string {
+  if (b.st === 'fin') return `🏁 ${(b.finishMs / 1000).toFixed(1)}s`;
+  if (b.st === 'gone') return 'left';
+  return `${Math.floor(MP.progress(b, now) * 100)}%${b.st === 'quiz' ? ' 📝' : ''}`;
+}
+
 // Live standings, top-left (power-up bars own the top-right).
-function drawStandings() {
+function drawStandings(now) {
   ctx.save();
   ctx.font = `10px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'left';
-  MP.standings().forEach((b, i) => {
-    ctx.globalAlpha = b.alive ? 1 : 0.5;
+  MP.standings(now).forEach((b, i) => {
+    ctx.globalAlpha = b.st === 'gone' ? 0.4 : 1;
     const tag = b.id === MP.myId() ? ' ◀' : '';
-    strokedText(`${b.alive ? `${i + 1}.` : '☠'} ${b.name} ${b.score}${tag}`, 14, 24 + i * 18, 3);
+    strokedText(`${i + 1}. ${b.name} ${raceLabel(b, now)}${tag}`, 14, 24 + i * 18, 3);
   });
   ctx.restore();
 }
@@ -3277,11 +3405,18 @@ function stepOnce() {
   const flapped = pendingFlap;
   if (flapped) { flapTicks.push(gs.tick); pendingFlap = false; }
   const result: StepResult = step(gs, flapped);
-  if (mpRun && !mpSpectating) {
-    const eff = getEffective(gs);
-    MP.localTick(gs.tick, flapped, gs.player.y, gs.player.vy, eff.gravity, eff.size, gs.score);
+  if (mpRun && !result.dead) {
+    const item = MP.passItems(gs, mpSeen);
+    const now = performance.now();
+    if (item === 'coin') { pickupPop = { text: '⚡ AFTERBURNER', color: '#facc15', at: now }; AudioFX.boost(); }
+    if (item === 'orb' && hexCharges < MP.MAX_HEX_CHARGES) {
+      hexCharges++;
+      pickupPop = { text: '🔮 +HEX [E]', color: '#d8b4fe', at: now };
+      AudioFX.orb();
+    }
+    MP.updateOwned(MP.myId(), gs, 'fly', flapped);
   }
-  if (result.scored && !mpSpectating) AudioFX.score();
+  if (result.scored) AudioFX.score();
 
   // Power-up pickup
   if (result.collected) {
@@ -3319,13 +3454,13 @@ function loop(now) {
   for (const p of gs.pipes) drawPipe(p.x, p.topH, p.gap);
   drawPowerUps();
   drawPipeDestruction();
-  if (mpRun) drawGhosts(now);
-  if (!mpSpectating) {
-    try { drawPlayer(); } catch (e) { console.error('[drawPlayer]', e); }
-  }
+  if (mpRun) { drawFinishLine(); drawItems(now); drawGhosts(now); }
+  try { drawPlayer(); } catch (e) { console.error('[drawPlayer]', e); }
+  if (mpRun) drawBoostFx(now);
+  if (mpRun) drawHexWorld(now);
   drawHUD();
-  if (!mpSpectating) drawPowerUpHUD();
-  if (mpRun) drawStandings();
+  drawPowerUpHUD();
+  if (mpRun) { drawStandings(now); drawHexOverlay(now); }
 
   // ── Countdown phase: freeze physics, show number ──
   // Countdown is purely cosmetic, so wall-clock timing is fine here.
@@ -3346,7 +3481,8 @@ function loop(now) {
 
   // Advance the parallax scroll with the world. Render-only: tied to pipeSpeed so
   // scenery tracks pipe motion, but never fed into physics/replay.
-  bgScroll += gs.pipeSpeed;
+  const frozen = mpRun && mpPhase === 'quiz';   // sim paused behind the quiz card
+  if (!frozen) bgScroll += gs.pipeSpeed;
 
   // ── Active play: fixed-timestep accumulator ──
   // Advance physics in fixed TICK_MS steps regardless of monitor refresh rate,
@@ -3354,13 +3490,16 @@ function loop(now) {
   if (lastFrameTime === null) lastFrameTime = now;
   acc += Math.min(now - lastFrameTime, MAX_FRAME_MS); // clamp after tab stalls
   lastFrameTime = now;
+  if (frozen) acc = 0;
 
   while (acc >= TICK_MS) {
-    if (stepOnce() && !mpSpectating) {
+    if (stepOnce()) {
       if (!mpRun) { endGame(); return; }
-      mpDie();
+      mpCrash();
+      break;
     }
     acc -= TICK_MS;
+    if (mpRun && gs.dist >= MP.room.finishDist) { mpFinish(); return; }
   }
 
   // Role-assumption: cycle avatar every 40 ticks while active
@@ -3465,7 +3604,13 @@ async function endGame() {
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 function flap() {
-  if (mpSpectating) return;
+  if (mpRun && mpPhase !== 'fly') return;
+  // MFARequired hex: every other flap is eaten by an imaginary MFA prompt.
+  if (performance.now() < hexMfaUntil && (mfaEaten = !mfaEaten)) {
+    mfaPromptAt = performance.now();
+    AudioFX.denied();
+    return;
+  }
   // Queue the flap for the next physics tick, which applies it to the core AND
   // logs that tick into flapTicks (see stepOnce). Routing input through the tick
   // boundary keeps browser play byte-identical to the server replay.
@@ -3508,6 +3653,10 @@ function devInjectPowerUp(idx: number) {
 // DEV_MODE floating panel — HTML buttons so we skip all keyboard-event voodoo.
 if (window.DEV_MODE) {
   (window as any).devPU = devInjectPowerUp; // also accessible from console
+  (window as any).devState = () => gs;      // live sim state, for console poking + test autopilots
+  (window as any).devHex = (kind: string) => applyHex(kind, 'devtools'); // MP round only
+  (window as any).devQuiz = () => quizQ;    // current crash question (tests answer it on purpose)
+  (window as any).devRoom = () => MP.room;  // race state, for console + race tests
   const panel = document.createElement('div');
   panel.id = 'dev-pu-panel';
   Object.assign(panel.style, {
@@ -3531,6 +3680,11 @@ if (window.DEV_MODE) {
 }
 
 document.addEventListener('keydown', e => {
+  if (mpRun && !e.repeat) {
+    if (e.code === 'KeyE' && gameActive && mpPhase === 'fly') throwHex(MP.racerAhead(MP.myId()));
+    if (e.code === 'Space' && mpPhase === 'fin') throwHex(leaderRival());
+    if (mpPhase === 'quiz') quizKey(e);
+  }
   // e.repeat is true for OS auto-repeat while the key is held — ignore it so one
   // physical press = exactly one flap (must release + press again to flap again).
   if (e.code === 'Space' && !e.repeat && !overlay.classList.contains('hidden') === false) flap();
@@ -3688,65 +3842,393 @@ document.getElementById('btn-menu').addEventListener('click', () => { populateUs
 
 // ─── MULTIPLAYER UI ───────────────────────────────────────────────────────────
 // Lobby flow: pick name + avatar on the menu → Multiplayer → create or join a room
-// by code (or open a ?room=CODE link). The first player in the room is host and
-// starts rounds; everyone else waits. Rounds skip the SSO/captcha theater and never
-// submit to the leaderboard (see multiplayer.ts).
+// by code (or open a ?room=CODE link). The first player in the room is host: picks
+// the race length, adds/removes bots, starts races. Races skip the SSO/captcha
+// theater and never submit to the leaderboard (see multiplayer.ts).
 const mpJoin    = document.getElementById('mp-join');
 const mpLobby   = document.getElementById('mp-lobby');
+const mpRace    = document.getElementById('mp-race');
 const mpCodeIn  = document.getElementById('mp-code-input') as HTMLInputElement;
 const mpError   = document.getElementById('mp-error');
 const mpStatus  = document.getElementById('mp-status');
 const mpPlayers = document.getElementById('mp-players');
+const mpRaceRows = document.getElementById('mp-race-rows');
+const mpLength  = document.getElementById('mp-length') as HTMLSelectElement;
+const mpMap     = document.getElementById('mp-map');
 const btnMp      = document.getElementById('btn-mp');
 const btnMpStart = document.getElementById('btn-mp-start') as HTMLButtonElement;
+const btnBotAdd  = document.getElementById('btn-mp-bot-add') as HTMLButtonElement;
+const btnBotDel  = document.getElementById('btn-mp-bot-remove') as HTMLButtonElement;
 const urlRoom = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-if (urlRoom) btnMp.textContent = `👥 Join room ${urlRoom}`;
+if (urlRoom) btnMp.textContent = `👥 Join ${urlRoom}`;
 
-function mpDie() {
-  mpSpectating = true;
-  mpFinalScore = gs.score;
-  puScreenShake = 0;
-  AudioFX.gameOver();
-  MP.localDeath(gs.score, gs.tick);
+// ── Hexes ──
+function clearHexes() {
+  hexFlipUntil = hexBlackoutUntil = hexMfaUntil = 0;
+  hexToast = null;
+  canvas.style.transform = '';
 }
 
+function leaderRival(): string | null {
+  return MP.standings().find(b => b.st === 'fly' && b.id !== MP.myId())?.id ?? null;
+}
+
+// Racing: spend a banked 🔮 on the racer just ahead. Finished: heckle on a cooldown.
+function throwHex(target: string | null) {
+  const now = performance.now();
+  if (!target || !MP.room.roundLive || now < MP.room.raceStartAt) return;
+  if (mpPhase === 'fin') {
+    if (now < hexReadyAt) return;
+    hexReadyAt = now + HECKLE_CD_MS;
+  } else {
+    if (hexCharges <= 0) return;
+    hexCharges--;
+  }
+  MP.sendHex(MP.myId(), target, MP.HEX_KINDS[Math.floor(Math.random() * MP.HEX_KINDS.length)]);
+  AudioFX.zap();
+}
+
+// A hex landed on me. Sim hexes go through MP.applySimHex (shared with bots); the
+// rest are render/input-only.
+function applyHex(kind: string, from: string) {
+  if (!mpRun || !gameActive || mpPhase !== 'fly') return;
+  const now = performance.now();
+  MP.applySimHex(gs, kind);
+  switch (kind) {
+    case 'yank':     puScreenShake = 6; break;
+    case 'failover': hexFlipUntil = now + 4000; break;
+    case 'outage':   hexBlackoutUntil = now + 3500; break;
+    case 'mfa':      hexMfaUntil = now + 4000; mfaEaten = false; break;
+  }
+  hexToast = { ...HEXES[kind], from, at: now };
+  AudioFX.hexed();
+}
+
+// World-layer hex visuals (under the HUD): barrel roll, blackout, MFA prompt.
+function drawHexWorld(now) {
+  // RegionFailover: the whole canvas does a CSS barrel roll (rotate, not flip, so
+  // pipes come from the left too). Toggled only on change to keep the transition.
+  const flip = now < hexFlipUntil ? 'rotate(180deg)' : '';
+  if (canvas.style.transform !== flip) {
+    canvas.style.transition = 'transform 0.45s ease-in-out';
+    canvas.style.transform = flip;
+  }
+  if (mpPhase !== 'fly') return;
+  if (now < hexBlackoutUntil) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.92)';
+    ctx.beginPath();
+    ctx.rect(0, 0, C.W, C.GROUND);
+    ctx.arc(C.PLAYER_X, gs.player.y, 150, 0, Math.PI * 2);
+    ctx.fill('evenodd');
+    ctx.font = `12px ${activeStyle().fontDisplay}`;
+    ctx.textAlign = 'center';
+    strokedText('Service health: us-east-1 🔥', C.W / 2, 140, 3);
+    ctx.restore();
+  }
+  if (now < hexMfaUntil) {
+    const fresh = now - mfaPromptAt < 500;
+    ctx.save();
+    ctx.font = `${fresh ? 14 : 10}px ${activeStyle().fontDisplay}`;
+    ctx.textAlign = 'left';
+    strokedText(fresh ? '🔐 Enter MFA code: ______' : '🔐 MFA required', C.PLAYER_X - 40, gs.player.y - 50, 3);
+    ctx.restore();
+  }
+}
+
+// Screen-layer hex visuals: kill feed (top-centre, under the race map) + the
+// "you got hexed" toast.
+function drawHexOverlay(now) {
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = `10px ${activeStyle().fontDisplay}`;
+  hexFeed = hexFeed.filter(f => now - f.at < 4500);
+  hexFeed.forEach((f, i) => {
+    ctx.globalAlpha = Math.min(1, (4500 - (now - f.at)) / 600);
+    strokedText(f.text, C.W / 2, 96 + i * 18, 3);
+  });
+  if (hexToast && now - hexToast.at < 1800) {
+    const t = (now - hexToast.at) / 1800;
+    ctx.globalAlpha = t < 0.8 ? 1 : (1 - t) / 0.2;
+    ctx.translate(C.W / 2, C.GROUND * 0.32);
+    ctx.rotate(Math.sin(now / 60) * 0.06);
+    ctx.scale(1 + Math.max(0, 0.25 - t) * 2, 1 + Math.max(0, 0.25 - t) * 2);
+    ctx.font = `30px ${activeStyle().fontDisplay}`;
+    strokedText(`${hexToast.icon} ${hexToast.title}`, 0, 0, 7);
+    ctx.font = `12px ${activeStyle().fontDisplay}`;
+    strokedText(`courtesy of ${hexToast.from}`, 0, 32, 4);
+  }
+  ctx.restore();
+}
+
+// ── Crash → quiz → respawn ──
+// Crashing freezes your sim and puts up one of the Clave AWS questions. Right
+// answer: respawn in the next gap with a short invincibility window. Wrong: read
+// the explanation through a lockout, then get a different question. Everyone else
+// keeps flying, so each crash costs you real race time.
+const QUIZ_LOCK_MS = 2000;
+const QUIZ_TIME_MS = 10000;      // answer within this or it counts as wrong
+// Single-answer only: multi-select "pick all that apply" cards are too slow mid-race.
+const QUIZ_POOL = Clave.QUESTIONS.filter(q => q.type === 'single');
+const quizTimer = document.getElementById('mp-quiz-timer');
+let quizDeadline = 0;
+const quizPrompt = document.getElementById('mp-quiz-prompt');
+const quizKind   = document.getElementById('mp-quiz-kind');
+const quizOpts   = document.getElementById('mp-quiz-opts');
+const quizMsg    = document.getElementById('mp-quiz-msg');
+const btnQuizSubmit = document.getElementById('btn-mp-quiz-submit') as HTMLButtonElement;
+let quizBag: number[] = [];
+let quizQ: any = null;
+let quizLocked = false;
+
+function shuffle<T>(a: T[]): T[] {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function nextQuestion() {
+  if (!quizBag.length) quizBag = shuffle(QUIZ_POOL.map((_, i) => i));
+  const q = QUIZ_POOL[quizBag.pop()];
+  quizQ = { ...q, options: shuffle([...q.options]) };
+  quizLocked = false;
+  quizPrompt.innerHTML = quizQ.prompt;   // trusted: question bank ships in the bundle
+  quizKind.textContent = 'Pick one (keys 1–5) · 10s';
+  quizOpts.innerHTML = quizQ.options
+    .map((o, i) => `<button class="mp-quiz-opt" data-i="${i}">${i + 1}. ${o.text}</button>`).join('');
+  btnQuizSubmit.classList.toggle('hidden', quizQ.type !== 'multi');
+  quizMsg.textContent = '';
+  quizMsg.className = 'mp-quiz-msg';
+  // Timer bar: restart the CSS transition from full to empty.
+  quizDeadline = performance.now() + QUIZ_TIME_MS;
+  quizTimer.style.transition = 'none';
+  quizTimer.style.width = '100%';
+  void quizTimer.offsetWidth;
+  quizTimer.style.transition = `width ${QUIZ_TIME_MS}ms linear`;
+  quizTimer.style.width = '0%';
+}
+
+// Ran out the clock → same as a wrong answer.
+setInterval(() => {
+  if (mpPhase === 'quiz' && !quizLocked && quizDeadline && performance.now() > quizDeadline) checkAnswer([]);
+}, 200);
+
+function pickOption(i: number) {
+  if (quizLocked || !quizQ?.options[i]) return;
+  if (quizQ.type !== 'multi') { checkAnswer([i]); return; }
+  quizOpts.children[i].classList.toggle('selected');
+}
+
+function checkAnswer(selected: number[]) {
+  if (quizLocked) return;
+  const correct = quizQ.options.map((o, i) => o.correct ? i : -1).filter(i => i >= 0);
+  const ok = selected.length === correct.length && selected.every(i => correct.includes(i));
+  quizLocked = true;
+  quizTimer.style.transition = 'none';
+  if (ok) {
+    quizMsg.textContent = '✅ Access granted. Respawning…';
+    quizMsg.className = 'mp-quiz-msg ok';
+    setTimeout(mpRespawn, 450);
+    return;
+  }
+  AudioFX.denied();
+  const right = correct.map(i => quizQ.options[i]);
+  let left = QUIZ_LOCK_MS / 1000;
+  const say = () => {
+    quizMsg.innerHTML = `❌ ${selected.length ? 'Denied' : 'Timed out'}. Answer: <strong>${right.map(o => o.text).join(' + ')}</strong> — ${right[0].explain}`
+      + `<br>New question in ${left}s…`;
+  };
+  quizMsg.className = 'mp-quiz-msg bad';
+  say();
+  const t = setInterval(() => {
+    left--;
+    if (mpPhase !== 'quiz') { clearInterval(t); return; }
+    if (left <= 0) { clearInterval(t); nextQuestion(); } else say();
+  }, 1000);
+}
+
+function quizKey(e: KeyboardEvent) {
+  const n = /^Digit([1-9])$/.exec(e.code)?.[1];
+  if (n) pickOption(+n - 1);
+  if (e.code === 'Enter' && quizQ?.type === 'multi') btnQuizSubmit.click();
+}
+
+quizOpts.addEventListener('click', e => {
+  const btn = (e.target as HTMLElement).closest('.mp-quiz-opt') as HTMLElement;
+  if (btn) pickOption(+btn.dataset.i);
+});
+btnQuizSubmit.addEventListener('click', () => {
+  checkAnswer([...quizOpts.querySelectorAll('.mp-quiz-opt.selected')].map(b => +(b as HTMLElement).dataset.i));
+});
+
+function mpCrash() {
+  mpPhase = 'quiz';
+  clearHexes();
+  puScreenShake = 0;
+  AudioFX.gameOver();
+  MP.updateOwned(MP.myId(), gs, 'quiz', true);
+  nextQuestion();
+  showScreen('mpquiz');
+}
+
+function mpRespawn() {
+  if (mpPhase !== 'quiz' || !MP.room.roundLive) return;
+  MP.respawn(gs);
+  mpPhase = 'fly';
+  pendingFlap = false;
+  lastFrameTime = null;
+  acc = 0;
+  showScreen(null);
+  MP.updateOwned(MP.myId(), gs, 'fly', true);
+}
+
+function mpFinish() {
+  mpPhase = 'fin';
+  MP.updateOwned(MP.myId(), gs, 'fin', true, performance.now() - MP.room.raceStartAt);
+  cancelAnimationFrame(animId);
+  gameActive = false;
+  clearHexes();
+  hexReadyAt = 0;            // first heckle is free
+  (document.getElementById('gfx-toggle') as HTMLElement).style.display = '';
+  AudioFX.finish();
+  startIdle();
+  renderLobby();
+  if (MP.room.roundLive) showScreen('mp');
+}
+
+// ── Race map ──
+// A track strip pinned to the top of the viewport while a race is live: every racer
+// as an avatar pin at their course position, 📝 while quizzing, parked on the 🏁
+// once done. Pins alternate above/below the line so a bunched pack stays readable.
+const mapPins = new Map<string, HTMLElement>();
+function renderMap() {
+  const live = MP.inRoom() && MP.room.roundLive;
+  mpMap.classList.toggle('hidden', !live);
+  if (!live) {
+    if (mapPins.size) { mapPins.forEach(el => el.remove()); mapPins.clear(); }
+    return;
+  }
+  const now = performance.now();
+  const track = mpMap.querySelector('.mp-track');
+  MP.standings(now).forEach((b, i) => {
+    let pin = mapPins.get(b.id);
+    if (!pin) {
+      pin = document.createElement('div');
+      pin.className = 'mp-pin' + (b.id === MP.myId() ? ' me' : '');
+      pin.innerHTML = `<img alt=""><span></span>`;
+      track.appendChild(pin);
+      mapPins.set(b.id, pin);
+    }
+    const theme = THEMES[b.avatar] || THEMES.penguin;
+    const img = pin.querySelector('img');
+    if (img.getAttribute('src') !== theme.img.src) img.src = theme.img.src;
+    pin.querySelector('span').textContent = `${b.st === 'quiz' ? '📝' : b.st === 'fin' ? '🏁' : ''}${b.name}`;
+    pin.style.left = `${MP.progress(b, now) * 100}%`;
+    pin.classList.toggle('below', i % 2 === 1);
+    pin.classList.toggle('quiz', b.st === 'quiz');
+    pin.classList.toggle('gone', b.st === 'gone');
+  });
+  if (mpPhase === 'fin' && !gameActive) renderRaceView();
+}
+setInterval(renderMap, 100);
+
+// ── Lobby / race screen ──
 function escapeHtml(t: string) {
   return t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function avatarImg(key: string) {
+  return `<img src="${(THEMES[key] || THEMES.penguin).img.src}" alt="">`;
+}
+
+function resultLabel(r: MP.RoundResult) {
+  const place = r.finished ? `🏁 ${(r.finishMs / 1000).toFixed(1)}s` : `${Math.floor(r.progress * 100)}%`;
+  return r.takedowns ? `${place} · 💥${r.takedowns}` : place;
+}
+
+// Side award: most crashes caused by your hexes.
+function chaosMonkey(results: MP.RoundResult[]) {
+  const top = [...results].sort((a, b) => b.takedowns - a.takedowns)[0];
+  return top?.takedowns ? ` 🐒 Chaos Monkey: ${top.name} (${top.takedowns} takedown${top.takedowns > 1 ? 's' : ''})` : '';
+}
+
+// While you're finished and others are still racing: live standings with a hex
+// button on every racer still flying. Percentages tick several times a second, so
+// rows are only rebuilt when their order/buttons change and otherwise patched in
+// place — a rebuild between mousedown and mouseup would swallow the click.
+let raceRowsKey = '';
+function renderRaceView() {
+  const now = performance.now();
+  const rows = MP.standings(now);
+  const mine = rows.findIndex(b => b.id === MP.myId());
+  const meBird = rows[mine];
+  const cd = Math.ceil((hexReadyAt - now) / 1000);
+  document.getElementById('mp-race-status').textContent = meBird
+    ? `🏁 You finished #${mine + 1} in ${(meBird.finishMs / 1000).toFixed(1)}s. Now heckle the stragglers.`
+    : '';
+  document.getElementById('mp-race-hint').textContent =
+    cd > 0 ? `Hex recharging… ${cd}s` : 'SPACE: hex the leader · or pick a victim · hex-caused crashes count for 🐒 Chaos Monkey';
+  const canHex = (b: MP.Bird) => b.st === 'fly' && b.id !== MP.myId();
+  const key = rows.map(b => `${b.id}:${canHex(b)}`).join('|') + `|${cd > 0}`;
+  if (key !== raceRowsKey) {
+    raceRowsKey = key;
+    mpRaceRows.innerHTML = rows.map(b => `<div class="mp-row${b.id === MP.myId() ? ' me' : ''}">
+        ${avatarImg(b.avatar)}
+        <span class="mp-name"></span>
+        <span class="mp-score"></span>
+        ${canHex(b) ? `<button class="mp-hex-btn" data-id="${b.id}" ${cd > 0 ? 'disabled' : ''}>🪄 Hex</button>` : '<span></span>'}
+      </div>`).join('');
+  }
+  rows.forEach((b, i) => {
+    const row = mpRaceRows.children[i];
+    row.querySelector('.mp-name').textContent = `${i + 1}. ${b.bot ? '🤖 ' : ''}${b.name}`;
+    row.querySelector('.mp-score').textContent = raceLabel(b, now);
+  });
+}
+mpRaceRows.addEventListener('click', e => {
+  const btn = (e.target as HTMLElement).closest('.mp-hex-btn') as HTMLElement;
+  if (btn) throwHex(btn.dataset.id);
+});
+
 function renderLobby() {
   const inRoom = MP.inRoom();
+  const racing = inRoom && MP.room.roundLive && MP.inRound() && mpPhase === 'fin';
   mpJoin.classList.toggle('hidden', inRoom);
-  mpLobby.classList.toggle('hidden', !inRoom);
+  mpLobby.classList.toggle('hidden', !inRoom || racing);
+  mpRace.classList.toggle('hidden', !racing);
   if (!inRoom) return;
+  if (racing) { raceRowsKey = ''; renderRaceView(); return; }
   document.getElementById('mp-code').textContent = MP.room.code;
 
   const host = MP.isHost();
   const last = MP.room.lastResults;
-  const winner = last[0];
+  const w = last[0];
   mpStatus.textContent =
-      MP.room.roundLive ? `Round ${MP.room.round} in progress — you're in the next one.`
-    : winner ? (winner.score > 0 ? `Round ${MP.room.round}: ${winner.name} wins with ${winner.score}! 🏆` : `Round ${MP.room.round}: nobody scored. Shameful.`)
-    : host ? 'You are the host. Start when everyone is in.'
+      MP.room.roundLive ? `Race ${MP.room.round} in progress — you're in the next one.`
+    : w?.finished ? `Race ${MP.room.round}: ${w.name} wins in ${(w.finishMs / 1000).toFixed(1)}s! 🏆${chaosMonkey(last)}`
+    : w ? `Race ${MP.room.round}: time's up — ${w.name} got furthest (${Math.floor(w.progress * 100)}%).${chaosMonkey(last)}`
+    : host ? 'You are the host. Add bots, pick a length, start when everyone is in.'
     : 'Waiting for the host to start…';
-  btnMpStart.classList.toggle('hidden', !host);
+  for (const el of [btnMpStart, btnBotAdd, btnBotDel, mpLength]) el.classList.toggle('hidden', !host);
   btnMpStart.disabled = MP.room.roundLive;
-  btnMpStart.textContent = MP.room.round ? 'Next round' : 'Start round';
+  btnMpStart.textContent = MP.room.round ? 'Next race' : 'Start race';
+  btnBotDel.disabled = MP.myBots.length === 0 || MP.room.roundLive;
 
-  const lastScore = new Map(last.map(r => [r.id, r.score]));
-  const rank = new Map(last.map((r, i) => [r.id, i]));
+  const res = new Map(last.map((r, i) => [r.id, { r, i }]));
   const peers = [...MP.room.peers].sort((a, b) =>
-    (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9) || a.joinedAt - b.joinedAt);
-  mpPlayers.innerHTML = peers.map((p, i) => {
-    const theme = THEMES[p.avatar] || THEMES.penguin;
-    const crown = p.id === MP.room.peers[0]?.id ? ' 👑' : '';
+    (res.get(a.id)?.i ?? 1e9) - (res.get(b.id)?.i ?? 1e9));
+  const hostId = MP.room.peers.find(p => !p.bot)?.id;
+  mpPlayers.innerHTML = peers.map(p => {
+    const entry = res.get(p.id);
+    const crown = p.id === hostId ? ' 👑' : '';
     const you = p.id === MP.myId() ? ' <span class="mp-you">(you)</span>' : '';
-    const score = lastScore.has(p.id) ? lastScore.get(p.id) : '–';
-    const medal = rank.get(p.id) === 0 && winner?.score > 0 ? '🥇' : rank.get(p.id) === 1 ? '🥈' : rank.get(p.id) === 2 ? '🥉' : '';
+    const medal = entry && (entry.r.finished || entry.r.progress > 0) ? ['🥇', '🥈', '🥉'][entry.i] ?? '' : '';
     return `<div class="mp-row${p.id === MP.myId() ? ' me' : ''}">
-      <img src="${theme.img.src}" alt="">
-      <span class="mp-name">${medal} ${escapeHtml(p.name)}${crown}${you}</span>
-      <span class="mp-score">${score}</span>
+      ${avatarImg(p.avatar)}
+      <span class="mp-name">${medal} ${p.bot ? '🤖 ' : ''}${escapeHtml(p.name)}${crown}${you}</span>
+      <span class="mp-score">${entry ? resultLabel(entry.r) : '–'}</span>
       <span class="mp-wins">🏆${p.wins || 0}</span>
     </div>`;
   }).join('');
@@ -3756,18 +4238,42 @@ const mpHandlers: MP.Handlers = {
   onLobby: () => { if (!gameActive) renderLobby(); },
   onStart: (roundSeed) => {
     AudioFX.unlock();
+    hexFeed = [];
     startGame(currentPlayer, roundSeed);
+    Bots.start(roundSeed);
+  },
+  onHex: (from, to, kind) => {
+    const h = HEXES[kind];
+    if (!h) return;
+    const now = performance.now();
+    hexFeed.push({ text: `${from.name} ⇢ ${to.name}  ${h.icon} ${h.title}`, at: now });
+    if (hexFeed.length > 4) hexFeed.shift();
+    hexMarks.set(to.id, { icon: h.icon, at: now });
+    if (to.id === MP.myId()) applyHex(kind, from.name);
+    else if (Bots.owns(to.id)) Bots.hex(to.id, kind);
+  },
+  onTakedown: (from, to, kind) => {
+    const h = HEXES[kind];
+    const now = performance.now();
+    hexFeed.push({ text: `💥 ${from.name}'s ${h?.title ?? 'hex'} took out ${to.name}`, at: now });
+    if (hexFeed.length > 4) hexFeed.shift();
+    if (from.id === MP.myId()) {
+      AudioFX.takedown();
+      if (gameActive) pickupPop = { text: '💥 TAKEDOWN', color: '#f87171', at: now };
+    }
   },
   onRoundEnd: () => {
-    // Small beat so the last death registers before the lobby slams in.
+    Bots.stop();
+    // Small beat so the last crossing registers before the lobby slams in.
     setTimeout(() => {
       if (gameActive && mpRun) {
         cancelAnimationFrame(animId);
         gameActive = false;
-        mpSpectating = false;
         (document.getElementById('gfx-toggle') as HTMLElement).style.display = '';
         startIdle();
       }
+      mpPhase = 'fly';
+      clearHexes();
       renderLobby();
       if (MP.inRoom()) showScreen('mp');
     }, 1200);
@@ -3807,8 +4313,11 @@ document.getElementById('btn-mp-create').addEventListener('click', () => mpEnter
 document.getElementById('btn-mp-join').addEventListener('click', () => mpEnter(mpCodeIn.value.trim().toUpperCase()));
 mpCodeIn.addEventListener('keydown', e => { if (e.key === 'Enter') mpEnter(mpCodeIn.value.trim().toUpperCase()); });
 document.getElementById('btn-mp-back').addEventListener('click', () => showScreen('menu'));
-btnMpStart.addEventListener('click', () => MP.startRound());
+btnMpStart.addEventListener('click', () => MP.startRound(MP.RACE_LENGTHS[mpLength.value] ?? MP.RACE_LENGTHS.standard));
+btnBotAdd.addEventListener('click', () => MP.addBot());
+btnBotDel.addEventListener('click', () => MP.removeBot());
 document.getElementById('btn-mp-leave').addEventListener('click', async () => {
+  Bots.stop();
   await MP.leaveRoom();
   history.replaceState(null, '', location.pathname);
   populateUserSelect();

@@ -87,8 +87,23 @@ export const POWERUP_DEFS: readonly PowerUpDef[] = [
   { id: 'star',            durationTicks: 210, speedMul: 1.5, invincible: true, destroysPipes: true, weight: 0.5, minSpeedLevel: 2 },
 ];
 
+// ── Multiplayer-only effects ────────────────────────────────────────────────
+// Hexes other racers throw at you, the respawn grace after a crash quiz, and the
+// coin boost (see multiplayer.ts). Never spawned as pickups and kept out of
+// POWERUP_DEFS, so spawn weights — and every single-player replay — are untouched.
+export const MP_DEFS: readonly PowerUpDef[] = [
+  { id: 'hex-throttled', durationTicks: 180, flapMul: 0.6 },
+  { id: 'hex-bloat',     durationTicks: 240, sizeMul: 1.6 },
+  { id: 'respawn',       durationTicks: 120, invincible: true }, // post-crash grace
+  { id: 'boost',         durationTicks: 75,  speedMul: 1.7, invincible: true }, // coin grab: afterburner dash through pipes
+];
+
+export function defOf(id: string): PowerUpDef | undefined {
+  return POWERUP_DEFS.find(d => d.id === id) ?? MP_DEFS.find(d => d.id === id);
+}
+
 // ── State ───────────────────────────────────────────────────────────────────
-export interface Pipe { x: number; topH: number; gap: number; scored: boolean; }
+export interface Pipe { x: number; topH: number; gap: number; scored: boolean; n: number; } // n = spawn index
 export interface PowerUpItem { x: number; y: number; defId: string; collected: boolean; }
 export interface ActiveEffect { defId: string; expiryTick: number; }
 
@@ -100,6 +115,10 @@ export interface GameState {
   score: number;
   pipeSpeed: number;
   tick: number;
+  dist: number;                    // px of course flown (Σ effective scroll speed) — race progress
+  pipesSpawned: number;
+  maxSpeedLevel: number | null;    // speed ramp cap (races); null = ramp forever
+  gapMul: number;                  // race-wide gap multiplier (1 in single-player)
   lastSpeedUpTick: number | null;  // null until the first active tick
   lastPipeTick: number | null;
   rng: () => number;
@@ -111,14 +130,29 @@ export interface GameState {
   activeEffects: ActiveEffect[];
 }
 
-export function createState(seed: number, opts: { splitPowerUpRng?: boolean } = {}): GameState {
+// Race options (multiplayer only — single-player uses the defaults, which is what
+// the server replay assumes): start further up the speed ramp, cap it, and put the
+// first pipe closer so a race is busy from the first second.
+export interface StateOpts {
+  splitPowerUpRng?: boolean;
+  startLevel?: number;
+  maxSpeedLevel?: number;
+  firstPipeX?: number;
+  gapMul?: number;     // widen every gap (fast but forgiving)
+}
+
+export function createState(seed: number, opts: StateOpts = {}): GameState {
   const rng = mulberry32(seed);
   const s: GameState = {
     player: { y: C.H / 2, vy: 0 },
     pipes: [],
     score: 0,
-    pipeSpeed: C.PIPE_SPEED,
+    pipeSpeed: C.PIPE_SPEED + (opts.startLevel ?? 0) * C.SPEED_UP_AMOUNT,
     tick: 0,
+    dist: 0,
+    pipesSpawned: 0,
+    maxSpeedLevel: opts.maxSpeedLevel ?? null,
+    gapMul: opts.gapMul ?? 1,
     lastSpeedUpTick: null,
     lastPipeTick: null,
     rng,
@@ -126,7 +160,7 @@ export function createState(seed: number, opts: { splitPowerUpRng?: boolean } = 
     powerUps: [],
     activeEffects: [],
   };
-  prefillField(s);   // pipes exist from construction so they render during the countdown
+  prefillField(s, opts.firstPipeX ?? C.FIRST_PIPE_X); // pipes exist from construction so they render during the countdown
   return s;
 }
 
@@ -134,11 +168,11 @@ export function createState(seed: number, opts: { splitPowerUpRng?: boolean } = 
 // arriving ~6s sooner): pipes at their natural spacing, nearest at FIRST_PIPE_X out to
 // the right edge. Phases lastPipeTick so the first edge spawn keeps the rhythm (no seam).
 // Draws rng once per pipe in order — identical on client + server (determinism intact).
-function prefillField(s: GameState): void {
+function prefillField(s: GameState, firstX: number): void {
   const intervalTicks = currentInterval(s) / TICK_MS;
   const spacing = s.pipeSpeed * intervalTicks;           // px between pipes at start
   const xs: number[] = [];
-  for (let x = C.FIRST_PIPE_X; x <= C.W; x += spacing) xs.push(x);
+  for (let x = firstX; x <= C.W; x += spacing) xs.push(x);
   for (const x of xs) spawnPipe(s, x);                   // nearest → farthest (left→right)
   const xr = xs[xs.length - 1];
   s.lastPipeTick = -Math.round((C.W - xr) / s.pipeSpeed); // virtual: spawned before tick 0
@@ -151,9 +185,9 @@ export function speedLevel(s: GameState): number {
 }
 export function currentGap(s: GameState): number {
   const baseGap = Math.max(C.PIPE_GAP_MIN, C.PIPE_GAP_MAX - speedLevel(s) * C.PIPE_GAP_STEP);
-  let gapMul = 1;
+  let gapMul = s.gapMul;
   for (const e of s.activeEffects) {
-    const d = POWERUP_DEFS.find(p => p.id === e.defId);
+    const d = defOf(e.defId);
     if (d?.gapMul) gapMul *= d.gapMul;
   }
   return baseGap * gapMul;
@@ -167,7 +201,7 @@ function spawnPipe(s: GameState, x: number = C.W): void {
   const minTop = 60;
   const maxTop = C.GROUND - gap - 60;
   const topH = minTop + s.rng() * (maxTop - minTop); // seeded → reproducible
-  s.pipes.push({ x, topH, gap, scored: false });
+  s.pipes.push({ x, topH, gap, scored: false, n: s.pipesSpawned++ });
   s.lastPipeTick = s.tick;
 }
 
@@ -214,7 +248,7 @@ export function getEffective(s: GameState): {
   let gravity = C.GRAVITY, flap = C.FLAP, speed = 1, size = 1;
   let invincible = false, destroysPipes = false;
   for (const e of s.activeEffects) {
-    const d = POWERUP_DEFS.find(p => p.id === e.defId);
+    const d = defOf(e.defId);
     if (!d) continue;
     if (d.gravityMul)    gravity *= d.gravityMul;
     if (d.flapMul)       flap *= d.flapMul;
@@ -250,13 +284,13 @@ export function step(s: GameState, flapped: boolean): StepResult {
     if (s.tick < e.expiryTick) return true;
     // Safe expiry: if this effect has invincible or sizeMul, check if removing
     // it would cause instant death. If so, extend by grace window.
-    const def = POWERUP_DEFS.find(d => d.id === e.defId);
+    const def = defOf(e.defId);
     if (def && (def.invincible || def.sizeMul)) {
       // Temporarily compute what collision would look like without this effect
       const testEffects = s.activeEffects.filter(ae => ae !== e);
       let testSizeMul = 1;
       for (const te of testEffects) {
-        const td = POWERUP_DEFS.find(d => d.id === te.defId);
+        const td = defOf(te.defId);
         if (td?.sizeMul) testSizeMul *= td.sizeMul;
       }
       const testSize = (C.PLAYER_SIZE * testSizeMul) / 2 - 4;
@@ -295,7 +329,8 @@ export function step(s: GameState, flapped: boolean): StepResult {
   if (s.lastSpeedUpTick === null) s.lastSpeedUpTick = s.tick;
 
   // Speed ramp (every SPEED_UP_TICKS ticks).
-  if (s.tick - s.lastSpeedUpTick >= SPEED_UP_TICKS) {
+  if (s.tick - s.lastSpeedUpTick >= SPEED_UP_TICKS
+      && (s.maxSpeedLevel === null || speedLevel(s) < s.maxSpeedLevel)) {
     s.pipeSpeed += C.SPEED_UP_AMOUNT;
     s.lastSpeedUpTick = s.tick;
   }
@@ -319,6 +354,7 @@ export function step(s: GameState, flapped: boolean): StepResult {
   // Update pipes + scoring (with effective speed).
   let scored = false;
   const effectiveSpeed = s.pipeSpeed * eff.speed;
+  s.dist += effectiveSpeed;
   let destroyedPipes = 0;
   for (const p of s.pipes) {
     p.x -= effectiveSpeed;
