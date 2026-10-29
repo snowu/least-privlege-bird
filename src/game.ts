@@ -13,6 +13,7 @@ import {
   showRecoverModal, _loadLocal,
 } from './scores.ts';
 import { Clave } from './clave.ts';
+import * as MP from './multiplayer.ts';
 
 // ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -2383,6 +2384,7 @@ const screens = {
   menu:     document.getElementById('menu-screen'),
   scores:   document.getElementById('scores-screen'),
   gameover: document.getElementById('gameover-screen'),
+  mp:       document.getElementById('mp-screen'),
 };
 function showScreen(name) {
   Object.values(screens).forEach(s => s.classList.add('hidden'));
@@ -2595,11 +2597,23 @@ let puDestroyedPipes: Array<{ x: number; topH: number; gap: number; tick: number
 let puRoleSwapTheme: any = null; // random theme for role-assumption visual
 let puScreenShake = 0;           // remaining screen-shake frames
 
-function initGame(playerName) {
+// ── Multiplayer run state ──
+// After dying in a room round you keep watching: the sim keeps stepping (pipes keep
+// scrolling for everyone else's ghosts) but your bird is hidden and inputs ignored.
+let mpRun = false;               // this run is a multiplayer round
+let mpSpectating = false;
+let mpFinalScore = 0;
+
+// mpSeed: a multiplayer round's shared seed. Splits the power-up rng off so the pipe
+// course stays identical for every player regardless of who grabs which power-up.
+function initGame(playerName, mpSeed?: number) {
   currentPlayer = playerName;
+  mpRun = mpSeed != null;
+  mpSpectating = false;
+  mpFinalScore = 0;
   // seed drives all gameplay-affecting randomness; createState seeds the core PRNG.
-  seed = crypto.getRandomValues(new Uint32Array(1))[0];
-  gs = createState(seed);
+  seed = mpSeed ?? crypto.getRandomValues(new Uint32Array(1))[0];
+  gs = createState(seed, { splitPowerUpRng: mpRun });
   flapTicks = [];
   pendingFlap = false;
   bgScroll = 0;
@@ -3197,6 +3211,11 @@ function drawHUD() {
   ctx.font = `14px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'center';
   const sl = speedLevel(gs) + 1;
+  if (mpRun) {
+    const tail = mpSpectating ? `☠ ${mpFinalScore}  |  spectating` : `Score: ${gs.score}`;
+    strokedText(`Room ${MP.room.code}  |  ${currentPlayer}  |  ${tail}  |  Spd ${sl}`, C.W / 2, C.GROUND + 32, 4);
+    return;
+  }
   // High is shown only when we have an authoritative value from Supabase.
   // currentBest === null means offline/unknown → omit it rather than show a stale number.
   const high = currentBest == null ? '' : `High: ${Math.max(gs.score, currentBest)}  |  `;
@@ -3204,6 +3223,44 @@ function drawHUD() {
     `Score: ${gs.score}  |  ${high}${currentPlayer}  |  Spd ${sl}`,
     C.W / 2, C.GROUND + 32, 4
   );
+}
+
+// Other players in a multiplayer round: translucent, name-tagged, dead-reckoned
+// between their snapshots (see multiplayer.ts). Everyone shares PLAYER_X, so this
+// reads as a ghost race — whoever's still on screen is still in it.
+function drawGhosts(now) {
+  for (const b of MP.remoteBirds()) {
+    if (!b.alive) continue;
+    const { y, vy } = MP.extrapolate(b, now);
+    b.dispY += (y - b.dispY) * 0.5;   // soften snapshot corrections
+    const theme = THEMES[b.avatar] || THEMES.penguin;
+    const s = C.PLAYER_SIZE * C.SPRITE_SCALE * b.size;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.translate(C.PLAYER_X, b.dispY);
+    ctx.rotate(Math.max(-0.4, Math.min(0.4, vy * 0.05)));
+    if (theme.img?.complete) ctx.drawImage(theme.img, -s / 2, -s / 2, s, s);
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    ctx.font = `9px ${activeStyle().fontDisplay}`;
+    ctx.textAlign = 'center';
+    strokedText(b.name, C.PLAYER_X, b.dispY - s / 2 - 6, 3);
+    ctx.restore();
+  }
+}
+
+// Live standings, top-left (power-up bars own the top-right).
+function drawStandings() {
+  ctx.save();
+  ctx.font = `10px ${activeStyle().fontDisplay}`;
+  ctx.textAlign = 'left';
+  MP.standings().forEach((b, i) => {
+    ctx.globalAlpha = b.alive ? 1 : 0.5;
+    const tag = b.id === MP.myId() ? ' ◀' : '';
+    strokedText(`${b.alive ? `${i + 1}.` : '☠'} ${b.name} ${b.score}${tag}`, 14, 24 + i * 18, 3);
+  });
+  ctx.restore();
 }
 
 // Collision lives in the shared core (collides()); step() returns whether the
@@ -3220,7 +3277,11 @@ function stepOnce() {
   const flapped = pendingFlap;
   if (flapped) { flapTicks.push(gs.tick); pendingFlap = false; }
   const result: StepResult = step(gs, flapped);
-  if (result.scored) AudioFX.score();
+  if (mpRun && !mpSpectating) {
+    const eff = getEffective(gs);
+    MP.localTick(gs.tick, flapped, gs.player.y, gs.player.vy, eff.gravity, eff.size, gs.score);
+  }
+  if (result.scored && !mpSpectating) AudioFX.score();
 
   // Power-up pickup
   if (result.collected) {
@@ -3258,9 +3319,13 @@ function loop(now) {
   for (const p of gs.pipes) drawPipe(p.x, p.topH, p.gap);
   drawPowerUps();
   drawPipeDestruction();
-  try { drawPlayer(); } catch (e) { console.error('[drawPlayer]', e); }
+  if (mpRun) drawGhosts(now);
+  if (!mpSpectating) {
+    try { drawPlayer(); } catch (e) { console.error('[drawPlayer]', e); }
+  }
   drawHUD();
-  drawPowerUpHUD();
+  if (!mpSpectating) drawPowerUpHUD();
+  if (mpRun) drawStandings();
 
   // ── Countdown phase: freeze physics, show number ──
   // Countdown is purely cosmetic, so wall-clock timing is fine here.
@@ -3291,7 +3356,10 @@ function loop(now) {
   lastFrameTime = now;
 
   while (acc >= TICK_MS) {
-    if (stepOnce()) { endGame(); return; }
+    if (stepOnce() && !mpSpectating) {
+      if (!mpRun) { endGame(); return; }
+      mpDie();
+    }
     acc -= TICK_MS;
   }
 
@@ -3308,7 +3376,7 @@ function loop(now) {
   animId = requestAnimationFrame(loop);
 }
 
-async function startGame(playerName) {
+async function startGame(playerName, mpSeed?: number) {
   stopIdle();
   (document.getElementById('gfx-toggle') as HTMLElement).style.display = 'none';
   gameActive = true;
@@ -3317,8 +3385,9 @@ async function startGame(playerName) {
   showScreen(null);
   // Fetch the authoritative best from Supabase once, before the loop starts.
   // null ⇒ offline/unknown → HUD omits the High readout.
-  currentBest = await fetchBest(playerName);
-  initGame(playerName);
+  // Multiplayer skips it: every client must hit the countdown at the same moment.
+  currentBest = mpSeed != null ? null : await fetchBest(playerName);
+  initGame(playerName, mpSeed);
   animId = requestAnimationFrame(loop);
 }
 
@@ -3396,6 +3465,7 @@ async function endGame() {
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 function flap() {
+  if (mpSpectating) return;
   // Queue the flap for the next physics tick, which applies it to the core AND
   // logs that tick into flapTicks (see stepOnce). Routing input through the tick
   // boundary keeps browser play byte-identical to the server replay.
@@ -3616,10 +3686,148 @@ document.getElementById('btn-retry').addEventListener('click', () => startGame(c
 
 document.getElementById('btn-menu').addEventListener('click', () => { populateUserSelect(); showScreen('menu'); });
 
+// ─── MULTIPLAYER UI ───────────────────────────────────────────────────────────
+// Lobby flow: pick name + avatar on the menu → Multiplayer → create or join a room
+// by code (or open a ?room=CODE link). The first player in the room is host and
+// starts rounds; everyone else waits. Rounds skip the SSO/captcha theater and never
+// submit to the leaderboard (see multiplayer.ts).
+const mpJoin    = document.getElementById('mp-join');
+const mpLobby   = document.getElementById('mp-lobby');
+const mpCodeIn  = document.getElementById('mp-code-input') as HTMLInputElement;
+const mpError   = document.getElementById('mp-error');
+const mpStatus  = document.getElementById('mp-status');
+const mpPlayers = document.getElementById('mp-players');
+const btnMp      = document.getElementById('btn-mp');
+const btnMpStart = document.getElementById('btn-mp-start') as HTMLButtonElement;
+const urlRoom = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+if (urlRoom) btnMp.textContent = `👥 Join room ${urlRoom}`;
+
+function mpDie() {
+  mpSpectating = true;
+  mpFinalScore = gs.score;
+  puScreenShake = 0;
+  AudioFX.gameOver();
+  MP.localDeath(gs.score, gs.tick);
+}
+
+function escapeHtml(t: string) {
+  return t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderLobby() {
+  const inRoom = MP.inRoom();
+  mpJoin.classList.toggle('hidden', inRoom);
+  mpLobby.classList.toggle('hidden', !inRoom);
+  if (!inRoom) return;
+  document.getElementById('mp-code').textContent = MP.room.code;
+
+  const host = MP.isHost();
+  const last = MP.room.lastResults;
+  const winner = last[0];
+  mpStatus.textContent =
+      MP.room.roundLive ? `Round ${MP.room.round} in progress — you're in the next one.`
+    : winner ? (winner.score > 0 ? `Round ${MP.room.round}: ${winner.name} wins with ${winner.score}! 🏆` : `Round ${MP.room.round}: nobody scored. Shameful.`)
+    : host ? 'You are the host. Start when everyone is in.'
+    : 'Waiting for the host to start…';
+  btnMpStart.classList.toggle('hidden', !host);
+  btnMpStart.disabled = MP.room.roundLive;
+  btnMpStart.textContent = MP.room.round ? 'Next round' : 'Start round';
+
+  const lastScore = new Map(last.map(r => [r.id, r.score]));
+  const rank = new Map(last.map((r, i) => [r.id, i]));
+  const peers = [...MP.room.peers].sort((a, b) =>
+    (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9) || a.joinedAt - b.joinedAt);
+  mpPlayers.innerHTML = peers.map((p, i) => {
+    const theme = THEMES[p.avatar] || THEMES.penguin;
+    const crown = p.id === MP.room.peers[0]?.id ? ' 👑' : '';
+    const you = p.id === MP.myId() ? ' <span class="mp-you">(you)</span>' : '';
+    const score = lastScore.has(p.id) ? lastScore.get(p.id) : '–';
+    const medal = rank.get(p.id) === 0 && winner?.score > 0 ? '🥇' : rank.get(p.id) === 1 ? '🥈' : rank.get(p.id) === 2 ? '🥉' : '';
+    return `<div class="mp-row${p.id === MP.myId() ? ' me' : ''}">
+      <img src="${theme.img.src}" alt="">
+      <span class="mp-name">${medal} ${escapeHtml(p.name)}${crown}${you}</span>
+      <span class="mp-score">${score}</span>
+      <span class="mp-wins">🏆${p.wins || 0}</span>
+    </div>`;
+  }).join('');
+}
+
+const mpHandlers: MP.Handlers = {
+  onLobby: () => { if (!gameActive) renderLobby(); },
+  onStart: (roundSeed) => {
+    AudioFX.unlock();
+    startGame(currentPlayer, roundSeed);
+  },
+  onRoundEnd: () => {
+    // Small beat so the last death registers before the lobby slams in.
+    setTimeout(() => {
+      if (gameActive && mpRun) {
+        cancelAnimationFrame(animId);
+        gameActive = false;
+        mpSpectating = false;
+        (document.getElementById('gfx-toggle') as HTMLElement).style.display = '';
+        startIdle();
+      }
+      renderLobby();
+      if (MP.inRoom()) showScreen('mp');
+    }, 1200);
+  },
+};
+
+async function mpEnter(code: string) {
+  const name = nameInput.value.trim();
+  if (!name) { showScreen('menu'); nameInput.focus(); return; }
+  if (!/^[A-Z]{4}$/.test(code)) { mpError.textContent = 'Room codes are 4 letters.'; return; }
+  mpError.textContent = 'Assuming role…';
+  currentPlayer = name;
+  try { localStorage.setItem('lpb_player', name); } catch {}
+  const avatar = Object.keys(THEMES).find(k => THEMES[k] === currentTheme) || 'penguin';
+  try {
+    await MP.joinRoom(code, name, avatar, mpHandlers);
+    mpError.textContent = '';
+    history.replaceState(null, '', `?room=${code}`);
+    renderLobby();
+  } catch (e) {
+    mpError.textContent = `AccessDenied: couldn't reach the room (${(e as Error).message}).`;
+  }
+}
+
+btnMp.addEventListener('click', () => {
+  AudioFX.unlock();
+  if (!nameInput.value.trim()) { nameInput.focus(); return; }
+  devDisclaimer.style.display = 'none';
+  fitToViewport();
+  mpCodeIn.value = urlRoom;
+  mpError.textContent = '';
+  renderLobby();
+  showScreen('mp');
+  if (urlRoom) mpEnter(urlRoom);
+});
+document.getElementById('btn-mp-create').addEventListener('click', () => mpEnter(MP.newRoomCode()));
+document.getElementById('btn-mp-join').addEventListener('click', () => mpEnter(mpCodeIn.value.trim().toUpperCase()));
+mpCodeIn.addEventListener('keydown', e => { if (e.key === 'Enter') mpEnter(mpCodeIn.value.trim().toUpperCase()); });
+document.getElementById('btn-mp-back').addEventListener('click', () => showScreen('menu'));
+btnMpStart.addEventListener('click', () => MP.startRound());
+document.getElementById('btn-mp-leave').addEventListener('click', async () => {
+  await MP.leaveRoom();
+  history.replaceState(null, '', location.pathname);
+  populateUserSelect();
+  showScreen('menu');
+});
+document.getElementById('btn-mp-copy').addEventListener('click', async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement;
+  try {
+    await navigator.clipboard.writeText(`${location.origin}${location.pathname}?room=${MP.room.code}`);
+    btn.textContent = '✅ Copied';
+  } catch { btn.textContent = '❌ No clipboard'; }
+  setTimeout(() => { btn.textContent = '📋 Copy link'; }, 1500);
+});
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // Build avatar picker (rebuildable so the art-style toggle can refresh thumbnails)
 const avatarPicker = document.getElementById('avatar-picker');
 const avatarPickerGo = document.getElementById('avatar-picker-go');
+const avatarPickerMp = document.getElementById('avatar-picker-mp');
 // Build the avatar picker into a container. Used for the menu picker AND the game-over
 // picker (the latter lets players switch avatar and retry without redoing the login
 // theater — retry skips auth). Selecting in one syncs the highlight in the other.
@@ -3651,12 +3859,14 @@ function selectAvatar(key) {
   try { localStorage.setItem('lpb_avatar', key); } catch {}   // QOL: remember last pick
   document.querySelectorAll('.avatar-opt').forEach(d =>
     d.classList.toggle('selected', d.dataset.key === key));
+  MP.setAvatar(key);     // no-op outside a room
   drawBackground();      // live preview (menu or game-over background)
   reskinFortuneCow();    // swap the corner cow to the new avatar (no refetch)
 }
 function buildAvatarPicker() {
   buildAvatarPickerInto(avatarPicker);
   buildAvatarPickerInto(avatarPickerGo);
+  buildAvatarPickerInto(avatarPickerMp);
 }
 buildAvatarPicker();
 

@@ -292,6 +292,40 @@
     #avatar-picker-go .avatar-opt { padding: 4px 5px; border-radius: 6px; }
     #avatar-picker-go .avatar-opt img { width: 32px; height: 32px; }
     #avatar-picker-go .avatar-opt span { font-size: 0.46rem; }
+    /* Multiplayer lobby */
+    #mp-panel {
+      background: rgba(0,0,0,0.75); border-radius: 16px; padding: 24px 32px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      min-width: 340px; max-width: min(560px, calc(100vw - 32px));
+    }
+    #mp-join, #mp-lobby { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+    #mp-code-input { text-transform: uppercase; letter-spacing: 0.3em; font-family: var(--font-display) !important; }
+    .mp-hint { font-family: var(--font-display); font-size: 0.55rem; line-height: 1.7; color: #c8d6f8; text-align: center; }
+    .mp-error { font-family: var(--font-display); font-size: 0.55rem; line-height: 1.6; color: #ff6b6b; min-height: 1.2em; text-align: center; }
+    .mp-room { font-family: var(--font-display); font-size: 0.7rem; display: flex; align-items: center; gap: 10px; }
+    #mp-code { color: #ffd600; letter-spacing: 0.2em; font-size: 1rem; }
+    #overlay #btn-mp-copy { padding: 6px 10px; font-size: 0.5rem; }
+    #mp-players { display: flex; flex-direction: column; gap: 4px; width: 100%; max-height: 280px; overflow-y: auto; }
+    .mp-row {
+      display: grid; grid-template-columns: 32px 1fr auto auto; align-items: center; gap: 10px;
+      padding: 4px 10px; border-radius: var(--radius); background: rgba(255,255,255,0.06);
+      font-family: var(--font-display); font-size: 0.55rem; line-height: 1.5;
+    }
+    .mp-row.me { background: rgba(255,214,0,0.15); }
+    .mp-row img { width: 32px; height: 32px; image-rendering: pixelated; }
+    .mp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mp-you { color: #9fb0c8; }
+    .mp-score { color: #ffd600; min-width: 2em; text-align: right; }
+    .mp-wins { color: #c8d6f8; }
+    #avatar-picker-mp {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+      width: 100%; max-width: 360px;
+    }
+    #avatar-picker-mp .avatar-opt { padding: 4px 5px; border-radius: 6px; }
+    #avatar-picker-mp .avatar-opt img { width: 28px; height: 28px; }
+    #avatar-picker-mp .avatar-opt span { font-size: 0.42rem; }
+    #avatar-picker-mp.round-gfx .avatar-opt img { image-rendering: auto; }
+
     .go-swap-label { font-size: 0.6rem; color: #9fb0c8; margin: 6px 0 4px; text-align: center; }
 
     #menu-screen {
@@ -381,12 +415,41 @@
       <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.1);" />
       <div id="avatar-picker"></div>
       <button id="btn-play" style="width:220px;">Login &amp; Play</button>
+      <button id="btn-mp" class="secondary" style="width:220px;">👥 Multiplayer</button>
       <a id="btn-recover-home" href="#" style="font-family:var(--font-display);color:#7ca4f4;font-size:0.55rem;margin-top:4px;">🔑 Recover account with token</a>
 
       <!-- High Scores: corner badge (see #btn-scores rule below) — pulled out of the
            pick-name → pick-avatar → play motion so it stops getting fat-fingered.
            #menu-screen has no `position`, so this still anchors to #overlay's corner. -->
       <button id="btn-scores" class="secondary">🏆 High Scores</button>
+    </div>
+
+    <!-- ══ MULTIPLAYER ══ -->
+    <div id="mp-screen" class="hidden">
+      <div id="mp-panel">
+        <h2>👥 sts:AssumeRole — party</h2>
+        <div id="mp-join">
+          <p class="mp-hint">Same pipes for everyone. Last bird with permissions wins.</p>
+          <input id="mp-code-input" type="text" maxlength="4" placeholder="ROOM CODE" autocomplete="off" />
+          <div class="go-btns">
+            <button id="btn-mp-join">Join</button>
+            <button id="btn-mp-create" class="secondary">Create room</button>
+          </div>
+          <p id="mp-error" class="mp-error"></p>
+          <button id="btn-mp-back" class="secondary">Back</button>
+        </div>
+        <div id="mp-lobby" class="hidden">
+          <p class="mp-room">Room <span id="mp-code"></span> <button id="btn-mp-copy" class="secondary">📋 Copy link</button></p>
+          <p id="mp-status" class="mp-hint"></p>
+          <div id="mp-players"></div>
+          <p class="go-swap-label">Avatar:</p>
+          <div id="avatar-picker-mp"></div>
+          <div class="go-btns">
+            <button id="btn-mp-start">Start round</button>
+            <button id="btn-mp-leave" class="secondary">Leave</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ══ SCORES ══ -->

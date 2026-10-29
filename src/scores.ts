@@ -6,8 +6,8 @@ declare global {
 }
 
 // Supabase config — fill in when ready, stubs work offline via localStorage
-const SUPABASE_URL = 'https://yozllinwvvprtguinflm.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_FqTiUUOrvfWv6zmwobkcgg_9_d9iyvU';
+export const SUPABASE_URL = 'https://yozllinwvvprtguinflm.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_FqTiUUOrvfWv6zmwobkcgg_9_d9iyvU';
 
 const LS_KEY = 'lpb_players'; // { [name]: token }
 
