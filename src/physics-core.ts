@@ -103,11 +103,16 @@ export interface GameState {
   lastSpeedUpTick: number | null;  // null until the first active tick
   lastPipeTick: number | null;
   rng: () => number;
+  // Power-up rolls draw from this. Single-player aliases it to `rng` (so the
+  // server replay and goldens are unchanged); multiplayer splits it off so the
+  // pipe sequence never depends on who grabbed what — everyone flies one course.
+  puRng: () => number;
   powerUps: PowerUpItem[];
   activeEffects: ActiveEffect[];
 }
 
-export function createState(seed: number): GameState {
+export function createState(seed: number, opts: { splitPowerUpRng?: boolean } = {}): GameState {
+  const rng = mulberry32(seed);
   const s: GameState = {
     player: { y: C.H / 2, vy: 0 },
     pipes: [],
@@ -116,7 +121,8 @@ export function createState(seed: number): GameState {
     tick: 0,
     lastSpeedUpTick: null,
     lastPipeTick: null,
-    rng: mulberry32(seed),
+    rng,
+    puRng: opts.splitPowerUpRng ? mulberry32(seed ^ 0x9E3779B9) : rng,
     powerUps: [],
     activeEffects: [],
   };
@@ -171,7 +177,7 @@ function spawnPowerUp(s: GameState, pipeX: number): void {
 
   // Weighted random selection
   const totalWeight = eligible.reduce((sum, d) => sum + (d.weight ?? 1), 0);
-  let roll = s.rng() * totalWeight;
+  let roll = s.puRng() * totalWeight;
   let chosen = eligible[0];
   for (const d of eligible) {
     roll -= d.weight ?? 1;
@@ -180,7 +186,7 @@ function spawnPowerUp(s: GameState, pipeX: number): void {
 
   const pipe = s.pipes[s.pipes.length - 1];
   const gapCenter = pipe.topH + pipe.gap / 2;
-  const offset = (s.rng() - 0.5) * 60;
+  const offset = (s.puRng() - 0.5) * 60;
   const y = Math.max(60, Math.min(C.GROUND - 60, gapCenter + offset));
   s.powerUps.push({ x: pipeX + C.POWERUP_AHEAD_PX, y, defId: chosen.id, collected: false });
 }
@@ -254,10 +260,13 @@ export function step(s: GameState, flapped: boolean): StepResult {
         if (td?.sizeMul) testSizeMul *= td.sizeMul;
       }
       const testSize = (C.PLAYER_SIZE * testSizeMul) / 2 - 4;
-      // Check if player would collide with restored size
+      // Check if player would collide with a PIPE at restored size. Floor/ceiling
+      // are deliberately excluded: an invincible bird that fell through the floor
+      // is always "colliding", so counting it extended the effect forever (endless
+      // free score, and multiplayer rounds that never end).
       const py = s.player.y;
-      let wouldCollide = py - testSize <= 0 || py + testSize >= C.GROUND;
-      if (!wouldCollide) {
+      let wouldCollide = false;
+      {
         for (const p of s.pipes) {
           if (C.PLAYER_X + testSize > p.x && C.PLAYER_X - testSize < p.x + C.PIPE_W) {
             if (py - testSize < p.topH || py + testSize > p.topH + p.gap) {
@@ -303,7 +312,7 @@ export function step(s: GameState, flapped: boolean): StepResult {
         C.POWERUP_CHANCE_CAP,
         C.POWERUP_BASE_CHANCE + speedLevel(s) * C.POWERUP_CHANCE_PER_LEVEL,
       );
-      if (s.rng() < chance) spawnPowerUp(s, s.pipes[s.pipes.length - 1].x);
+      if (s.puRng() < chance) spawnPowerUp(s, s.pipes[s.pipes.length - 1].x);
     }
   }
 

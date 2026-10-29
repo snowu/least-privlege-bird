@@ -102,6 +102,37 @@ if (nearPipe) {
   console.log(`⊘ safe expiry: no pipe near player to test (non-critical, geometry-dependent)`);
 }
 
+// ── Safe expiry never extends past the floor ──
+// Invincible + no flaps = fall through the ground. The effect must still expire and
+// the bird die, or a single pickup farms score forever (and MP rounds never end).
+const s6 = createState(123);
+s6.activeEffects.push({ defId: 'wildcard', expiryTick: POWERUP_DEFS[0].durationTicks });
+let s6dead = false;
+for (let t = 0; t < 2000 && !s6dead; t++) s6dead = step(s6, false).dead;
+assert(s6dead, `safe expiry: invincible bird below the floor still dies once the effect ends`);
+
+// ── Split power-up rng (multiplayer) keeps the pipe course identical ──
+// Two players on one seed: one grabs everything, one ignores power-ups. With the
+// rng split, their pipe heights must match pipe-for-pipe.
+const grab = createState(99, { splitPowerUpRng: true });
+const skip = createState(99, { splitPowerUpRng: true });
+const heights = (st: typeof grab) => st.pipes.map(p => Math.round(p.topH));
+const seenGrab: number[] = [], seenSkip: number[] = [];
+let grabbed = 0;
+for (let t = 0; t < 3000; t++) {
+  for (const pu of grab.powerUps) if (!pu.collected) pu.y = grab.player.y; // walk into every pickup
+  skip.powerUps = [];                                                       // field always clear → rolls every pipe
+  grab.player.y = skip.player.y = C.H / 2; grab.player.vy = skip.player.vy = 0; // hover, ignore deaths
+  if (step(grab, false).collected) grabbed++;
+  step(skip, false);
+  for (const h of heights(grab)) if (!seenGrab.includes(h)) seenGrab.push(h);
+  for (const h of heights(skip)) if (!seenSkip.includes(h)) seenSkip.push(h);
+}
+assert(grabbed > 0, `split rng: grabber picked up ${grabbed} power-ups`);
+const n = Math.min(seenGrab.length, seenSkip.length, 30);
+assert(n >= 10 && seenGrab.slice(0, n).every((h, i) => h === seenSkip[i]),
+  `split rng: first ${n} pipe heights identical with vs without power-ups`);
+
 // ── Stacking test ──
 const s5 = createState(1);
 s5.activeEffects = [
