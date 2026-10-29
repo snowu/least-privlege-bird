@@ -1,6 +1,9 @@
 <!-- viewBox = squared content bbox so the body fills the same footprint as every
      other model → the fixed circular hitbox stays visually fair. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="2.5 1.5 12 12" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M5 2.5h6v.5H5zM4.5 3h7v.5H4.5zM4.5 3.5h7v.5H4.5zM4.5 4h7v.5H4.5zM4.5 4.5h7v.5H4.5zM13 4.5h1v.5H13zM4.5 5h7v.5H4.5zM12.5 5h2v.5H12.5zM4 5.5h8v.5H4zM12.5 5.5h2v.5H12.5zM3.5 6h9v.5H3.5zM13 6h1v.5H13zM3.5 6.5h10.5v.5H3.5zM3.5 7h11v.5H3.5zM3 7.5h11.5v.5H3zM2.5 8h12v.5H2.5zM2.5 8.5h12v.5H2.5zM3 9h11.5v.5H3zM3.5 9.5h11v.5H3.5zM3.5 10h10.5v.5H3.5zM3.5 10.5h9v.5H3.5zM4 11h8v.5H4zM4.5 11.5h7v.5H4.5zM5 12h6v.5H5z"/>
+
   <!-- wings -->
   <g fill="#cfeffd"><rect x="5" y="3" width="3" height="2"/><rect x="8" y="3" width="3" height="2"/></g>
   <!-- body (round, yellow/black stripes) -->
@@ -11,15 +14,15 @@
   </g>
   <!-- stripes: full-height vertical bands (reach the rounded top+bottom rows so they
        read as banding, not eyes) -->
-  <g fill="#1a1a1a">
+  <g fill="#152338">
     <rect x="6" y="5" width="2" height="7"/>
     <rect x="9" y="5" width="2" height="7"/>
   </g>
   <!-- head (right) + eye -->
-  <rect x="12" y="7" width="2" height="3" fill="#1a1a1a"/>
+  <rect x="12" y="7" width="2" height="3" fill="#152338"/>
   <rect x="13" y="7" width="1" height="1" fill="#fff"/>
   <!-- stinger (left) -->
-  <rect x="3" y="8" width="1" height="1" fill="#1a1a1a"/>
+  <rect x="3" y="8" width="1" height="1" fill="#152338"/>
   <!-- antenna -->
-  <rect x="13" y="5" width="1" height="1" fill="#1a1a1a"/>
+  <rect x="13" y="5" width="1" height="1" fill="#152338"/>
 </svg>

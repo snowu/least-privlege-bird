@@ -1,6 +1,9 @@
 <!-- viewBox = squared content bbox so the body fills the same footprint as every
      other model → the fixed circular hitbox stays visually fair. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 2 13 13" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M5 3.5h2v.5H5zM4.5 4h3v.5H4.5zM4.5 4.5h3v.5H4.5zM4.5 5h3v.5H4.5zM3 5.5h1v.5H3zM4.5 5.5h8.5v.5H4.5zM2.5 6h11v.5H2.5zM1 6.5h13v.5H1zM0.5 7h14v.5H0.5zM0.5 7.5h14v.5H0.5zM0.5 8h14v.5H0.5zM0.5 8.5h14v.5H0.5zM1 9h13v.5H1zM2.5 9.5h11v.5H2.5zM3 10h1v.5H3zM4.5 10h8.5v.5H4.5zM4.5 10.5h3v.5H4.5zM4.5 11h3v.5H4.5zM4.5 11.5h3v.5H4.5zM5 12h2v.5H5z"/>
+
   <!-- flame tail (left) -->
   <g fill="#ff7b00"><rect x="1" y="7" width="2" height="2"/></g>
   <g fill="#ffd23f"><rect x="3" y="6" width="1" height="4"/><rect x="2" y="7" width="1" height="2"/></g>

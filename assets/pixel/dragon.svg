@@ -3,47 +3,50 @@
      head front-RIGHT raised high, neck down to a long curved tail flicking up bottom-
      left. Wing raised to the top edge. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M6 1.5h2v.5H6zM11 1.5h2v.5H11zM5.5 2h3v.5H5.5zM10.5 2h3v.5H10.5zM5.5 2.5h3v.5H5.5zM9 2.5h4.5v.5H9zM5.5 3h8v.5H5.5zM5.5 3.5h8.5v.5H5.5zM6 4h8.5v.5H6zM6.5 4.5h8v.5H6.5zM6.5 5h8v.5H6.5zM6.5 5.5h8.5v.5H6.5zM6.5 6h9v.5H6.5zM6.5 6.5h9v.5H6.5zM6.5 7h9v.5H6.5zM6 7.5h9.5v.5H6zM5.5 8h9.5v.5H5.5zM1 8.5h2v.5H1zM5.5 8.5h7v.5H5.5zM0.5 9h3v.5H0.5zM5.5 9h7v.5H5.5zM0.5 9.5h3v.5H0.5zM4 9.5h5.5v.5H4zM10.5 9.5h2v.5H10.5zM0.5 10h8.5v.5H0.5zM11 10h1v.5H11zM0.5 10.5h8v.5H0.5zM1 11h7.5v.5H1zM1.5 11.5h7v.5H1.5zM2 12h6.5v.5H2zM4.5 12.5h4v.5H4.5zM4.5 13h4v.5H4.5zM4.5 13.5h4v.5H4.5zM5 14h1v.5H5zM7 14h1v.5H7z"/>
+
   <!-- long curved tail: low-left, flicks up at the tip -->
-  <g fill="#e53935">
+  <g fill="#ff6257">
     <rect x="6" y="9" width="2" height="1"/>
     <rect x="4" y="10" width="2" height="1"/>
     <rect x="3" y="11" width="2" height="1"/>
     <rect x="2" y="10" width="1" height="2"/>
   </g>
-  <rect x="1" y="9" width="1" height="2" fill="#ffd54f"/>
-  <rect x="2" y="9" width="1" height="1" fill="#ffd54f"/>
+  <rect x="1" y="9" width="1" height="2" fill="#ffe27a"/>
+  <rect x="2" y="9" width="1" height="1" fill="#ffe27a"/>
   <!-- BIG wing raised toward TOP edge -->
-  <g fill="#c2185b">
+  <g fill="#a92c62">
     <rect x="7" y="6" width="2" height="2"/>
     <rect x="7" y="4" width="2" height="2"/>
     <rect x="6" y="2" width="2" height="2"/>
     <rect x="9" y="3" width="2" height="3"/>
     <rect x="11" y="2" width="2" height="4"/>
   </g>
-  <g fill="#7a0f3a"><rect x="7" y="2" width="1" height="6"/><rect x="10" y="3" width="1" height="3"/><rect x="12" y="2" width="1" height="4"/></g>
-  <g fill="#ff7043"><rect x="6" y="2" width="1" height="1"/><rect x="11" y="2" width="1" height="1"/></g>
+  <g fill="#55234e"><rect x="7" y="2" width="1" height="6"/><rect x="10" y="3" width="1" height="3"/><rect x="12" y="2" width="1" height="4"/></g>
+  <g fill="#ffad78"><rect x="6" y="2" width="1" height="1"/><rect x="11" y="2" width="1" height="1"/></g>
   <!-- elongated body: low-left rising to head high-right -->
-  <g fill="#e53935">
+  <g fill="#ff6257">
     <rect x="6" y="8" width="2" height="2"/>
     <rect x="8" y="7" width="3" height="2"/>
     <rect x="10" y="6" width="3" height="2"/>
   </g>
   <!-- belly highlight -->
-  <g fill="#fb8c00"><rect x="7" y="9" width="2" height="1"/><rect x="9" y="8" width="3" height="1"/></g>
+  <g fill="#ffb347"><rect x="7" y="9" width="2" height="1"/><rect x="9" y="8" width="3" height="1"/></g>
   <!-- dorsal scales -->
-  <g fill="#c2185b"><rect x="9" y="6" width="1" height="1"/><rect x="11" y="5" width="1" height="1"/></g>
+  <g fill="#a92c62"><rect x="9" y="6" width="1" height="1"/><rect x="11" y="5" width="1" height="1"/></g>
   <!-- prominent back leg (left, thick) -->
-  <g fill="#c2185b"><rect x="6" y="10" width="2" height="3"/><rect x="5" y="12" width="3" height="1"/></g>
-  <rect x="5" y="13" width="1" height="1" fill="#7a0f3a"/>
-  <rect x="7" y="13" width="1" height="1" fill="#7a0f3a"/>
+  <g fill="#a92c62"><rect x="6" y="10" width="2" height="3"/><rect x="5" y="12" width="3" height="1"/></g>
+  <rect x="5" y="13" width="1" height="1" fill="#55234e"/>
+  <rect x="7" y="13" width="1" height="1" fill="#55234e"/>
   <!-- front leg (right, smaller) -->
-  <g fill="#c2185b"><rect x="11" y="8" width="1" height="2"/></g>
+  <g fill="#a92c62"><rect x="11" y="8" width="1" height="2"/></g>
   <!-- horns -->
-  <g fill="#ffd54f"><rect x="11" y="4" width="1" height="1"/><rect x="13" y="4" width="1" height="1"/></g>
+  <g fill="#ffe27a"><rect x="11" y="4" width="1" height="1"/><rect x="13" y="4" width="1" height="1"/></g>
   <!-- head front-right, raised -->
-  <g fill="#e53935"><rect x="11" y="5" width="3" height="3"/></g>
-  <rect x="14" y="6" width="1" height="2" fill="#fb8c00"/>
+  <g fill="#ff6257"><rect x="11" y="5" width="3" height="3"/></g>
+  <rect x="14" y="6" width="1" height="2" fill="#ffb347"/>
   <!-- eye -->
   <rect x="12" y="5" width="1" height="1" fill="#fff"/>
-  <rect x="13" y="5" width="1" height="1" fill="#1a1a1a"/>
+  <rect x="13" y="5" width="1" height="1" fill="#152338"/>
 </svg>

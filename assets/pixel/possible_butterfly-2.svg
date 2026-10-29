@@ -2,6 +2,9 @@
      down-beat) — a strongly different silhouette from frame 1's raised wings, so the
      flap reads clearly. Body matches dragon.svg. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M10 4.5h1v.5H10zM9.5 5h2v.5H9.5zM7 5.5h1v.5H7zM9.5 5.5h4.5v.5H9.5zM6.5 6h2v.5H6.5zM9.5 6h5v.5H9.5zM6.5 6.5h8v.5H6.5zM6.5 7h8v.5H6.5zM4 7.5h10.5v.5H4zM3.5 8h11v.5H3.5zM3.5 8.5h11v.5H3.5zM3.5 9h11v.5H3.5zM2 9.5h1v.5H2zM3.5 9.5h11v.5H3.5zM1.5 10h12.5v.5H1.5zM1 10.5h13v.5H1zM0.5 11h14v.5H0.5zM0.5 11.5h14v.5H0.5zM1 12h13.5v.5H1zM1.5 12.5h13v.5H1.5zM2 13h6.5v.5H2zM9 13h5v.5H9zM3.5 13.5h5v.5H3.5zM4 14h4v.5H4z"/>
+
   <!-- LEFT wing: swept down below body, notched outer edge -->
   <g fill="#b71c1c">
     <rect x="6" y="9" width="2" height="5"/>
@@ -27,7 +30,7 @@
     <rect x="9" y="9" width="2" height="1"/>
   </g>
   <!-- horns -->
-  <g fill="#ffd54f">
+  <g fill="#ffe27a">
     <rect x="11" y="6" width="1" height="1"/>
     <rect x="13" y="6" width="1" height="1"/>
   </g>
@@ -36,9 +39,9 @@
     <rect x="2" y="11" width="3" height="1"/>
     <rect x="4" y="10" width="2" height="1"/>
   </g>
-  <rect x="1" y="11" width="1" height="1" fill="#ffd54f"/>
-  <rect x="2" y="10" width="1" height="1" fill="#ffd54f"/>
-  <rect x="2" y="12" width="1" height="1" fill="#ffd54f"/>
+  <rect x="1" y="11" width="1" height="1" fill="#ffe27a"/>
+  <rect x="2" y="10" width="1" height="1" fill="#ffe27a"/>
+  <rect x="2" y="12" width="1" height="1" fill="#ffe27a"/>
   <!-- chunky body -->
   <g fill="#d32f2f">
     <rect x="4" y="8" width="4" height="3"/>
@@ -46,7 +49,7 @@
     <rect x="10" y="6" width="4" height="3"/>
   </g>
   <!-- belly highlight -->
-  <g fill="#ff7043">
+  <g fill="#ffad78">
     <rect x="5" y="10" width="3" height="1"/>
     <rect x="8" y="9" width="3" height="1"/>
   </g>
@@ -57,7 +60,7 @@
   <rect x="11" y="7" width="1" height="1" fill="#fff"/>
   <rect x="12" y="7" width="1" height="1" fill="#ffc400"/>
   <!-- dorsal spikes -->
-  <g fill="#ffd54f">
+  <g fill="#ffe27a">
     <rect x="7" y="6" width="1" height="1"/>
     <rect x="10" y="5" width="1" height="1"/>
   </g>

@@ -20,14 +20,21 @@ import { nextCrashQuestion } from './crash-quiz.ts';
 // ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
-canvas.width  = C.W;
-canvas.height = C.H;
-// Pin the displayed size to the internal resolution so the browser never rescales
-// the canvas (rescaling + image-rendering:pixelated is what produced vertical bands).
-canvas.style.width  = C.W + 'px';
+// Render text and vector details into a high-resolution backing store. Gameplay
+// continues to use logical coordinates; sprite sampling stays nearest-neighbour.
+canvas.style.width = C.W + 'px';
 canvas.style.height = C.H + 'px';
-// Crisp sprite scaling: our 16px pixel-art SVGs are drawn up to 40px — keep hard edges.
-ctx.imageSmoothingEnabled = false;
+canvas.style.imageRendering = 'auto';
+let canvasDensity = 0;
+function updateCanvasResolution(viewScale: number) {
+  const density = Math.max(0.5, (window.devicePixelRatio || 1) * viewScale);
+  if (density === canvasDensity) return;
+  canvasDensity = density;
+  canvas.width = Math.round(C.W * density);
+  canvas.height = Math.round(C.H * density);
+  ctx.setTransform(canvas.width / C.W, 0, 0, canvas.height / C.H, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+}
 
 const overlay = document.getElementById('overlay');
 
@@ -62,6 +69,7 @@ function fitToViewport() {
   const vw = Math.max(window.innerWidth, window.innerHeight);
   const vh = Math.min(window.innerWidth, window.innerHeight) - urlBarEst - (isMob ? 0 : reserved);
   const scale = Math.min(vw / C.W, vh / C.H, 1);
+  updateCanvasResolution(scale);
   // translate(-50%,-50%) centers the layout box on the anchor point.
   // Shift the anchor down by half the reserved bar height so the game
   // sits centered in the space below the disclaimer.
@@ -69,12 +77,9 @@ function fitToViewport() {
   gameFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
   // Keep the scores corner badge clear of the disclaimer bar.
   (document.getElementById('btn-scores') as HTMLElement).style.top = `${reserved + 12}px`;
-  // Partial font-size compensation: dampens the scale-down so UI text stays
-  // legible on small screens without fully undoing the scale transform.
-  // _baseFontPx is kept in sync by applyStyle() so desktop (scale=1) is unaffected.
-  // Desktop gets a 25% boost since the canvas never scales down on large screens.
-  const desktopBoost = scale >= 0.95 ? 1.25 : 1;
-  document.documentElement.style.fontSize = `${_baseFontPx * desktopBoost / Math.pow(scale, 0.1)}px`;
+  // Keep UI type at its declared size: fractional font compensation and the
+  // desktop enlargement made the pixel glyph grid uneven.
+  document.documentElement.style.fontSize = `${_baseFontPx}px`;
   // Reveal after the correct transform is set — prevents flash of unscaled content
   // while the JS bundle loads. CSS opacity:0 hides game-frame until this runs.
   gameFrame.style.opacity = '1';
@@ -267,10 +272,10 @@ let gfxStyle = localStorage.getItem('lpb_gfx') === 'round' ? 'round' : 'pixel';
 const STYLE: { [key: string]: any } = {
   pixel: {
     fontDisplay: "'Press Start 2P', monospace", // titles, buttons, HUD
-    fontBody:    "'Press Start 2P', monospace", // labels, prose
+    fontBody:    "'Press Start 2P', monospace", // crisp pixel labels and prose
     fontMono:    "'Press Start 2P', monospace", // dense logs
     smoothing: false,        // crisp sprite edges
-    radius: '4px',           // button / tile corner radius
+    radius: '0px',           // button / tile corner radius
     textShadow: '3px 3px 0 #000',
     letterSpacing: '0px',
     fontScale: 1,            // baseline — all rem sizes were tuned for this font
@@ -2722,7 +2727,12 @@ function drawBackground() {
   // Each theme may define bgLayers: [{ speed, draw(offset) }]. Far layers use a
   // small speed (drift slowly), near layers a larger one. offset is the wrapped
   // horizontal scroll for that layer's tile width, handled by tileMotif.
-  if (t.bgLayers) for (const layer of t.bgLayers) layer.draw(bgScroll * layer.speed);
+  if (t.bgLayers) {
+    ctx.save();
+    ctx.globalAlpha = 0.7; // Keep decorative scenery behind the playable silhouettes.
+    for (const layer of t.bgLayers) layer.draw(bgScroll * layer.speed);
+    ctx.restore();
+  }
 
   // Ground / HUD bar — a pixel "surface" lip on top of a dirt/base bar. The lip palette
   // is per-theme (t.surface = [lip, highlight, seam]) so each avatar gets a fitting top
@@ -2743,7 +2753,7 @@ function drawBackground() {
   }
   // Dark wash over the HUD bar (below the grass lip) so the white HUD readout stays
   // legible regardless of the avatar's ground color (e.g. penguin's near-white ice).
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = '#101c30';
   ctx.fillRect(0, C.GROUND + px * 3, C.W, C.HUD - px * 3);
 }
 
@@ -3070,12 +3080,12 @@ function drawPlayer() {
   if (fxMane && fxMane.kind === 'mane') drawMane(s, fxMane.color);
   // Multiplayer: a solid yellow outline (+ soft glow) so you can find your own bird
   // in a pack of ghosts — the sprite's silhouette stamped 3px out in 8 directions.
-  if (mpRun) {
+  {
     const sil = silhouette(sprite, s);
     if (sil) {
       ctx.save();
       ctx.shadowColor = 'rgba(255,214,0,0.8)';
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 0;
       for (const [dx, dy] of OUTLINE_DIRS) ctx.drawImage(sil, -s / 2 + dx * 3, -s / 2 + dy * 3, s, s);
       ctx.restore();
     }
@@ -3312,27 +3322,37 @@ function drawPowerUpHUD() {
 }
 
 function drawHUD() {
-  ctx.font = `14px ${activeStyle().fontDisplay}`;
+  ctx.save();
+  ctx.font = `8px ${activeStyle().fontBody}`;
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f1f5ff';
+  ctx.textAlign = 'left';
+  const y = C.GROUND + 33;
+  const name = currentPlayer.length > 22 ? currentPlayer.slice(0, 21) + '…' : currentPlayer;
+  ctx.fillStyle = '#ffe17a';
+  ctx.fillText(name, 22, y);
   ctx.textAlign = 'center';
   const sl = speedLevel(gs) + 1;
   if (mpRun) {
-    const now = performance.now();
-    const t = Math.max(0, (now - MP.room.raceStartAt) / 1000).toFixed(1);
+    const elapsed = Math.max(0, (performance.now() - MP.room.raceStartAt) / 1000).toFixed(1);
     const pct = Math.floor(Math.min(1, gs.dist / MP.room.finishDist) * 100);
-    const hex = hexCharges ? `[E] 🔮×${hexCharges}` : '🔮 0';
-    const boost = gs.activeEffects.some(e => e.defId === 'boost') ? '  |  ⚡AFTERBURNER' : '';
-    strokedText(
-      `Room ${MP.room.code}  |  ${currentPlayer}  |  ⏱ ${t}s  |  ${pct}%  |  ${hex}${boost}  |  Spd ${sl}`,
-      C.W / 2, C.GROUND + 32, 4);
-    return;
+    ctx.fillStyle = '#f1f5ff';
+    ctx.fillText(`ROOM ${MP.room.code}    •    ${elapsed}s    •    ${pct}% COMPLETE`, C.W / 2, y);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#bce9ff';
+    const boost = gs.activeEffects.some(e => e.defId === 'boost') ? 'BOOST  •  ' : '';
+    ctx.fillText(`${boost}[E] HEX ×${hexCharges}    SPEED ${sl}`, C.W - 22, y);
+    ctx.fillStyle = '#72e6c2';
+    ctx.fillRect(0, C.H - 3, C.W * pct / 100, 3);
+  } else {
+    ctx.fillStyle = '#f1f5ff';
+    const high = currentBest == null ? '' : `    •    BEST ${Math.max(gs.score, currentBest)}`;
+    ctx.fillText(`SCORE ${gs.score}${high}`, C.W / 2, y);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#bce9ff';
+    ctx.fillText(`SPEED ${sl}`, C.W - 22, y);
   }
-  // High is shown only when we have an authoritative value from Supabase.
-  // currentBest === null means offline/unknown → omit it rather than show a stale number.
-  const high = currentBest == null ? '' : `High: ${Math.max(gs.score, currentBest)}  |  `;
-  strokedText(
-    `Score: ${gs.score}  |  ${high}${currentPlayer}  |  Spd ${sl}`,
-    C.W / 2, C.GROUND + 32, 4
-  );
+  ctx.restore();
 }
 
 // Other racers: translucent, name-tagged, dead-reckoned between snapshots (see
@@ -3349,18 +3369,24 @@ function drawGhosts(now) {
     const theme = THEMES[b.avatar] || THEMES.penguin;
     const s = C.PLAYER_SIZE * C.SPRITE_SCALE * b.size;
     ctx.save();
-    ctx.globalAlpha = b.st === 'quiz' ? 0.2 : 0.35;
+    ctx.globalAlpha = b.st === 'quiz' ? 0.35 : 0.65;
     ctx.translate(x, b.dispY);
     ctx.rotate(Math.max(-0.4, Math.min(0.4, e.vy * 0.05)));
     if (theme.img?.complete) ctx.drawImage(theme.img, -s / 2, -s / 2, s, s);
     ctx.restore();
     ctx.save();
-    ctx.globalAlpha = 0.8;
-    ctx.font = `9px ${activeStyle().fontDisplay}`;
+    ctx.globalAlpha = 1;
+    ctx.font = `8px ${activeStyle().fontBody}`;
     ctx.textAlign = 'center';
     const mark = hexMarks.get(b.id);
     const badge = b.st === 'quiz' ? ' 📝' : mark && now - mark.at < 2500 ? ` ${mark.icon}` : '';
-    strokedText(b.name + badge, x, b.dispY - s / 2 - 6, 3);
+    const label = b.name.slice(0, 20) + badge;
+    const labelY = b.dispY - s / 2 - 10;
+    const labelW = ctx.measureText(label).width + 16;
+    ctx.fillStyle = '#101c30';
+    ctx.fillRect(x - labelW / 2, labelY - 17, labelW, 24);
+    ctx.fillStyle = '#e8f3ff';
+    ctx.fillText(label, x, labelY);
     ctx.restore();
   }
 }
@@ -3439,7 +3465,7 @@ function drawPickupLabel(now) {
   ctx.fillStyle = pickupPop.color;
   ctx.strokeText(pickupPop.name, 0, 0);
   ctx.fillText(pickupPop.name, 0, 0);
-  ctx.font = `bold 15px 'Segoe UI', system-ui, sans-serif`;
+  ctx.font = `8px ${activeStyle().fontBody}`;
   ctx.lineWidth = 4;
   ctx.fillStyle = '#fff';
   ctx.strokeText(pickupPop.what, 0, 22);
@@ -3456,16 +3482,24 @@ function raceLabel(b: MP.Bird, now: number): string {
 // Live standings, top-left (power-up bars own the top-right).
 function drawStandings(now) {
   ctx.save();
-  ctx.font = `10px ${activeStyle().fontDisplay}`;
+  ctx.font = `8px ${activeStyle().fontBody}`;
   ctx.textAlign = 'left';
   // Top 5 plus you — a full 13-racer list would cover half the screen.
   const all = MP.standings(now);
   const shown = all.map((b, i) => ({ b, i })).filter(({ b, i }) => i < 5 || b.id === MP.myId());
+  ctx.fillStyle = 'rgba(16,28,48,0.94)';
+  ctx.fillRect(12, 12, 310, 34 + shown.length * 26);
+  ctx.fillStyle = '#72e6c2';
+  ctx.fillRect(12, 12, 4, 34 + shown.length * 26);
+  ctx.font = `8px ${activeStyle().fontBody}`;
+  ctx.fillText('LIVE RACE', 26, 32);
+  ctx.font = `8px ${activeStyle().fontBody}`;
   shown.forEach(({ b, i }, row) => {
     ctx.globalAlpha = b.st === 'gone' ? 0.4 : 1;
     const tag = b.id === MP.myId() ? ' ◀' : '';
     const gap = row === 5 ? 8 : 0;   // nudge "you" down when you're outside the top 5
-    strokedText(`${i + 1}. ${b.name} ${raceLabel(b, now)}${tag}`, 14, 24 + row * 18 + gap, 3);
+    ctx.fillStyle = b.id === MP.myId() ? '#ffe17a' : '#e8f3ff';
+    ctx.fillText(`${i + 1}. ${b.name.slice(0, 12)} ${raceLabel(b, now)}${tag}`, 26, 56 + row * 26 + gap, 280);
   });
   ctx.restore();
 }
