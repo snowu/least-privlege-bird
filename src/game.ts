@@ -2636,7 +2636,7 @@ const PICKUP_INFO: { [id: string]: { name: string; what: string } } = {
   'role-assumption': { name: '⇄ ROLE SWAP',     what: 'Wider gaps + disguise' },
   'elb':             { name: '☁ ELB',           what: 'Low gravity' },
   'star':            { name: '★ STAR',          what: 'Invincible, smash pipes' },
-  'boost':           { name: '⚡ AFTERBURNER',   what: 'Dash through pipes' },
+  'boost':           { name: '⚡ AFTERBURNER',   what: 'Autopilot dash: sit back' },
   'orb':             { name: '🔮 +1 HEX',        what: 'Press E: curse the racer ahead' },
   'respawn':         { name: '⛑ RESPAWNED',     what: 'Invincible for 2s' },
   'hex-throttled':   { name: '🐌 THROTTLED',     what: 'Weak flaps' },
@@ -2975,6 +2975,29 @@ function beamEndX(x0, y) {
   return end;
 }
 
+// Yellow silhouette of a sprite at a given size, for the "this one is you" outline.
+// Cached per image + size (sizes only vary with a handful of effects).
+const OUTLINE_DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+const silhouettes = new Map<string, HTMLCanvasElement>();
+function silhouette(img: HTMLImageElement, size: number): HTMLCanvasElement | null {
+  if (!img.complete || !img.naturalWidth) return null;
+  const px = Math.ceil(size);
+  const key = `${img.src}|${px}`;
+  let c = silhouettes.get(key);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = c.height = px;
+    const x = c.getContext('2d');
+    x.imageSmoothingEnabled = ctx.imageSmoothingEnabled;
+    x.drawImage(img, 0, 0, px, px);
+    x.globalCompositeOperation = 'source-in';
+    x.fillStyle = '#ffd600';
+    x.fillRect(0, 0, px, px);
+    silhouettes.set(key, c);
+  }
+  return c;
+}
+
 function drawPlayer() {
   const eff = getEffective(gs);
   const now = performance.now();
@@ -3045,6 +3068,18 @@ function drawPlayer() {
   // on flap. Render-only, no sim touch.
   const fxMane = fxActiveForStyle(displayTheme);
   if (fxMane && fxMane.kind === 'mane') drawMane(s, fxMane.color);
+  // Multiplayer: a solid yellow outline (+ soft glow) so you can find your own bird
+  // in a pack of ghosts — the sprite's silhouette stamped 3px out in 8 directions.
+  if (mpRun) {
+    const sil = silhouette(sprite, s);
+    if (sil) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,214,0,0.8)';
+      ctx.shadowBlur = 12;
+      for (const [dx, dy] of OUTLINE_DIRS) ctx.drawImage(sil, -s / 2 + dx * 3, -s / 2 + dy * 3, s, s);
+      ctx.restore();
+    }
+  }
   ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
   // Sprite effect (theme.fx with fx.sprite): a transparent FX image drawn relative to the
   // avatar for fx.durationMs after it fired. Inside the same translate/rotate so it tracks
@@ -3314,7 +3349,7 @@ function drawGhosts(now) {
     const theme = THEMES[b.avatar] || THEMES.penguin;
     const s = C.PLAYER_SIZE * C.SPRITE_SCALE * b.size;
     ctx.save();
-    ctx.globalAlpha = b.st === 'quiz' ? 0.25 : 0.45;
+    ctx.globalAlpha = b.st === 'quiz' ? 0.2 : 0.35;
     ctx.translate(x, b.dispY);
     ctx.rotate(Math.max(-0.4, Math.min(0.4, e.vy * 0.05)));
     if (theme.img?.complete) ctx.drawImage(theme.img, -s / 2, -s / 2, s, s);
@@ -3960,14 +3995,6 @@ function drawHexWorld(now) {
     canvas.style.transform = flip;
   }
   if (mpPhase !== 'fly') return;
-  if (gs.hover) {
-    ctx.save();
-    ctx.font = `18px ${activeStyle().fontDisplay}`;
-    ctx.textAlign = 'center';
-    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(now / 120);
-    strokedText('FLAP TO GO!', C.PLAYER_X + 20, gs.player.y + 56, 5);
-    ctx.restore();
-  }
   if (now < hexBlackoutUntil) {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.92)';

@@ -60,14 +60,16 @@ export interface Handlers {
 }
 
 // Race tuning — the knobs to turn if races feel too hard/easy. No classic power-ups
-// (races have their own pickups: ⚡ coins and 🔮 orbs). Pacing: start where
-// single-player is ~10s in (3px/tick), ramp only to 4px/tick, never less than
-// 1.35s between pipes (~300px apart), first pipe close, gaps widened 20%. Feel: a
+// (races have their own pickups: ⚡ coins and 🔮 orbs). Pacing: fast (3.5→4.5 px/tick)
+// but easy pipes: never less than 1.35s between them (so faster = further apart),
+// gaps widened 40%, and each gap within 150px of the last so the course flows
+// instead of zig-zagging; first pipe close. Feel: a
 // touch more gravity with a matching flap (same hop height, quicker rhythm), a
 // terminal velocity so one missed flap is recoverable, and soft floor/ceiling
 // while invincible so respawn grace / afterburner can't drop you out of the world.
 export const RACE_OPTS = {
-  splitPowerUpRng: true, powerUps: false, startLevel: 2, maxSpeedLevel: 4, minIntervalMs: 1350, firstPipeX: 480, gapMul: 1.2,
+  splitPowerUpRng: true, powerUps: false, startLevel: 3, maxSpeedLevel: 5, minIntervalMs: 1350, firstPipeX: 480,
+  gapMul: 1.4, maxGapShift: 150,
   gravity: 0.55, flap: -9.4, maxFall: 10, softBounds: true,
 } satisfies StateOpts;
 // Nominal length = seconds a clean, boost-free run takes. Coins make it shorter.
@@ -295,9 +297,11 @@ export function itemFor(n: number): 'coin' | 'orb' | null {
 // for the caller to bank as a hex charge. `seen` remembers pipes already judged.
 export function passItems(s: GameState, seen: WeakSet<Pipe>): 'coin' | 'orb' | null {
   let got: 'coin' | 'orb' | null = null;
+  const dashing = s.activeEffects.some(e => e.defId === 'boost');
   for (const p of s.pipes) {
     if (seen.has(p) || p.x + C.PIPE_W / 2 > C.PLAYER_X) continue;
     seen.add(p);
+    if (dashing) continue;   // blasted past it: no afterburner chains
     const item = itemFor(p.n);
     if (!item || Math.abs(s.player.y - (p.topH + p.gap / 2)) > ITEM_GRAB_PX) continue;
     if (item === 'coin') {
@@ -530,9 +534,9 @@ export function racerAhead(id: string, now = performance.now()): string | null {
 
 // ── Shared race mechanics (local player + bots) ───────────────────────────────
 // Put a crashed bird back on course as a clean restart: clear the pipes right around
-// it, centre it in the next gap and hover it there until the player's first flap
-// (it used to sink to the floor while you found your bird, and die the moment the
-// grace ended), with a short invincibility window on top.
+// it and centre it in the next gap at rest, then hand straight back to the player
+// with a short invincibility window to react in (soft floor/ceiling keep them in
+// the world meanwhile).
 const RESPAWN_CLEAR_PX = 350;
 export function respawn(s: GameState) {
   const r = C.PLAYER_SIZE / 2;
@@ -540,7 +544,6 @@ export function respawn(s: GameState) {
   const next = s.pipes.find(p => p.x + C.PIPE_W > C.PLAYER_X - r);
   s.player.y = next ? next.topH + next.gap / 2 : C.GROUND / 2;
   s.player.vy = 0;
-  s.hover = true;      // hang there until the first flap: rejoin on your own timing
   s.activeEffects = s.activeEffects.filter(e => e.defId !== 'boost'); // crashing kills momentum
   s.activeEffects.push({ defId: 'respawn', expiryTick: s.tick + defOf('respawn')!.durationTicks });
 }

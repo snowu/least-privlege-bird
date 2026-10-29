@@ -110,7 +110,6 @@ function tick(r: BotRun, now: number) {
 
 function decide(r: BotRun, now: number): boolean {
   const s = r.s;
-  if (s.hover) return Math.random() < 0.08;   // just respawned: kick off within a few ticks
   if (s.tick < r.zoneOutUntil) return false;
   if (Math.random() < (1 - r.skill) * 0.0025) { r.zoneOutUntil = s.tick + 25; return false; }
 

@@ -74,6 +74,7 @@ export interface PowerUpDef {
   sizeMul?: number;
   invincible?: boolean;
   destroysPipes?: boolean;
+  autopilot?: boolean;     // steer through gap centres; input ignored (race afterburner)
   weight?: number;
   minSpeedLevel?: number;
 }
@@ -95,7 +96,7 @@ export const MP_DEFS: readonly PowerUpDef[] = [
   { id: 'hex-throttled', durationTicks: 180, flapMul: 0.6 },
   { id: 'hex-bloat',     durationTicks: 240, sizeMul: 1.6 },
   { id: 'respawn',       durationTicks: 120, invincible: true }, // post-crash grace
-  { id: 'boost',         durationTicks: 75,  speedMul: 1.7, invincible: true }, // coin grab: afterburner dash through pipes
+  { id: 'boost',         durationTicks: 75,  speedMul: 1.7, invincible: true, autopilot: true }, // coin grab: afterburner autopilot dash
 ];
 
 export function defOf(id: string): PowerUpDef | undefined {
@@ -121,11 +122,11 @@ export interface GameState {
   gapMul: number;                  // race-wide gap multiplier (1 in single-player)
   minIntervalMs: number;           // pipe-interval floor (C.PIPE_INTERVAL_MIN in single-player)
   powerUpsOn: boolean;             // classic power-ups spawn (true in single-player)
+  maxGapShift: number | null;      // gap-to-gap height cap (null in single-player)
   gravity: number;                 // base physics (race tuning; C.GRAVITY / C.FLAP in single-player)
   flap: number;
   maxFall: number | null;
   softBounds: boolean;
-  hover: boolean;                  // held in place until the next flap (race respawn); false in single-player
   lastSpeedUpTick: number | null;  // null until the first active tick
   lastPipeTick: number | null;
   rng: () => number;
@@ -148,6 +149,7 @@ export interface StateOpts {
   gapMul?: number;     // widen every gap (fast but forgiving)
   minIntervalMs?: number; // floor on time between pipes (default C.PIPE_INTERVAL_MIN)
   powerUps?: boolean;  // spawn the classic power-ups (default true; races use coins/orbs instead)
+  maxGapShift?: number; // cap how far (px) a gap may move from the previous one — flowing course
   gravity?: number;    // base gravity / flap impulse (default C.GRAVITY / C.FLAP)
   flap?: number;
   maxFall?: number;    // terminal velocity (px/tick); unset = unbounded
@@ -168,11 +170,11 @@ export function createState(seed: number, opts: StateOpts = {}): GameState {
     gapMul: opts.gapMul ?? 1,
     minIntervalMs: opts.minIntervalMs ?? C.PIPE_INTERVAL_MIN,
     powerUpsOn: opts.powerUps ?? true,
+    maxGapShift: opts.maxGapShift ?? null,
     gravity: opts.gravity ?? C.GRAVITY,
     flap: opts.flap ?? C.FLAP,
     maxFall: opts.maxFall ?? null,
     softBounds: opts.softBounds ?? false,
-    hover: false,
     lastSpeedUpTick: null,
     lastPipeTick: null,
     rng,
@@ -220,7 +222,15 @@ function spawnPipe(s: GameState, x: number = C.W): void {
   const gap = currentGap(s);
   const minTop = 60;
   const maxTop = C.GROUND - gap - 60;
-  const topH = minTop + s.rng() * (maxTop - minTop); // seeded → reproducible
+  let topH = minTop + s.rng() * (maxTop - minTop); // seeded → reproducible
+  // Race courses flow: clamp the gap near the previous one (same rng draw, so the
+  // sequence stays deterministic; single-player leaves maxGapShift null).
+  const prev = s.pipes[s.pipes.length - 1];
+  if (s.maxGapShift !== null && prev) {
+    const prevMid = prev.topH + prev.gap / 2;
+    const mid = Math.max(prevMid - s.maxGapShift, Math.min(prevMid + s.maxGapShift, topH + gap / 2));
+    topH = Math.max(minTop, Math.min(maxTop, mid - gap / 2));
+  }
   s.pipes.push({ x, topH, gap, scored: false, n: s.pipesSpawned++ });
   s.lastPipeTick = s.tick;
 }
@@ -263,10 +273,10 @@ function collides(s: GameState): boolean {
 // Returns absolute values for gravity/flap (already multiplied), multipliers for speed/size.
 export function getEffective(s: GameState): {
   gravity: number; flap: number; speed: number; size: number;
-  invincible: boolean; destroysPipes: boolean;
+  invincible: boolean; destroysPipes: boolean; autopilot: boolean;
 } {
   let gravity = s.gravity, flap = s.flap, speed = 1, size = 1;
-  let invincible = false, destroysPipes = false;
+  let invincible = false, destroysPipes = false, autopilot = false;
   for (const e of s.activeEffects) {
     const d = defOf(e.defId);
     if (!d) continue;
@@ -276,8 +286,9 @@ export function getEffective(s: GameState): {
     if (d.sizeMul)       size *= d.sizeMul;
     if (d.invincible)    invincible = true;
     if (d.destroysPipes) destroysPipes = true;
+    if (d.autopilot)     autopilot = true;
   }
-  return { gravity, flap, speed, size, invincible, destroysPipes };
+  return { gravity, flap, speed, size, invincible, destroysPipes, autopilot };
 }
 
 // ── The one physics tick ──────────────────────────────────────────────────────
@@ -343,7 +354,6 @@ export function step(s: GameState, flapped: boolean): StepResult {
 
   // INPUT — before physics, matching original ordering (flap sets vy, then gravity adds)
   if (flapped) s.player.vy = eff.flap;
-  if (flapped) s.hover = false;
 
   // Start the speed-ramp clock on the first active tick. The pipe field is already
   // pre-filled at construction (see prefillField), so nothing to spawn here.
@@ -420,8 +430,14 @@ export function step(s: GameState, flapped: boolean): StepResult {
   }
 
   // Update player physics with effective values.
-  if (s.hover) {
-    s.player.vy = 0;   // race respawn: hang in place until the player flaps
+  if (eff.autopilot) {
+    // Afterburner: glide toward the next gap's centre, ignoring input, so the dash
+    // ends lined up in a gap instead of dumping you into a pipe at full speed.
+    const r = C.PLAYER_SIZE / 2;
+    const next = s.pipes.find(p => p.x + C.PIPE_W > C.PLAYER_X - r);
+    const target = next ? next.topH + next.gap / 2 : C.GROUND / 2;
+    s.player.y += (target - s.player.y) * 0.18;
+    s.player.vy = 0;
   } else {
     s.player.vy += eff.gravity;
     if (s.maxFall !== null && s.player.vy > s.maxFall) s.player.vy = s.maxFall;
