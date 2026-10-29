@@ -3,6 +3,7 @@ import {
   step, simulate,
   type PowerUpDef, type ActiveEffect,
 } from "../src/physics-core.ts";
+import * as MP from "../src/multiplayer.ts";
 
 let failed = 0;
 function assert(cond: boolean, msg: string) {
@@ -148,20 +149,57 @@ solo.activeEffects.push({ defId: 'wildcard', expiryTick: 120 });
 for (let t = 0; t < 110; t++) step(solo, false);
 assert(solo.player.y > C.GROUND, `solo: no soft bounds — invincible bird still falls through (unchanged)`);
 
-// ── Afterburner never strands you ──
-// Hands-off dash: the autopilot steers through every gap (zero input, no crash) and
-// hands control back at rest, lined up with the next gap — no forced flap.
-const RACE = { splitPowerUpRng: true, powerUps: false, startLevel: 3, maxSpeedLevel: 5, minIntervalMs: 1350, gapMul: 1.4, maxGapShift: 150, gravity: 0.55, flap: -9.4, maxFall: 10, softBounds: true };
-let stranded = 0, misaligned = 0;
+// ── Coin warp (races) ──
+// A warp jumps you forward on the course and clears the runway, without touching
+// your height, speed or controls — nothing to recover from afterwards.
+let warpBad = 0;
 for (let seed = 1; seed <= 50; seed++) {
-  const ab = createState(seed, RACE);
-  ab.activeEffects.push({ defId: 'boost', expiryTick: ab.tick + defOf('boost')!.durationTicks });
-  for (let t = 0; t < 74; t++) if (step(ab, false).dead) { stranded++; break; }
-  const next = ab.pipes.find(p => p.x + C.PIPE_W > C.PLAYER_X - 20);
-  if (next && Math.abs(ab.player.y - (next.topH + next.gap / 2)) > next.gap / 4) misaligned++;
+  const w = MP.raceState(seed);
+  for (let t = 0; t < 300; t++) { w.player.y = C.H / 2; w.player.vy = 0; step(w, false); }
+  w.player.vy = -3;
+  const before = { dist: w.dist, y: w.player.y, vy: w.player.vy, speed: w.pipeSpeed };
+  MP.warp(w, 400);
+  const blocked = w.pipes.some(p => p.x + C.PIPE_W > C.PLAYER_X - 20 && p.x < C.PLAYER_X + 400);
+  if (w.dist !== before.dist + 400 || blocked || w.player.y !== before.y
+      || w.player.vy !== before.vy || w.pipeSpeed !== before.speed) warpBad++;
 }
-assert(stranded === 0, `afterburner: hands-off dash never crashes (${stranded}/50 crashed)`);
-assert(misaligned === 0, `afterburner: ends lined up with the next gap (${misaligned}/50 off-centre)`);
+assert(warpBad === 0, `warp: +px progress, runway cleared, control untouched (${warpBad}/50 wrong)`);
+
+// Rubber band: the leader gets the minimum warp, a trailer gets more, capped.
+MP.room.finishDist = 1e6;
+MP.room.birds = new Map([
+  ['lead', { id: 'lead', st: 'fin', dist: 0 } as any],   // finished → counts as at the line
+]);
+const atFront = MP.warpDistance('lead', 1e6);
+const midPack = MP.warpDistance('mid', 1e6 - 400);
+const wayBack = MP.warpDistance('last', 1e6 - 5000);
+assert(atFront === MP.WARP_MIN_PX && midPack > atFront && wayBack === MP.WARP_MAX_PX,
+  `rubber band: leader ${atFront}px < 400px behind ${Math.round(midPack)}px < far behind ${wayBack}px (capped)`);
+MP.room.birds = new Map();
+
+// Race physics stay flyable: flapping at the natural rhythm (2·|flap|/gravity ticks,
+// ~0.7s) holds a bird level and on screen.
+const fly = MP.raceState(3);
+let lowest = 0, highest = C.H;
+for (let t = 0; t < 600; t++) {
+  fly.activeEffects = []; fly.pipes = [];
+  step(fly, t % 41 === 0);
+  lowest = Math.max(lowest, fly.player.y); highest = Math.min(highest, fly.player.y);
+}
+assert(lowest < C.GROUND && highest > 0, `race physics: steady flapping holds altitude (y ${Math.round(highest)}–${Math.round(lowest)})`);
+
+// ── Party-race bonk: nobody is ever out ──
+// Even a player who never flaps keeps moving forward and stays on screen: every
+// crash is a bonk (stumble + hop), never a stop.
+const lazy = MP.raceState(11);
+let bonks = 0, offscreen = 0;
+for (let t = 0; t < 1800; t++) {
+  if (step(lazy, false).dead) { MP.bonk(lazy); bonks++; }
+  if (lazy.player.y < -40 || lazy.player.y > C.GROUND + 40) offscreen++;
+}
+assert(bonks > 0 && lazy.dist > MP.courseLength(30) * 0.33,
+  `bonk: a no-flap bird keeps going (${bonks} bonks, ${Math.round(lazy.dist / MP.courseLength(30) * 100)}% of a 30s course in 30s)`);
+assert(offscreen === 0, `bonk: bird never leaves the screen (${offscreen} ticks off-screen)`);
 
 // ── Stacking test ──
 const s5 = createState(1);

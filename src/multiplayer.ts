@@ -1,30 +1,28 @@
 // ─── MULTIPLAYER (Cloudflare relay) ───────────────────────────────────────────
 // A room is a socket into the lpb-rooms relay (relay/: one in-memory Durable Object
 // per room code): presence = who is in the lobby, broadcast = round start + bird
-// snapshots + hexes. The relay knows nothing about the game; the room evaporates
-// when the last player leaves. (Supabase Realtime's free tier caps a whole project
-// at 100 msgs/s counting every delivery — a 10-player race needs ~400.)
+// snapshots. The relay knows nothing about the game; the room evaporates when the
+// last player leaves. (Supabase Realtime's free tier caps a whole project at 100
+// msgs/s counting every delivery — a 10-player race needs ~400.)
 //
-// Rounds are RACES over a fixed distance. Everyone flies the SAME seed (power-up
-// rng split off, see createState) with race pacing (RACE_OPTS: start fast, capped
-// ramp). Crashing doesn't knock you out — you answer an AWS question and respawn
-// where you crashed, so a crash costs wall-clock time. Coins in the gaps boost you
-// forward (overtaking by skill); hex orbs give you a curse to throw at the racer
-// just ahead, and a crash it causes within HEX_CREDIT_MS is credited to you.
+// Rounds are PARTY RACES over a fixed distance: everyone flies the SAME seed (see
+// RACE_OPTS) and nobody is ever knocked out. Hitting anything is a BONK — a short
+// stumble, then you fly on — so a crash costs a moment, like falling off in a kart
+// game. ⚡ coins in the gaps warp you ahead. First to the 🏁 wins.
 //
 // Remote birds are dead-reckoned: each client sends a snapshot of the birds it owns
 // (itself + any bots it hosts) on every flap plus a slow heartbeat, batched into one
 // message per 50ms, and receivers extrapolate gravity + distance in between.
 //
 // Multiplayer runs never touch the leaderboard: the server replay doesn't know
-// about race options, respawns or hexes, so it would (correctly) reject them.
+// about race options or bonks, so it would (correctly) reject them.
 import {
   C, TICK_MS, SPEED_UP_TICKS, defOf, createState, mulberry32,
   type GameState, type Pipe, type StateOpts,
 } from './physics-core.ts';
 import { AVATAR_KEYS } from './avatars-meta.ts';
 
-export type BirdState = 'fly' | 'quiz' | 'fin' | 'gone';
+export type BirdState = 'fly' | 'fin' | 'gone';
 
 export interface Peer {
   id: string; name: string; avatar: string; joinedAt: number; wins: number;
@@ -41,51 +39,49 @@ export interface Bird {
   sp: number;              // current scroll speed (px/tick), for extrapolating dist
   at: number;              // performance.now() the snapshot was taken/received
   st: BirdState;
-  finishMs: number;        // race time (crash/quiz time included) once st === 'fin'
-  takedowns: number;       // crashes caused by this bird's hexes this round
+  finishMs: number;        // race time once st === 'fin'
+  bonks: number;           // how many times it hit something this round
   dispY: number;           // smoothed render y (render-only)
 }
 
 export interface RoundResult {
   id: string; name: string; avatar: string; bot: boolean;
-  finished: boolean; finishMs: number; progress: number; score: number; takedowns: number;
+  finished: boolean; finishMs: number; progress: number; score: number; bonks: number;
 }
 
 export interface Handlers {
-  onLobby(): void;                                      // presence/round status changed
-  onStart(seed: number): void;                          // a round I'm in is starting
-  onRoundEnd(results: RoundResult[]): void;             // race over
-  onHex(from: Bird, to: Bird, kind: string): void;      // someone hexed someone (any pair)
-  onTakedown(from: Bird, to: Bird, kind: string): void; // …and it made them crash
+  onLobby(): void;                               // presence/round status changed
+  onStart(seed: number): void;                   // a round I'm in is starting
+  onFinish(b: Bird, place: number): void;        // someone crossed the line
+  onRoundEnd(results: RoundResult[]): void;      // race over
 }
 
 // Race tuning — the knobs to turn if races feel too hard/easy. No classic power-ups
-// (races have their own pickups: ⚡ coins and 🔮 orbs). Pacing: fast (3.5→4.5 px/tick)
-// but easy pipes: never less than 1.35s between them (so faster = further apart),
-// gaps widened 40%, and each gap within 150px of the last so the course flows
-// instead of zig-zagging; first pipe close. Feel: a
-// touch more gravity with a matching flap (same hop height, quicker rhythm), a
-// terminal velocity so one missed flap is recoverable, and soft floor/ceiling
-// while invincible so respawn grace / afterburner can't drop you out of the world.
+// (the only race pickup is the ⚡ warp coin). Pacing: 3.5→4.5 px/tick, at least
+// 1.25s between pipes (so faster = further apart), gaps 20% wider than solo, and
+// each gap within 190px of the last so the course flows rather than zig-zags;
+// first pipe close. Feel: lighter than single-player (less gravity,
+// softer flap: same hop height, more hang time), a gentle terminal velocity, and
+// soft floor/ceiling while bonked so a stumble can't drop you out of the world.
 export const RACE_OPTS = {
-  splitPowerUpRng: true, powerUps: false, startLevel: 3, maxSpeedLevel: 5, minIntervalMs: 1350, firstPipeX: 480,
-  gapMul: 1.4, maxGapShift: 150,
-  gravity: 0.55, flap: -9.4, maxFall: 10, softBounds: true,
+  splitPowerUpRng: true, powerUps: false, startLevel: 3, maxSpeedLevel: 5, minIntervalMs: 1250, firstPipeX: 480,
+  gapMul: 1.2, maxGapShift: 190,
+  gravity: 0.4, flap: -8.2, maxFall: 8, softBounds: true,
 } satisfies StateOpts;
-// Nominal length = seconds a clean, boost-free run takes. Coins make it shorter.
-export const RACE_LENGTHS = { sprint: 30, standard: 45, marathon: 75 };
-export const HEX_KINDS = ['yank', 'throttled', 'bloat', 'failover', 'outage', 'mfa'];
-export const MAX_HEX_CHARGES = 2;
-export const ITEM_GRAB_PX = 34;     // how close to the gap centre you must pass to grab its item
+// Nominal length = seconds a clean, warp-free run takes. Coins make it shorter.
+export const RACE_LENGTHS = { sprint: 20, standard: 30, marathon: 45 };
+export const ITEM_GRAB_PX = 34;     // how close to the gap centre you must pass to grab a coin
+// Rubber-band warp (anti-snowball, à la kart racers): a coin throws you further the
+// further you trail the leader — a nudge at the front, a real catch-up at the back.
+export const WARP_MIN_PX = 150;
+export const WARP_MAX_PX = 700;
+const WARP_PER_PX_BEHIND = 0.6;
 
-const HEX_CREDIT_MS = 3500;    // a crash this soon after a hex counts as a takedown
-const HEX_IMMUNE_MS = 4000;    // after taking a hex you can't take another this soon…
-const RESPAWN_IMMUNE_MS = 3000; // …nor right after respawning (no pile-ons / crash loops)
 const SEND_EVERY_MS = 50;      // batch window for outgoing snapshots
 const HEARTBEAT_MS = 400;      // re-sync each owned bird at least this often
 const STALE_MS = 4000;         // no word for this long → treat as disconnected
-const FINISH_GRACE_MS = 30000; // race closes this long after the first finisher
-const HARD_CAP_MS = 180000;    // …or this long past the nominal race length
+const FINISH_GRACE_MS = 20000; // race closes this long after the first finisher
+const HARD_CAP_MS = 120000;    // …or this long past the nominal race length
 const MAX_BOTS = 12;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I/O — read aloud on a call
 const BOT_NAMES = [
@@ -96,7 +92,8 @@ const BOT_NAMES = [
 
 // The deployed relay when served from GitHub Pages; a local `wrangler dev` (in
 // relay/) everywhere else.
-const RELAY_URL = location.hostname.endsWith('github.io')
+// (A function, not a constant, so this module also loads in the Node tests.)
+const relayUrl = () => location.hostname.endsWith('github.io')
   ? 'wss://lpb-rooms.zancato-t.workers.dev'
   : `ws://${location.hostname || 'localhost'}:8787`;
 
@@ -116,7 +113,7 @@ class RelayChannel {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`${RELAY_URL}/ws/${this.code}`);
+      const ws = new WebSocket(`${relayUrl()}/ws/${this.code}`);
       this.ws = ws;
       let opened = false;
       ws.onopen = () => {
@@ -154,9 +151,6 @@ let handlers: Handlers | null = null;
 let checkTimer = 0, sendTimer = 0, trackTimer = 0;
 const dirty = new Set<string>();      // owned birds that flapped since the last send
 const lastSent = new Map<string, number>();
-const lastHexed = new Map<string, { from: string; kind: string; at: number }>(); // target → last hex
-const immuneUntil = new Map<string, number>();  // bird → performance.now() its hex immunity ends
-export const isImmune = (id: string) => (immuneUntil.get(id) ?? 0) > performance.now();
 
 const me = { id: crypto.randomUUID(), name: '', avatar: 'penguin', joinedAt: 0, wins: 0 };
 // Bots this client hosts. They ride in my presence meta so everyone lists them.
@@ -201,7 +195,6 @@ export async function joinRoom(code: string, name: string, avatar: string, h: Ha
   const ch = new RelayChannel(code, (event, payload) => {
     if (event === 'start') onStart(payload);
     else if (event === 'snaps') onSnaps(payload);
-    else if (event === 'hex') onHex(payload);
   }, onPresence);
   await ch.connect();
   channel = ch;
@@ -244,7 +237,7 @@ export function addBot() {
   const taken = new Set([...room.peers, ...myBots].map(p => p.name)); // presence lags clicks
   const name = BOT_NAMES.find(n => !taken.has(n)) ?? `Bot ${myBots.length + 1}`;
   const avatar = AVATAR_KEYS[Math.floor(Math.random() * AVATAR_KEYS.length)];
-  // Skill spread so a lobby of bots has a pack: some crash constantly, some rarely.
+  // Skill spread so a lobby of bots has a pack: some bonk constantly, some rarely.
   const skill = 0.35 + Math.random() * 0.6;
   myBots.push({ id: `bot-${crypto.randomUUID()}`, name, avatar, wins: 0, skill });
   track();
@@ -271,7 +264,7 @@ export function startRound(raceSec: number) {
 // ── Course ────────────────────────────────────────────────────────────────────
 export const raceState = (seed: number) => createState(seed, RACE_OPTS);
 
-// Distance a clean, boost-free run covers in `sec` seconds under RACE_OPTS pacing
+// Distance a clean, warp-free run covers in `sec` seconds under RACE_OPTS pacing
 // (mirrors step()'s ramp: +SPEED_UP_AMOUNT every SPEED_UP_TICKS, up to the cap).
 export function courseLength(sec: number): number {
   let speed = C.PIPE_SPEED + RACE_OPTS.startLevel * C.SPEED_UP_AMOUNT;
@@ -284,39 +277,60 @@ export function courseLength(sec: number): number {
   return dist;
 }
 
-// What floats in pipe n's gap: deterministic from the round seed + spawn index,
-// so every racer sees the same coins/orbs on the same pipes.
-export function itemFor(n: number): 'coin' | 'orb' | null {
-  if (n < 1) return null;
-  const r = mulberry32((room.seed ^ Math.imul(n, 0x9E3779B1)) >>> 0)();
-  return r < 0.45 ? 'coin' : r < 0.62 ? 'orb' : null;
+// Whether pipe n's gap holds a ⚡ coin: deterministic from the round seed + spawn
+// index, so every racer sees the same coins on the same pipes.
+export function hasCoin(n: number): boolean {
+  if (n < 1) return false;
+  return mulberry32((room.seed ^ Math.imul(n, 0x9E3779B1)) >>> 0)() < 0.15;   // ~1 in 7 gaps
 }
 
-// Call after each step: as a pipe's centre passes the bird, grab its item if the
-// bird threads the gap close to centre. Coins boost on the spot; orbs are returned
-// for the caller to bank as a hex charge. `seen` remembers pipes already judged.
-export function passItems(s: GameState, seen: WeakSet<Pipe>): 'coin' | 'orb' | null {
-  let got: 'coin' | 'orb' | null = null;
-  const dashing = s.activeEffects.some(e => e.defId === 'boost');
+// Call after each step for bird `id`: as a pipe's centre passes the bird, grab its
+// coin (→ rubber-band warp) if the bird threads the gap close to centre. `seen`
+// remembers pipes already judged. Returns whether a coin was grabbed.
+export function passItems(s: GameState, seen: WeakSet<Pipe>, id: string): boolean {
+  let got = false;
   for (const p of s.pipes) {
     if (seen.has(p) || p.x + C.PIPE_W / 2 > C.PLAYER_X) continue;
     seen.add(p);
-    if (dashing) continue;   // blasted past it: no afterburner chains
-    const item = itemFor(p.n);
-    if (!item || Math.abs(s.player.y - (p.topH + p.gap / 2)) > ITEM_GRAB_PX) continue;
-    if (item === 'coin') {
-      const boost = s.activeEffects.find(e => e.defId === 'boost');
-      const until = s.tick + defOf('boost')!.durationTicks;
-      if (boost) boost.expiryTick = until; else s.activeEffects.push({ defId: 'boost', expiryTick: until });
-    }
-    got = item;
+    if (!hasCoin(p.n) || Math.abs(s.player.y - (p.topH + p.gap / 2)) > ITEM_GRAB_PX) continue;
+    warp(s, warpDistance(id, s.dist));
+    got = true;
+    break;   // the warp just cleared the pipes we were iterating
   }
   return got;
 }
 
+// How far a coin throws a bird that has flown `dist`: WARP_MIN_PX plus a share of
+// its gap to the leader, capped. The leader (or a solo racer) gets the minimum.
+export function warpDistance(id: string, dist: number, now = performance.now()): number {
+  let lead = dist;
+  for (const b of room.birds.values()) {
+    if (b.id === id || b.st === 'gone') continue;
+    lead = Math.max(lead, b.st === 'fin' ? room.finishDist : extrapolate(b, now).dist);
+  }
+  return Math.min(WARP_MAX_PX, WARP_MIN_PX + (lead - dist) * WARP_PER_PX_BEHIND);
+}
+
+// Coin grab: jump `px` further along the course and clear the runway — the pipes in
+// that stretch vanish. Position, speed and control are untouched, so there's
+// nothing to recover from.
+export function warp(s: GameState, px: number) {
+  const r = C.PLAYER_SIZE / 2;
+  s.dist += px;
+  s.pipes = s.pipes.filter(p => p.x + C.PIPE_W <= C.PLAYER_X - r || p.x >= C.PLAYER_X + px);
+}
+
+// Hit a pipe / the floor / the ceiling: no stopping, just a stumble. The bonk
+// effect slows the world and lets you pass through for a moment, plus a little
+// hop so a floor hit bounces you back into play.
+export function bonk(s: GameState) {
+  s.player.vy = -4;
+  s.activeEffects.push({ defId: 'bonk', expiryTick: s.tick + defOf('bonk')!.durationTicks });
+}
+
 // ── Owned birds → wire ────────────────────────────────────────────────────────
 // Call every sim tick (and on state changes) for each bird this client owns.
-// `urgent` (a flap or a state change) gets it into the next 50ms batch; otherwise
+// `urgent` (a flap, bonk or finish) gets it into the next 50ms batch; otherwise
 // it rides the heartbeat.
 export function updateOwned(id: string, s: GameState, st: BirdState, urgent = false, finishMs = 0) {
   const b = room.birds.get(id);
@@ -328,16 +342,18 @@ export function updateOwned(id: string, s: GameState, st: BirdState, urgent = fa
     if (d?.sizeMul) size *= d.sizeMul;
     if (d?.speedMul) speed *= d.speedMul;
   }
-  const crashed = st === 'quiz' && b.st === 'fly';
-  if (st === 'fly' && b.st === 'quiz') immuneUntil.set(id, performance.now() + RESPAWN_IMMUNE_MS);
   Object.assign(b, {
     y: s.player.y, vy: s.player.vy, g, size, score: s.score,
     dist: s.dist, sp: s.pipeSpeed * speed, st, finishMs, at: performance.now(),
   });
-  if (st === 'fin' && !room.firstFinishAt) room.firstFinishAt = performance.now();
-  if (crashed) creditCrash(b);
   if (urgent) dirty.add(id);
-  if (st === 'fin') checkRound();
+  if (st === 'fin') finished(b);
+}
+
+// One of my birds hit something (counted for the 🤕 award on the results screen).
+export function noteBonk(id: string) {
+  const b = room.birds.get(id);
+  if (b) { b.bonks++; dirty.add(id); }
 }
 
 function flushSnaps() {
@@ -350,18 +366,9 @@ function flushSnaps() {
     if (!dirty.has(id) && now - (lastSent.get(id) ?? 0) < HEARTBEAT_MS) continue;
     dirty.delete(id);
     lastSent.set(id, now);
-    out.push({ id, st: b.st, y: b.y, vy: b.vy, g: b.g, size: b.size, score: b.score, d: b.dist, sp: b.sp, fm: b.finishMs });
+    out.push({ id, st: b.st, y: b.y, vy: b.vy, g: b.g, size: b.size, score: b.score, d: b.dist, sp: b.sp, fm: b.finishMs, bk: b.bonks });
   }
   if (out.length) channel.send('snaps', { round: room.round, birds: out });
-}
-
-// Throw a hex (from me or one of my bots) at another racer. Everyone gets it for
-// the kill feed; only the target's owner applies it.
-export function sendHex(from: string, to: string, kind: string) {
-  if (!channel || !room.roundLive) return;
-  const payload = { round: room.round, from, to, kind };
-  channel.send('hex', payload);
-  onHex(payload);
 }
 
 // ── Wire → state ──────────────────────────────────────────────────────────────
@@ -394,8 +401,6 @@ function onStart(p: { round: number; seed: number; ids: string[]; raceSec: numbe
   room.firstFinishAt = 0;
   dirty.clear();
   lastSent.clear();
-  lastHexed.clear();
-  immuneUntil.clear();
   // Snapshots don't flow during the countdown — start the staleness clock after it.
   room.raceStartAt = performance.now() + C.COUNTDOWN_SEC * 1000;
   for (const id of p.ids) {
@@ -404,63 +409,46 @@ function onStart(p: { round: number; seed: number; ids: string[]; raceSec: numbe
       id, name: peer?.name ?? '???', avatar: peer?.avatar ?? 'penguin',
       bot: !!peer?.bot, owner: peer?.owner ?? id,
       y: C.H / 2, vy: 0, g: 0, size: 1, score: 0, dist: 0, sp: 0, at: room.raceStartAt,
-      st: 'fly', finishMs: 0, takedowns: 0, dispY: C.H / 2,
+      st: 'fly', finishMs: 0, bonks: 0, dispY: C.H / 2,
     });
   }
   if (p.ids.includes(me.id)) handlers?.onStart(p.seed);
   handlers?.onLobby();
 }
 
-function onSnaps(p: { round: number; birds: Array<{ id: string; st: BirdState; y: number; vy: number; g: number; size: number; score: number; d: number; sp: number; fm: number }> }) {
+function onSnaps(p: { round: number; birds: Array<{ id: string; st: BirdState; y: number; vy: number; g: number; size: number; score: number; d: number; sp: number; fm: number; bk: number }> }) {
   if (p.round !== room.round) return;
   const now = performance.now();
   for (const s of p.birds) {
     if (owns(s.id)) continue;
     const b = room.birds.get(s.id);
     if (!b || b.st === 'fin') continue;   // a 'gone' racer who's talking again is back in (wifi blip / reconnect)
-    const crashed = s.st === 'quiz' && b.st === 'fly';
-    if (s.st === 'fly' && b.st === 'quiz') immuneUntil.set(b.id, now + RESPAWN_IMMUNE_MS);
-    Object.assign(b, { y: s.y, vy: s.vy, g: s.g, size: s.size, score: s.score, dist: s.d, sp: s.sp, st: s.st, finishMs: s.fm, at: now });
-    if (s.st === 'fin' && !room.firstFinishAt) room.firstFinishAt = now;
-    if (crashed) creditCrash(b);
+    Object.assign(b, { y: s.y, vy: s.vy, g: s.g, size: s.size, score: s.score, dist: s.d, sp: s.sp, st: s.st, finishMs: s.fm, bonks: s.bk ?? b.bonks, at: now });
+    if (s.st === 'fin') finished(b);
   }
   checkRound();
 }
 
-function onHex(p: { round: number; from: string; to: string; kind: string }) {
-  if (p.round !== room.round || !room.roundLive) return;
-  const from = room.birds.get(p.from), to = room.birds.get(p.to);
-  if (!from || !to || to.st !== 'fly' || isImmune(to.id)) return;
-  const now = performance.now();
-  lastHexed.set(to.id, { from: from.id, kind: p.kind, at: now });
-  immuneUntil.set(to.id, now + HEX_IMMUNE_MS);
-  handlers?.onHex(from, to, p.kind);
-}
-
-// A bird just crashed: if a hex hit it moments ago, that's the thrower's takedown.
-// Every client runs this on the same events, so tallies agree (modulo latency).
-function creditCrash(victim: Bird) {
-  const h = lastHexed.get(victim.id);
-  if (!h || performance.now() - h.at > HEX_CREDIT_MS) return;
-  lastHexed.delete(victim.id);
-  const from = room.birds.get(h.from);
-  if (!from) return;
-  from.takedowns++;
-  handlers?.onTakedown(from, victim, h.kind);
+// Someone crossed the line: announce it with their place, start the grace clock.
+function finished(b: Bird) {
+  if (!room.firstFinishAt) room.firstFinishAt = performance.now();
+  const place = [...room.birds.values()].filter(x => x.st === 'fin').length;
+  handlers?.onFinish(b, place);
+  checkRound();
 }
 
 // Drops racers who left or went silent (not for good: their next snapshot revives
-// them), and closes the race once nobody's racing,
-// FINISH_GRACE_MS after the winner, or at the hard cap.
+// them), and closes the race once nobody's racing, FINISH_GRACE_MS after the
+// winner, or at the hard cap.
 function checkRound() {
   if (!room.roundLive) return;
   const now = performance.now();
   const present = new Set(room.peers.map(p => p.id));
   for (const b of room.birds.values()) {
-    if (b.st === 'fin' || b.st === 'gone' || owns(b.id)) continue;
+    if (b.st !== 'fly' || owns(b.id)) continue;
     if (!present.has(b.id) || now - b.at > STALE_MS) b.st = 'gone';
   }
-  const racing = [...room.birds.values()].some(b => b.st === 'fly' || b.st === 'quiz');
+  const racing = [...room.birds.values()].some(b => b.st === 'fly');
   const graceOver = room.firstFinishAt && now - room.firstFinishAt > FINISH_GRACE_MS;
   const capped = now - room.raceStartAt > room.raceSec * 1000 + HARD_CAP_MS;
   if (racing && !graceOver && !capped) return;
@@ -468,7 +456,7 @@ function checkRound() {
   room.roundLive = false;
   room.lastResults = standings(now).map(b => ({
     id: b.id, name: b.name, avatar: b.avatar, bot: b.bot, finished: b.st === 'fin',
-    finishMs: b.finishMs, progress: progress(b, now), score: b.score, takedowns: b.takedowns,
+    finishMs: b.finishMs, progress: progress(b, now), score: b.score, bonks: b.bonks,
   }));
   // Everyone computes the same winner from (nearly) the same results; each client
   // bumps only the tallies it owns and republishes them via presence.
@@ -515,42 +503,4 @@ export function standings(now = performance.now()): Bird[] {
 
 export function remoteBirds(): Bird[] {
   return [...room.birds.values()].filter(b => b.id !== me.id);
-}
-
-// Hex target for a racer: whoever is just ahead on the course (the one you're
-// chasing), skipping anyone currently immune. The leader has nobody ahead, so they
-// get the one right behind.
-export function racerAhead(id: string, now = performance.now()): string | null {
-  const self = room.birds.get(id);
-  if (!self) return null;
-  const mine = progress(self, now);
-  const flying = [...room.birds.values()].filter(b => b.st === 'fly' && b.id !== id && !isImmune(b.id));
-  const ahead = flying.filter(b => progress(b, now) >= mine)
-    .sort((a, b) => progress(a, now) - progress(b, now))[0];
-  const behind = flying.filter(b => progress(b, now) < mine)
-    .sort((a, b) => progress(b, now) - progress(a, now))[0];
-  return (ahead ?? behind)?.id ?? null;
-}
-
-// ── Shared race mechanics (local player + bots) ───────────────────────────────
-// Put a crashed bird back on course as a clean restart: clear the pipes right around
-// it and centre it in the next gap at rest, then hand straight back to the player
-// with a short invincibility window to react in (soft floor/ceiling keep them in
-// the world meanwhile).
-const RESPAWN_CLEAR_PX = 350;
-export function respawn(s: GameState) {
-  const r = C.PLAYER_SIZE / 2;
-  s.pipes = s.pipes.filter(p => p.x + C.PIPE_W <= C.PLAYER_X - r || p.x >= C.PLAYER_X + RESPAWN_CLEAR_PX);
-  const next = s.pipes.find(p => p.x + C.PIPE_W > C.PLAYER_X - r);
-  s.player.y = next ? next.topH + next.gap / 2 : C.GROUND / 2;
-  s.player.vy = 0;
-  s.activeEffects = s.activeEffects.filter(e => e.defId !== 'boost'); // crashing kills momentum
-  s.activeEffects.push({ defId: 'respawn', expiryTick: s.tick + defOf('respawn')!.durationTicks });
-}
-
-// Sim-side half of a hex (the rest is render/input, owned by game.ts or bots.ts).
-export function applySimHex(s: GameState, kind: string) {
-  if (kind === 'yank') s.player.vy = 9;
-  const defId = kind === 'throttled' ? 'hex-throttled' : kind === 'bloat' ? 'hex-bloat' : null;
-  if (defId) s.activeEffects.push({ defId, expiryTick: s.tick + defOf(defId)!.durationTicks });
 }

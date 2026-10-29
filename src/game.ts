@@ -15,7 +15,6 @@ import {
 import { Clave } from './clave.ts';
 import * as MP from './multiplayer.ts';
 import * as Bots from './bots.ts';
-import { nextCrashQuestion } from './crash-quiz.ts';
 
 // ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -240,13 +239,9 @@ const AudioFX = (() => {
     unlock() { const a = ctxAudio(); if (a.state === 'suspended') a.resume(); },
     flap(key) { (FLAPS[key] || FLAPS.bird)(); },
     score() { beep(1200, 1600, 0.06, 'square', 0.13); },
-    // Multiplayer hexes: a zap when you throw one, a sad warble when one lands on you.
-    zap() { beep(1800, 200, 0.14, 'sawtooth', 0.12); },
-    hexed() { beep(300, 600, 0.12, 'square', 0.16); beep(600, 150, 0.25, 'square', 0.14, 0.1); },
-    denied() { beep(180, 160, 0.12, 'square', 0.14); },
-    boost() { beep(400, 1400, 0.18, 'sawtooth', 0.12); },
-    orb() { beep(700, 700, 0.06, 'triangle', 0.16); beep(1050, 1050, 0.1, 'triangle', 0.16, 0.07); },
-    takedown() { beep(150, 60, 0.3, 'sawtooth', 0.18); beep(900, 1800, 0.12, 'square', 0.1, 0.12); },
+    // Party races: a whoosh on a coin warp, a boing on a bonk, a fanfare at the line.
+    warp() { beep(300, 2400, 0.22, 'sawtooth', 0.12); beep(1200, 2400, 0.12, 'triangle', 0.1, 0.08); },
+    bonk() { beep(220, 90, 0.16, 'square', 0.18); beep(520, 380, 0.08, 'triangle', 0.12, 0.05); },
     finish() { [523, 659, 784, 1047].forEach((f, i) => beep(f, f, 0.14, 'square', 0.15, i * 0.1)); },
     // Descending minor jingle — that N64/PS1 "you died" sting.
     gameOver() {
@@ -2400,7 +2395,6 @@ const screens = {
   scores:   document.getElementById('scores-screen'),
   gameover: document.getElementById('gameover-screen'),
   mp:       document.getElementById('mp-screen'),
-  mpquiz:   document.getElementById('mp-quiz-screen'),
 };
 function showScreen(name) {
   Object.values(screens).forEach(s => s.classList.add('hidden'));
@@ -2614,23 +2608,11 @@ let puRoleSwapTheme: any = null; // random theme for role-assumption visual
 let puScreenShake = 0;           // remaining screen-shake frames
 
 // ── Multiplayer run state ──
-// Rounds are races (see multiplayer.ts). Crashing freezes your sim behind a quiz
-// card and a right answer respawns you where you fell; finishing ends your run and
-// drops you on the race screen to heckle (hex) whoever's still flying.
+// Rounds are party races (see multiplayer.ts): hitting anything bonks you (stumble,
+// fly on); finishing ends your run and shows the live standings until the race
+// closes.
 let mpRun = false;               // this run is a multiplayer round
-let mpPhase: 'fly' | 'quiz' | 'fin' = 'fly';
-
-// ── Hexes (multiplayer interference) ──
-// Thrown by other players; applied by the target to its own sim/render. Wall-clock
-// timers are fine here: MP runs are never replay-validated.
-const HEXES = {
-  yank:      { icon: '⬇', title: 'AccessDenied',        what: 'Yanked down!' },
-  throttled: { icon: '🐌', title: 'ThrottlingException', what: 'Weak flaps for 3s' },
-  bloat:     { icon: '🎈', title: 'PolicySizeExceeded',  what: 'Huge hitbox for 4s' },
-  failover:  { icon: '🙃', title: 'RegionFailover',      what: 'Screen upside down!' },
-  outage:    { icon: '🌑', title: 'us-east-1 outage',    what: 'Lights out' },
-  mfa:       { icon: '🔐', title: 'MFARequired',         what: 'Every other flap fails' },
-};
+let mpPhase: 'fly' | 'fin' = 'fly';
 
 // What each pickup / timed effect does, in a few words: shown next to the bird on
 // pickup and as the label on its HUD timer bar. Covers solo power-ups too.
@@ -2641,28 +2623,18 @@ const PICKUP_INFO: { [id: string]: { name: string; what: string } } = {
   'role-assumption': { name: '⇄ ROLE SWAP',     what: 'Wider gaps + disguise' },
   'elb':             { name: '☁ ELB',           what: 'Low gravity' },
   'star':            { name: '★ STAR',          what: 'Invincible, smash pipes' },
-  'boost':           { name: '⚡ AFTERBURNER',   what: 'Autopilot dash: sit back' },
-  'orb':             { name: '🔮 +1 HEX',        what: 'Press E: curse the racer ahead' },
-  'respawn':         { name: '⛑ RESPAWNED',     what: 'Invincible for 2s' },
-  'hex-throttled':   { name: '🐌 THROTTLED',     what: 'Weak flaps' },
-  'hex-bloat':       { name: '🎈 BLOATED',       what: 'Huge hitbox' },
+  'warp':            { name: '⚡ WARP',          what: 'Skipped ahead!' },
+  'bonk':            { name: '💥 BONK!',         what: 'Shake it off, keep flapping' },
 };
-const HECKLE_CD_MS = 4000;       // finished racers heckle on a cooldown (racers spend orbs)
-let hexReadyAt = 0;
-let hexCharges = 0;              // 🔮 orbs banked from gaps (racing hexes cost one each)
-let mpSeen = new WeakSet<any>(); // pipes whose gap item has been judged (MP.passItems)
+let mpSeen = new WeakSet<any>(); // pipes whose coin has been judged (MP.passItems)
 let pickupPop: { name: string; what: string; color: string; at: number } | null = null;
+let raceFeed: Array<{ text: string; at: number }> = [];  // "🏁 bob finished 2nd"
 
 // Pop the "what did I just get" label next to the bird.
 function showPickup(id: string, color = puColor(id)) {
   const info = PICKUP_INFO[id];
   if (info) pickupPop = { ...info, color, at: performance.now() };
 }
-let hexFlipUntil = 0, hexBlackoutUntil = 0, hexMfaUntil = 0;
-let mfaEaten = false, mfaPromptAt = -1e9;
-let hexToast: { icon: string; title: string; what: string; from: string; at: number } | null = null;
-let hexFeed: Array<{ text: string; at: number }> = [];
-const hexMarks = new Map<string, { icon: string; at: number }>(); // bird id → last hex taken
 
 // mpSeed: a multiplayer round's shared seed. Races use MP.raceState (race pacing,
 // power-up rng split off so the course is identical for everyone).
@@ -2670,13 +2642,10 @@ function initGame(playerName, mpSeed?: number) {
   currentPlayer = playerName;
   mpRun = mpSeed != null;
   mpPhase = 'fly';
-  hexCharges = 0;
   mpSeen = new WeakSet();
   pickupPop = null;
-  hexReadyAt = 0;
-  clearHexes();
-  hexFeed = [];
-  hexMarks.clear();
+  raceFeed = [];
+  warpFxAt = bonkFxAt = -1e9;
   // seed drives all gameplay-affecting randomness; createState seeds the core PRNG.
   seed = mpSeed ?? crypto.getRandomValues(new Uint32Array(1))[0];
   gs = mpRun ? MP.raceState(seed) : createState(seed);
@@ -3205,8 +3174,7 @@ function puColor(id: string): string {
     case 'role-assumption': return '#ec4899'; // pink
     case 'elb':             return '#06b6d4'; // cyan
     case 'star':            return '#ef4444'; // red
-    case 'hex-throttled':   return '#a16207'; // mud
-    case 'hex-bloat':       return '#c026d3'; // fuchsia
+    case 'bonk':            return '#fb7185'; // rose
     default:                return '#888';
   }
 }
@@ -3219,8 +3187,7 @@ function puIcon(id: string): string {
     case 'role-assumption': return 'R';
     case 'elb':             return 'E';
     case 'star':            return '!';
-    case 'hex-throttled':   return '🐌';
-    case 'hex-bloat':       return '🎈';
+    case 'bonk':            return '💥';
     default:                return '?';
   }
 }
@@ -3340,8 +3307,7 @@ function drawHUD() {
     ctx.fillText(`ROOM ${MP.room.code}    •    ${elapsed}s    •    ${pct}% COMPLETE`, C.W / 2, y);
     ctx.textAlign = 'right';
     ctx.fillStyle = '#bce9ff';
-    const boost = gs.activeEffects.some(e => e.defId === 'boost') ? 'BOOST  •  ' : '';
-    ctx.fillText(`${boost}[E] HEX ×${hexCharges}    SPEED ${sl}`, C.W - 22, y);
+    ctx.fillText(`SPEED ${sl}`, C.W - 22, y);
     ctx.fillStyle = '#72e6c2';
     ctx.fillRect(0, C.H - 3, C.W * pct / 100, 3);
   } else {
@@ -3369,7 +3335,7 @@ function drawGhosts(now) {
     const theme = THEMES[b.avatar] || THEMES.penguin;
     const s = C.PLAYER_SIZE * C.SPRITE_SCALE * b.size;
     ctx.save();
-    ctx.globalAlpha = b.st === 'quiz' ? 0.35 : 0.65;
+    ctx.globalAlpha = 0.65;
     ctx.translate(x, b.dispY);
     ctx.rotate(Math.max(-0.4, Math.min(0.4, e.vy * 0.05)));
     if (theme.img?.complete) ctx.drawImage(theme.img, -s / 2, -s / 2, s, s);
@@ -3378,9 +3344,7 @@ function drawGhosts(now) {
     ctx.globalAlpha = 1;
     ctx.font = `8px ${activeStyle().fontBody}`;
     ctx.textAlign = 'center';
-    const mark = hexMarks.get(b.id);
-    const badge = b.st === 'quiz' ? ' 📝' : mark && now - mark.at < 2500 ? ` ${mark.icon}` : '';
-    const label = b.name.slice(0, 20) + badge;
+    const label = b.name.slice(0, 20);
     const labelY = b.dispY - s / 2 - 10;
     const labelW = ctx.measureText(label).width + 16;
     ctx.fillStyle = '#101c30';
@@ -3404,15 +3368,14 @@ function drawFinishLine() {
   }
 }
 
-// Gap items: gold ⚡ coins (thread the gap centre for an afterburner dash) and purple 🔮 orbs
-// (a hex charge). Drawn until the pipe's centre passes the bird and it's judged.
+// Gap coins: thread the gap centre to warp ahead. Drawn until the pipe's centre
+// passes the bird and it's judged.
 function drawItems(now) {
   for (const p of gs.pipes) {
-    const item = MP.itemFor(p.n);
-    if (!item || mpSeen.has(p)) continue;
+    if (!MP.hasCoin(p.n) || mpSeen.has(p)) continue;
     const x = p.x + C.PIPE_W / 2, y = p.topH + p.gap / 2 + Math.sin(now / 200 + p.n) * 4;
     ctx.save();
-    ctx.fillStyle = item === 'coin' ? '#facc15' : '#a855f7';
+    ctx.fillStyle = '#facc15';
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -3422,17 +3385,30 @@ function drawItems(now) {
     ctx.font = `bold 15px ${activeStyle().fontDisplay}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = item === 'coin' ? '#7c2d12' : '#fff';
-    ctx.fillText(item === 'coin' ? '⚡' : '✦', x, y + 1);
+    ctx.fillStyle = '#7c2d12';
+    ctx.fillText('⚡', x, y + 1);
     ctx.restore();
   }
 }
 
-// Afterburner speed lines across the screen.
-function drawBoostFx(now) {
-  if (gs.activeEffects.some(e => e.defId === 'boost')) {
+// Warp: a white flash fading into a burst of speed lines (render-only, ~0.6s);
+// bonk: a quick red flash.
+const WARP_FX_MS = 600;
+let warpFxAt = -1e9;
+let bonkFxAt = -1e9;   // red flash on a bonk
+function drawWarpFx(now) {
+  const tb = (now - bonkFxAt) / 300;
+  if (tb < 1) {
+    ctx.fillStyle = `rgba(251,113,133,${0.3 * (1 - tb)})`;
+    ctx.fillRect(0, 0, C.W, C.GROUND);
+  }
+  const t = (now - warpFxAt) / WARP_FX_MS;
+  if (t < 1) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillStyle = `rgba(255,255,255,${0.45 * Math.max(0, 1 - t * 3)})`;
+    ctx.fillRect(0, 0, C.W, C.GROUND);
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
     ctx.lineWidth = 3;
     for (let i = 0; i < 14; i++) {
       const y = (hash01(i * 7.3) * C.GROUND) | 0;
@@ -3476,7 +3452,7 @@ function drawPickupLabel(now) {
 function raceLabel(b: MP.Bird, now: number): string {
   if (b.st === 'fin') return `🏁 ${(b.finishMs / 1000).toFixed(1)}s`;
   if (b.st === 'gone') return 'left';
-  return `${Math.floor(MP.progress(b, now) * 100)}%${b.st === 'quiz' ? ' 📝' : ''}`;
+  return `${Math.floor(MP.progress(b, now) * 100)}%`;
 }
 
 // Live standings, top-left (power-up bars own the top-right).
@@ -3518,16 +3494,19 @@ function stepOnce() {
   const flapped = pendingFlap;
   if (flapped) { flapTicks.push(gs.tick); pendingFlap = false; }
   const result: StepResult = step(gs, flapped);
-  if (mpRun && !result.dead) {
-    const item = MP.passItems(gs, mpSeen);
-    const now = performance.now();
-    if (item === 'coin') { showPickup('boost', '#facc15'); AudioFX.boost(); }
-    if (item === 'orb' && hexCharges < MP.MAX_HEX_CHARGES) {
-      hexCharges++;
-      showPickup('orb', '#d8b4fe');
-      AudioFX.orb();
+  if (mpRun) {
+    // Party race: a crash is a bonk — stumble and fly on, never a game over.
+    if (result.dead) {
+      MP.bonk(gs);
+      MP.noteBonk(MP.myId());
+      showPickup('bonk', '#fb7185');
+      bonkFxAt = performance.now();
+      puScreenShake = 8;
+      AudioFX.bonk();
     }
-    MP.updateOwned(MP.myId(), gs, 'fly', flapped);
+    if (MP.passItems(gs, mpSeen, MP.myId())) { showPickup('warp', '#facc15'); warpFxAt = performance.now(); AudioFX.warp(); }
+    MP.updateOwned(MP.myId(), gs, 'fly', flapped || result.dead);
+    return false;
   }
   if (result.scored) AudioFX.score();
 
@@ -3570,12 +3549,11 @@ function loop(now) {
   drawPipeDestruction();
   if (mpRun) { drawFinishLine(); drawItems(now); drawGhosts(now); }
   try { drawPlayer(); } catch (e) { console.error('[drawPlayer]', e); }
-  if (mpRun) drawBoostFx(now);
-  if (mpRun) drawHexWorld(now);
+  if (mpRun) drawWarpFx(now);
   drawPickupLabel(now);
   drawHUD();
   drawPowerUpHUD();
-  if (mpRun) { drawStandings(now); drawHexOverlay(now); }
+  if (mpRun) { drawStandings(now); drawRaceFeed(now); }
 
   // ── Countdown phase: freeze physics, show number ──
   // Countdown is purely cosmetic, so wall-clock timing is fine here.
@@ -3596,8 +3574,7 @@ function loop(now) {
 
   // Advance the parallax scroll with the world. Render-only: tied to pipeSpeed so
   // scenery tracks pipe motion, but never fed into physics/replay.
-  const frozen = mpRun && mpPhase === 'quiz';   // sim paused behind the quiz card
-  if (!frozen) bgScroll += gs.pipeSpeed;
+  bgScroll += gs.pipeSpeed;
 
   // ── Active play: fixed-timestep accumulator ──
   // Advance physics in fixed TICK_MS steps regardless of monitor refresh rate,
@@ -3605,14 +3582,9 @@ function loop(now) {
   if (lastFrameTime === null) lastFrameTime = now;
   acc += Math.min(now - lastFrameTime, MAX_FRAME_MS); // clamp after tab stalls
   lastFrameTime = now;
-  if (frozen) acc = 0;
 
   while (acc >= TICK_MS) {
-    if (stepOnce()) {
-      if (!mpRun) { endGame(); return; }
-      mpCrash();
-      break;
-    }
+    if (stepOnce()) { endGame(); return; }   // never true in a race: crashes bonk
     acc -= TICK_MS;
     if (mpRun && gs.dist >= MP.room.finishDist) { mpFinish(); return; }
   }
@@ -3720,12 +3692,6 @@ async function endGame() {
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 function flap() {
   if (mpRun && mpPhase !== 'fly') return;
-  // MFARequired hex: every other flap is eaten by an imaginary MFA prompt.
-  if (performance.now() < hexMfaUntil && (mfaEaten = !mfaEaten)) {
-    mfaPromptAt = performance.now();
-    AudioFX.denied();
-    return;
-  }
   // Queue the flap for the next physics tick, which applies it to the core AND
   // logs that tick into flapTicks (see stepOnce). Routing input through the tick
   // boundary keeps browser play byte-identical to the server replay.
@@ -3769,8 +3735,6 @@ function devInjectPowerUp(idx: number) {
 if (window.DEV_MODE) {
   (window as any).devPU = devInjectPowerUp; // also accessible from console
   (window as any).devState = () => gs;      // live sim state, for console poking + test autopilots
-  (window as any).devHex = (kind: string) => applyHex(kind, 'devtools'); // MP round only
-  (window as any).devQuiz = () => quizQ;    // current crash question (tests answer it on purpose)
   (window as any).devRoom = () => MP.room;  // race state, for console + race tests
   const panel = document.createElement('div');
   panel.id = 'dev-pu-panel';
@@ -3795,11 +3759,6 @@ if (window.DEV_MODE) {
 }
 
 document.addEventListener('keydown', e => {
-  if (mpRun && !e.repeat) {
-    if (e.code === 'KeyE' && gameActive && mpPhase === 'fly') throwHex(MP.racerAhead(MP.myId()));
-    if (e.code === 'Space' && mpPhase === 'fin') throwHex(leaderRival());
-    if (mpPhase === 'quiz') quizKey(e);
-  }
   // e.repeat is true for OS auto-repeat while the key is held — ignore it so one
   // physical press = exactly one flap (must release + press again to flap again).
   if (e.code === 'Space' && !e.repeat && !overlay.classList.contains('hidden') === false) flap();
@@ -3977,200 +3936,17 @@ const btnBotDel  = document.getElementById('btn-mp-bot-remove') as HTMLButtonEle
 const urlRoom = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
 if (urlRoom) btnMp.textContent = `👥 Join ${urlRoom}`;
 
-// ── Hexes ──
-function clearHexes() {
-  hexFlipUntil = hexBlackoutUntil = hexMfaUntil = 0;
-  hexToast = null;
-  canvas.style.transform = '';
-}
-
-function leaderRival(): string | null {
-  return MP.standings().find(b => b.st === 'fly' && b.id !== MP.myId() && !MP.isImmune(b.id))?.id ?? null;
-}
-
-// Racing: spend a banked 🔮 on the racer just ahead. Finished: heckle on a cooldown.
-function throwHex(target: string | null) {
-  const now = performance.now();
-  if (!target || !MP.room.roundLive || now < MP.room.raceStartAt) return;
-  if (mpPhase === 'fin') {
-    if (now < hexReadyAt) return;
-    hexReadyAt = now + HECKLE_CD_MS;
-  } else {
-    if (hexCharges <= 0) return;
-    hexCharges--;
-  }
-  MP.sendHex(MP.myId(), target, MP.HEX_KINDS[Math.floor(Math.random() * MP.HEX_KINDS.length)]);
-  AudioFX.zap();
-}
-
-// A hex landed on me. Sim hexes go through MP.applySimHex (shared with bots); the
-// rest are render/input-only.
-function applyHex(kind: string, from: string) {
-  if (!mpRun || !gameActive || mpPhase !== 'fly') return;
-  const now = performance.now();
-  MP.applySimHex(gs, kind);
-  switch (kind) {
-    case 'yank':     puScreenShake = 6; break;
-    case 'failover': hexFlipUntil = now + 4000; break;
-    case 'outage':   hexBlackoutUntil = now + 3500; break;
-    case 'mfa':      hexMfaUntil = now + 4000; mfaEaten = false; break;
-  }
-  hexToast = { ...HEXES[kind], from, at: now };
-  AudioFX.hexed();
-}
-
-// World-layer hex visuals (under the HUD): barrel roll, blackout, MFA prompt.
-function drawHexWorld(now) {
-  // RegionFailover: the whole canvas does a CSS barrel roll (rotate, not flip, so
-  // pipes come from the left too). Toggled only on change to keep the transition.
-  const flip = now < hexFlipUntil ? 'rotate(180deg)' : '';
-  if (canvas.style.transform !== flip) {
-    canvas.style.transition = 'transform 0.45s ease-in-out';
-    canvas.style.transform = flip;
-  }
-  if (mpPhase !== 'fly') return;
-  if (now < hexBlackoutUntil) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.92)';
-    ctx.beginPath();
-    ctx.rect(0, 0, C.W, C.GROUND);
-    ctx.arc(C.PLAYER_X, gs.player.y, 150, 0, Math.PI * 2);
-    ctx.fill('evenodd');
-    ctx.font = `12px ${activeStyle().fontDisplay}`;
-    ctx.textAlign = 'center';
-    strokedText('Service health: us-east-1 🔥', C.W / 2, 140, 3);
-    ctx.restore();
-  }
-  if (now < hexMfaUntil) {
-    const fresh = now - mfaPromptAt < 500;
-    ctx.save();
-    ctx.font = `${fresh ? 14 : 10}px ${activeStyle().fontDisplay}`;
-    ctx.textAlign = 'left';
-    strokedText(fresh ? '🔐 Enter MFA code: ______' : '🔐 MFA required', C.PLAYER_X - 40, gs.player.y - 50, 3);
-    ctx.restore();
-  }
-}
-
-// Screen-layer hex visuals: kill feed (top-centre, under the race map) + the
-// "you got hexed" toast.
-function drawHexOverlay(now) {
+// Race feed (top-centre, under the race map): who just crossed the line.
+function drawRaceFeed(now) {
   ctx.save();
   ctx.textAlign = 'center';
-  ctx.font = `10px ${activeStyle().fontDisplay}`;
-  hexFeed = hexFeed.filter(f => now - f.at < 4500);
-  hexFeed.forEach((f, i) => {
+  ctx.font = `12px ${activeStyle().fontDisplay}`;
+  raceFeed = raceFeed.filter(f => now - f.at < 4500);
+  raceFeed.forEach((f, i) => {
     ctx.globalAlpha = Math.min(1, (4500 - (now - f.at)) / 600);
-    strokedText(f.text, C.W / 2, 96 + i * 18, 3);
+    strokedText(f.text, C.W / 2, 96 + i * 20, 3);
   });
-  if (hexToast && now - hexToast.at < 1800) {
-    const t = (now - hexToast.at) / 1800;
-    ctx.globalAlpha = t < 0.8 ? 1 : (1 - t) / 0.2;
-    ctx.translate(C.W / 2, C.GROUND * 0.32);
-    ctx.rotate(Math.sin(now / 60) * 0.06);
-    ctx.scale(1 + Math.max(0, 0.25 - t) * 2, 1 + Math.max(0, 0.25 - t) * 2);
-    ctx.font = `30px ${activeStyle().fontDisplay}`;
-    strokedText(`${hexToast.icon} ${hexToast.title}`, 0, 0, 7);
-    ctx.font = `12px ${activeStyle().fontDisplay}`;
-    strokedText(`${hexToast.what} · courtesy of ${hexToast.from}`, 0, 32, 4);
-  }
   ctx.restore();
-}
-
-// ── Crash → quiz → respawn ──
-// Crashing freezes your sim and puts up one of the Clave AWS questions. Right
-// answer: respawn in the next gap with a short invincibility window. Wrong: read
-// the explanation through a lockout, then get a different question. Everyone else
-// keeps flying, so each crash costs you real race time.
-const QUIZ_LOCK_MS = 1500;
-const QUIZ_TIME_MS = 8000;       // answer within this or it counts as wrong
-const quizTimer = document.getElementById('mp-quiz-timer');
-let quizDeadline = 0;
-const quizPrompt = document.getElementById('mp-quiz-prompt');
-const quizKind   = document.getElementById('mp-quiz-kind');
-const quizOpts   = document.getElementById('mp-quiz-opts');
-const quizMsg    = document.getElementById('mp-quiz-msg');
-let quizQ: any = null;
-let quizLocked = false;
-
-function nextQuestion() {
-  quizQ = nextCrashQuestion();
-  quizLocked = false;
-  quizPrompt.textContent = quizQ.prompt;
-  quizKind.textContent = 'keys 1 · 2 · 3';
-  quizOpts.innerHTML = quizQ.options
-    .map((o, i) => `<button class="mp-quiz-opt" data-i="${i}"><small>${i + 1}</small>${escapeHtml(o.text)}</button>`).join('');
-  quizMsg.textContent = '';
-  quizMsg.className = 'mp-quiz-msg';
-  // Timer bar: restart the CSS transition from full to empty.
-  quizDeadline = performance.now() + QUIZ_TIME_MS;
-  quizTimer.style.transition = 'none';
-  quizTimer.style.width = '100%';
-  void quizTimer.offsetWidth;
-  quizTimer.style.transition = `width ${QUIZ_TIME_MS}ms linear`;
-  quizTimer.style.width = '0%';
-}
-
-// Ran out the clock → same as a wrong answer.
-setInterval(() => {
-  if (mpPhase === 'quiz' && !quizLocked && quizDeadline && performance.now() > quizDeadline) checkAnswer([]);
-}, 200);
-
-function pickOption(i: number) {
-  if (quizLocked || !quizQ?.options[i]) return;
-  checkAnswer([i]);
-}
-
-function checkAnswer(selected: number[]) {
-  if (quizLocked) return;
-  const correct = quizQ.options.map((o, i) => o.correct ? i : -1).filter(i => i >= 0);
-  const ok = selected.length === correct.length && selected.every(i => correct.includes(i));
-  quizLocked = true;
-  quizTimer.style.transition = 'none';
-  if (ok) {
-    quizMsg.textContent = '✅ GO!';
-    quizMsg.className = 'mp-quiz-msg ok';
-    setTimeout(mpRespawn, 450);
-    return;
-  }
-  AudioFX.denied();
-  // Flash the right answer, then straight on to another card.
-  quizOpts.children[correct[0]]?.classList.add('right');
-  if (selected.length) quizOpts.children[selected[0]]?.classList.add('wrong');
-  quizMsg.textContent = selected.length ? '❌ Nope' : '⏰ Too slow';
-  quizMsg.className = 'mp-quiz-msg bad';
-  setTimeout(() => { if (mpPhase === 'quiz') nextQuestion(); }, QUIZ_LOCK_MS);
-}
-
-function quizKey(e: KeyboardEvent) {
-  const n = /^Digit([1-9])$/.exec(e.code)?.[1];
-  if (n) pickOption(+n - 1);
-}
-
-quizOpts.addEventListener('click', e => {
-  const btn = (e.target as HTMLElement).closest('.mp-quiz-opt') as HTMLElement;
-  if (btn) pickOption(+btn.dataset.i);
-});
-
-function mpCrash() {
-  mpPhase = 'quiz';
-  clearHexes();
-  puScreenShake = 0;
-  AudioFX.gameOver();
-  MP.updateOwned(MP.myId(), gs, 'quiz', true);
-  showScreen('mpquiz');   // before nextQuestion: the timer-bar transition needs a visible element
-  nextQuestion();
-}
-
-function mpRespawn() {
-  if (mpPhase !== 'quiz' || !MP.room.roundLive) return;
-  MP.respawn(gs);
-  mpPhase = 'fly';
-  pendingFlap = false;
-  lastFrameTime = null;
-  acc = 0;
-  showScreen(null);
-  showPickup('respawn', '#86efac');
-  MP.updateOwned(MP.myId(), gs, 'fly', true);
 }
 
 function mpFinish() {
@@ -4178,8 +3954,6 @@ function mpFinish() {
   MP.updateOwned(MP.myId(), gs, 'fin', true, performance.now() - MP.room.raceStartAt);
   cancelAnimationFrame(animId);
   gameActive = false;
-  clearHexes();
-  hexReadyAt = 0;            // first heckle is free
   (document.getElementById('gfx-toggle') as HTMLElement).style.display = '';
   AudioFX.finish();
   startIdle();
@@ -4189,8 +3963,7 @@ function mpFinish() {
 
 // ── Race map ──
 // A track strip pinned to the top of the viewport while a race is live: every racer
-// as an avatar pin at their course position, 📝 while quizzing, parked on the 🏁
-// once done. Pins alternate above/below the line so a bunched pack stays readable.
+// as an avatar pin at their course position, parked on the 🏁 once done. Pins alternate above/below the line so a bunched pack stays readable.
 const mapPins = new Map<string, HTMLElement>();
 function renderMap() {
   const live = MP.inRoom() && MP.room.roundLive;
@@ -4213,10 +3986,9 @@ function renderMap() {
     const theme = THEMES[b.avatar] || THEMES.penguin;
     const img = pin.querySelector('img');
     if (img.getAttribute('src') !== theme.img.src) img.src = theme.img.src;
-    pin.querySelector('span').textContent = `${b.st === 'quiz' ? '📝' : b.st === 'fin' ? '🏁' : ''}${b.name}`;
+    pin.querySelector('span').textContent = `${b.st === 'fin' ? '🏁' : ''}${b.name}`;
     pin.style.left = `${MP.progress(b, now) * 100}%`;
     pin.classList.toggle('below', i % 2 === 1);
-    pin.classList.toggle('quiz', b.st === 'quiz');
     pin.classList.toggle('gone', b.st === 'gone');
   });
   if (mpPhase === 'fin' && !gameActive) renderRaceView();
@@ -4234,40 +4006,35 @@ function avatarImg(key: string) {
 
 function resultLabel(r: MP.RoundResult) {
   const place = r.finished ? `🏁 ${(r.finishMs / 1000).toFixed(1)}s` : `${Math.floor(r.progress * 100)}%`;
-  return r.takedowns ? `${place} · 💥${r.takedowns}` : place;
+  return r.bonks ? `${place} · 💥${r.bonks}` : place;
 }
 
-// Side award: most crashes caused by your hexes.
-function chaosMonkey(results: MP.RoundResult[]) {
-  const top = [...results].sort((a, b) => b.takedowns - a.takedowns)[0];
-  return top?.takedowns ? ` 🐒 Chaos Monkey: ${top.name} (${top.takedowns} takedown${top.takedowns > 1 ? 's' : ''})` : '';
+// Booby prize: whoever bonked the most.
+function mostBonks(results: MP.RoundResult[]) {
+  const top = [...results].sort((a, b) => b.bonks - a.bonks)[0];
+  return top?.bonks ? ` 🤕 Most bonks: ${top.name} (${top.bonks})` : '';
 }
 
-// While you're finished and others are still racing: live standings with a hex
-// button on every racer still flying. Percentages tick several times a second, so
-// rows are only rebuilt when their order/buttons change and otherwise patched in
-// place — a rebuild between mousedown and mouseup would swallow the click.
+// While you're finished and others are still racing: live standings. Rows are
+// only rebuilt when the order changes and otherwise patched in place.
 let raceRowsKey = '';
 function renderRaceView() {
   const now = performance.now();
   const rows = MP.standings(now);
   const mine = rows.findIndex(b => b.id === MP.myId());
   const meBird = rows[mine];
-  const cd = Math.ceil((hexReadyAt - now) / 1000);
   document.getElementById('mp-race-status').textContent = meBird
-    ? `🏁 You finished #${mine + 1} in ${(meBird.finishMs / 1000).toFixed(1)}s. Now heckle the stragglers.`
+    ? `🏁 You finished #${mine + 1} in ${(meBird.finishMs / 1000).toFixed(1)}s!`
     : '';
-  document.getElementById('mp-race-hint').textContent =
-    cd > 0 ? `Hex recharging… ${cd}s` : 'SPACE: hex the leader · or pick a victim · hex-caused crashes count for 🐒 Chaos Monkey';
-  const canHex = (b: MP.Bird) => b.st === 'fly' && b.id !== MP.myId() && !MP.isImmune(b.id);
-  const key = rows.map(b => `${b.id}:${canHex(b)}`).join('|') + `|${cd > 0}`;
+  document.getElementById('mp-race-hint').textContent = 'Waiting for the others to cross the line…';
+  const key = rows.map(b => b.id).join('|');
   if (key !== raceRowsKey) {
     raceRowsKey = key;
     mpRaceRows.innerHTML = rows.map(b => `<div class="mp-row${b.id === MP.myId() ? ' me' : ''}">
         ${avatarImg(b.avatar)}
         <span class="mp-name"></span>
         <span class="mp-score"></span>
-        ${canHex(b) ? `<button class="mp-hex-btn" data-id="${b.id}" ${cd > 0 ? 'disabled' : ''}>🪄 Hex</button>` : '<span></span>'}
+        <span></span>
       </div>`).join('');
   }
   rows.forEach((b, i) => {
@@ -4276,10 +4043,6 @@ function renderRaceView() {
     row.querySelector('.mp-score').textContent = raceLabel(b, now);
   });
 }
-mpRaceRows.addEventListener('click', e => {
-  const btn = (e.target as HTMLElement).closest('.mp-hex-btn') as HTMLElement;
-  if (btn) throwHex(btn.dataset.id);
-});
 
 function renderLobby() {
   const inRoom = MP.inRoom();
@@ -4296,8 +4059,8 @@ function renderLobby() {
   const w = last[0];
   mpStatus.textContent =
       MP.room.roundLive ? `Race ${MP.room.round} in progress — you're in the next one.`
-    : w?.finished ? `Race ${MP.room.round}: ${w.name} wins in ${(w.finishMs / 1000).toFixed(1)}s! 🏆${chaosMonkey(last)}`
-    : w ? `Race ${MP.room.round}: time's up — ${w.name} got furthest (${Math.floor(w.progress * 100)}%).${chaosMonkey(last)}`
+    : w?.finished ? `Race ${MP.room.round}: ${w.name} wins in ${(w.finishMs / 1000).toFixed(1)}s! 🏆${mostBonks(last)}`
+    : w ? `Race ${MP.room.round}: time's up — ${w.name} got furthest (${Math.floor(w.progress * 100)}%).${mostBonks(last)}`
     : host ? 'You are the host. Add bots, pick a length, start when everyone is in.'
     : 'Waiting for the host to start…';
   for (const el of [btnMpStart, btnBotAdd, btnBotDel, mpLength]) el.classList.toggle('hidden', !host);
@@ -4327,29 +4090,13 @@ const mpHandlers: MP.Handlers = {
   onLobby: () => { if (!gameActive) renderLobby(); },
   onStart: (roundSeed) => {
     AudioFX.unlock();
-    hexFeed = [];
     startGame(currentPlayer, roundSeed);
     Bots.start(roundSeed);
   },
-  onHex: (from, to, kind) => {
-    const h = HEXES[kind];
-    if (!h) return;
-    const now = performance.now();
-    hexFeed.push({ text: `${from.name} ⇢ ${to.name}  ${h.icon} ${h.title}`, at: now });
-    if (hexFeed.length > 4) hexFeed.shift();
-    hexMarks.set(to.id, { icon: h.icon, at: now });
-    if (to.id === MP.myId()) applyHex(kind, from.name);
-    else if (Bots.owns(to.id)) Bots.hex(to.id, kind);
-  },
-  onTakedown: (from, to, kind) => {
-    const h = HEXES[kind];
-    const now = performance.now();
-    hexFeed.push({ text: `💥 ${from.name}'s ${h?.title ?? 'hex'} took out ${to.name}`, at: now });
-    if (hexFeed.length > 4) hexFeed.shift();
-    if (from.id === MP.myId()) {
-      AudioFX.takedown();
-      if (gameActive) pickupPop = { name: '💥 TAKEDOWN', what: `Your hex wrecked ${to.name}`, color: '#f87171', at: now };
-    }
+  onFinish: (b, place) => {
+    const nth = ['1st 🥇', '2nd 🥈', '3rd 🥉'][place - 1] ?? `#${place}`;
+    raceFeed.push({ text: `🏁 ${b.name} finished ${nth}`, at: performance.now() });
+    if (raceFeed.length > 4) raceFeed.shift();
   },
   onRoundEnd: () => {
     Bots.stop();
@@ -4362,7 +4109,6 @@ const mpHandlers: MP.Handlers = {
         startIdle();
       }
       mpPhase = 'fly';
-      clearHexes();
       renderLobby();
       if (MP.inRoom()) showScreen('mp');
     }, 1200);

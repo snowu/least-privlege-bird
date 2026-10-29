@@ -74,7 +74,6 @@ export interface PowerUpDef {
   sizeMul?: number;
   invincible?: boolean;
   destroysPipes?: boolean;
-  autopilot?: boolean;     // steer through gap centres; input ignored (race afterburner)
   weight?: number;
   minSpeedLevel?: number;
 }
@@ -89,14 +88,12 @@ export const POWERUP_DEFS: readonly PowerUpDef[] = [
 ];
 
 // ── Multiplayer-only effects ────────────────────────────────────────────────
-// Hexes other racers throw at you, the respawn grace after a crash quiz, and the
-// coin boost (see multiplayer.ts). Never spawned as pickups and kept out of
-// POWERUP_DEFS, so spawn weights — and every single-player replay — are untouched.
+// The party-race bonk (see multiplayer.ts): hitting something makes you stumble —
+// world in slow-mo, pass-through — then you fly on. Never spawned as a pickup and
+// kept out of POWERUP_DEFS, so spawn weights — and every single-player replay —
+// are untouched.
 export const MP_DEFS: readonly PowerUpDef[] = [
-  { id: 'hex-throttled', durationTicks: 180, flapMul: 0.6 },
-  { id: 'hex-bloat',     durationTicks: 240, sizeMul: 1.6 },
-  { id: 'respawn',       durationTicks: 120, invincible: true }, // post-crash grace
-  { id: 'boost',         durationTicks: 75,  speedMul: 1.7, invincible: true, autopilot: true }, // coin grab: afterburner autopilot dash
+  { id: 'bonk', durationTicks: 45, speedMul: 0.4, invincible: true },
 ];
 
 export function defOf(id: string): PowerUpDef | undefined {
@@ -273,10 +270,10 @@ function collides(s: GameState): boolean {
 // Returns absolute values for gravity/flap (already multiplied), multipliers for speed/size.
 export function getEffective(s: GameState): {
   gravity: number; flap: number; speed: number; size: number;
-  invincible: boolean; destroysPipes: boolean; autopilot: boolean;
+  invincible: boolean; destroysPipes: boolean;
 } {
   let gravity = s.gravity, flap = s.flap, speed = 1, size = 1;
-  let invincible = false, destroysPipes = false, autopilot = false;
+  let invincible = false, destroysPipes = false;
   for (const e of s.activeEffects) {
     const d = defOf(e.defId);
     if (!d) continue;
@@ -286,9 +283,8 @@ export function getEffective(s: GameState): {
     if (d.sizeMul)       size *= d.sizeMul;
     if (d.invincible)    invincible = true;
     if (d.destroysPipes) destroysPipes = true;
-    if (d.autopilot)     autopilot = true;
   }
-  return { gravity, flap, speed, size, invincible, destroysPipes, autopilot };
+  return { gravity, flap, speed, size, invincible, destroysPipes };
 }
 
 // ── The one physics tick ──────────────────────────────────────────────────────
@@ -430,19 +426,9 @@ export function step(s: GameState, flapped: boolean): StepResult {
   }
 
   // Update player physics with effective values.
-  if (eff.autopilot) {
-    // Afterburner: glide toward the next gap's centre, ignoring input, so the dash
-    // ends lined up in a gap instead of dumping you into a pipe at full speed.
-    const r = C.PLAYER_SIZE / 2;
-    const next = s.pipes.find(p => p.x + C.PIPE_W > C.PLAYER_X - r);
-    const target = next ? next.topH + next.gap / 2 : C.GROUND / 2;
-    s.player.y += (target - s.player.y) * 0.18;
-    s.player.vy = 0;
-  } else {
-    s.player.vy += eff.gravity;
-    if (s.maxFall !== null && s.player.vy > s.maxFall) s.player.vy = s.maxFall;
-    s.player.y += s.player.vy;
-  }
+  s.player.vy += eff.gravity;
+  if (s.maxFall !== null && s.player.vy > s.maxFall) s.player.vy = s.maxFall;
+  s.player.y += s.player.vy;
   if (s.softBounds && eff.invincible) {
     const r = (C.PLAYER_SIZE * eff.size) / 2 - 4;
     if (s.player.y < r) { s.player.y = r; s.player.vy = 0; }
