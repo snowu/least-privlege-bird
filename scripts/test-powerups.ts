@@ -133,6 +133,21 @@ const n = Math.min(seenGrab.length, seenSkip.length, 30);
 assert(n >= 10 && seenGrab.slice(0, n).every((h, i) => h === seenSkip[i]),
   `split rng: first ${n} pipe heights identical with vs without power-ups`);
 
+// ── Race physics options (multiplayer) ──
+// Terminal velocity caps the fall; soft bounds keep an invincible bird on screen
+// (respawn grace / afterburner used to let you sink through the floor and die the
+// moment it ended). Single-player gets neither.
+const race = createState(5, { maxFall: 10, softBounds: true, gravity: 0.55, flap: -9.4 });
+race.activeEffects.push({ defId: 'wildcard', expiryTick: 120 });
+let maxVy = 0, maxY = 0;
+for (let t = 0; t < 110; t++) { step(race, false); maxVy = Math.max(maxVy, race.player.vy); maxY = Math.max(maxY, race.player.y); }
+assert(maxVy <= 10, `race: fall speed capped at terminal velocity (max ${maxVy})`);
+assert(maxY <= C.GROUND, `race: invincible bird held above the floor (max y ${Math.round(maxY)})`);
+const solo = createState(5);
+solo.activeEffects.push({ defId: 'wildcard', expiryTick: 120 });
+for (let t = 0; t < 110; t++) step(solo, false);
+assert(solo.player.y > C.GROUND, `solo: no soft bounds — invincible bird still falls through (unchanged)`);
+
 // ── Stacking test ──
 const s5 = createState(1);
 s5.activeEffects = [

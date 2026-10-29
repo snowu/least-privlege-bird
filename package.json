@@ -17,7 +17,6 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
     "xmllint": "^0.1.1"
   }
 }

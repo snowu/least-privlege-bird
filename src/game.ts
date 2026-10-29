@@ -15,6 +15,7 @@ import {
 import { Clave } from './clave.ts';
 import * as MP from './multiplayer.ts';
 import * as Bots from './bots.ts';
+import { nextCrashQuestion } from './crash-quiz.ts';
 
 // ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -2618,21 +2619,43 @@ let mpPhase: 'fly' | 'quiz' | 'fin' = 'fly';
 // Thrown by other players; applied by the target to its own sim/render. Wall-clock
 // timers are fine here: MP runs are never replay-validated.
 const HEXES = {
-  yank:      { icon: '⬇', title: 'AccessDenied' },
-  throttled: { icon: '🐌', title: 'ThrottlingException' },
-  bloat:     { icon: '🎈', title: 'PolicySizeExceeded' },
-  failover:  { icon: '🙃', title: 'RegionFailover' },
-  outage:    { icon: '🌑', title: 'us-east-1 outage' },
-  mfa:       { icon: '🔐', title: 'MFARequired' },
+  yank:      { icon: '⬇', title: 'AccessDenied',        what: 'Yanked down!' },
+  throttled: { icon: '🐌', title: 'ThrottlingException', what: 'Weak flaps for 3s' },
+  bloat:     { icon: '🎈', title: 'PolicySizeExceeded',  what: 'Huge hitbox for 4s' },
+  failover:  { icon: '🙃', title: 'RegionFailover',      what: 'Screen upside down!' },
+  outage:    { icon: '🌑', title: 'us-east-1 outage',    what: 'Lights out' },
+  mfa:       { icon: '🔐', title: 'MFARequired',         what: 'Every other flap fails' },
+};
+
+// What each pickup / timed effect does, in a few words: shown next to the bird on
+// pickup and as the label on its HUD timer bar. Covers solo power-ups too.
+const PICKUP_INFO: { [id: string]: { name: string; what: string } } = {
+  'wildcard':        { name: '✱ WILDCARD',      what: 'Giant & invincible' },
+  'autoscaling':     { name: '▾ AUTOSCALING',   what: 'Tiny & bouncy' },
+  'cloudfront':      { name: '◷ CLOUDFRONT',    what: 'World in slow-mo' },
+  'role-assumption': { name: '⇄ ROLE SWAP',     what: 'Wider gaps + disguise' },
+  'elb':             { name: '☁ ELB',           what: 'Low gravity' },
+  'star':            { name: '★ STAR',          what: 'Invincible, smash pipes' },
+  'boost':           { name: '⚡ AFTERBURNER',   what: 'Dash through pipes' },
+  'orb':             { name: '🔮 +1 HEX',        what: 'Press E: curse the racer ahead' },
+  'respawn':         { name: '⛑ RESPAWNED',     what: 'Invincible for 2s' },
+  'hex-throttled':   { name: '🐌 THROTTLED',     what: 'Weak flaps' },
+  'hex-bloat':       { name: '🎈 BLOATED',       what: 'Huge hitbox' },
 };
 const HECKLE_CD_MS = 4000;       // finished racers heckle on a cooldown (racers spend orbs)
 let hexReadyAt = 0;
 let hexCharges = 0;              // 🔮 orbs banked from gaps (racing hexes cost one each)
 let mpSeen = new WeakSet<any>(); // pipes whose gap item has been judged (MP.passItems)
-let pickupPop: { text: string; color: string; at: number } | null = null;
+let pickupPop: { name: string; what: string; color: string; at: number } | null = null;
+
+// Pop the "what did I just get" label next to the bird.
+function showPickup(id: string, color = puColor(id)) {
+  const info = PICKUP_INFO[id];
+  if (info) pickupPop = { ...info, color, at: performance.now() };
+}
 let hexFlipUntil = 0, hexBlackoutUntil = 0, hexMfaUntil = 0;
 let mfaEaten = false, mfaPromptAt = -1e9;
-let hexToast: { icon: string; title: string; from: string; at: number } | null = null;
+let hexToast: { icon: string; title: string; what: string; from: string; at: number } | null = null;
 let hexFeed: Array<{ text: string; at: number }> = [];
 const hexMarks = new Map<string, { icon: string; at: number }>(); // bird id → last hex taken
 
@@ -3233,11 +3256,15 @@ function drawPowerUpHUD() {
     const isWarning = (def.invincible || def.sizeMul) && remaining <= 90;
     if (isWarning && Math.floor(gs.tick / 6) % 2 === 0) continue; // blink off
 
-    // Icon
-    ctx.fillStyle = puColor(e.defId);
+    // Label: what's running (named, not a single letter)
     ctx.font = `bold 11px monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText(puIcon(e.defId), startX - 4, y + barH - 1);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillStyle = puColor(e.defId);
+    const label = PICKUP_INFO[e.defId]?.name ?? puIcon(e.defId);
+    ctx.strokeText(label, startX - 6, y + barH);
+    ctx.fillText(label, startX - 6, y + barH);
 
     // Bar background
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
@@ -3340,7 +3367,7 @@ function drawItems(now) {
   }
 }
 
-// Boost speed lines + the little "+BOOST / +HEX / TAKEDOWN" pop over the bird.
+// Afterburner speed lines across the screen.
 function drawBoostFx(now) {
   if (gs.activeEffects.some(e => e.defId === 'boost')) {
     ctx.save();
@@ -3356,20 +3383,33 @@ function drawBoostFx(now) {
     }
     ctx.restore();
   }
-  if (pickupPop && now - pickupPop.at < 800) {
-    const t = (now - pickupPop.at) / 800;
-    ctx.save();
-    ctx.globalAlpha = 1 - t;
-    ctx.font = `16px ${activeStyle().fontDisplay}`;
-    ctx.textAlign = 'center';
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#000';
-    ctx.fillStyle = pickupPop.color;
-    const y = gs.player.y - 44 - t * 30;
-    ctx.strokeText(pickupPop.text, C.PLAYER_X + 30, y);
-    ctx.fillText(pickupPop.text, C.PLAYER_X + 30, y);
-    ctx.restore();
-  }
+}
+
+// The pickup label: name (in the item's colour) + what it does, beside the bird.
+function drawPickupLabel(now) {
+  const LIFE = 1600;
+  if (!pickupPop || now - pickupPop.at > LIFE) return;
+  const t = (now - pickupPop.at) / LIFE;
+  const pop = 1 + Math.max(0, 0.15 - t) * 3;
+  const y = Math.max(70, Math.min(C.GROUND - 60, gs.player.y - 50)) - t * 16;
+  ctx.save();
+  ctx.globalAlpha = t < 0.75 ? 1 : (1 - t) / 0.25;
+  ctx.translate(C.PLAYER_X + 46, y);
+  ctx.scale(pop, pop);
+  ctx.textAlign = 'left';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#000';
+  ctx.font = `20px ${activeStyle().fontDisplay}`;
+  ctx.lineWidth = 6;
+  ctx.fillStyle = pickupPop.color;
+  ctx.strokeText(pickupPop.name, 0, 0);
+  ctx.fillText(pickupPop.name, 0, 0);
+  ctx.font = `bold 15px 'Segoe UI', system-ui, sans-serif`;
+  ctx.lineWidth = 4;
+  ctx.fillStyle = '#fff';
+  ctx.strokeText(pickupPop.what, 0, 22);
+  ctx.fillText(pickupPop.what, 0, 22);
+  ctx.restore();
 }
 
 function raceLabel(b: MP.Bird, now: number): string {
@@ -3383,10 +3423,14 @@ function drawStandings(now) {
   ctx.save();
   ctx.font = `10px ${activeStyle().fontDisplay}`;
   ctx.textAlign = 'left';
-  MP.standings(now).forEach((b, i) => {
+  // Top 5 plus you — a full 13-racer list would cover half the screen.
+  const all = MP.standings(now);
+  const shown = all.map((b, i) => ({ b, i })).filter(({ b, i }) => i < 5 || b.id === MP.myId());
+  shown.forEach(({ b, i }, row) => {
     ctx.globalAlpha = b.st === 'gone' ? 0.4 : 1;
     const tag = b.id === MP.myId() ? ' ◀' : '';
-    strokedText(`${i + 1}. ${b.name} ${raceLabel(b, now)}${tag}`, 14, 24 + i * 18, 3);
+    const gap = row === 5 ? 8 : 0;   // nudge "you" down when you're outside the top 5
+    strokedText(`${i + 1}. ${b.name} ${raceLabel(b, now)}${tag}`, 14, 24 + row * 18 + gap, 3);
   });
   ctx.restore();
 }
@@ -3408,10 +3452,10 @@ function stepOnce() {
   if (mpRun && !result.dead) {
     const item = MP.passItems(gs, mpSeen);
     const now = performance.now();
-    if (item === 'coin') { pickupPop = { text: '⚡ AFTERBURNER', color: '#facc15', at: now }; AudioFX.boost(); }
+    if (item === 'coin') { showPickup('boost', '#facc15'); AudioFX.boost(); }
     if (item === 'orb' && hexCharges < MP.MAX_HEX_CHARGES) {
       hexCharges++;
-      pickupPop = { text: '🔮 +HEX [E]', color: '#d8b4fe', at: now };
+      showPickup('orb', '#d8b4fe');
       AudioFX.orb();
     }
     MP.updateOwned(MP.myId(), gs, 'fly', flapped);
@@ -3422,6 +3466,7 @@ function stepOnce() {
   if (result.collected) {
     puCollectedFlash = result.collected;
     puCollectedAt = performance.now();
+    showPickup(result.collected);
     // Role Assumption: pick a random display theme (render-only)
     if (result.collected === 'role-assumption') {
       const keys = Object.keys(THEMES).filter(k => {
@@ -3458,6 +3503,7 @@ function loop(now) {
   try { drawPlayer(); } catch (e) { console.error('[drawPlayer]', e); }
   if (mpRun) drawBoostFx(now);
   if (mpRun) drawHexWorld(now);
+  drawPickupLabel(now);
   drawHUD();
   drawPowerUpHUD();
   if (mpRun) { drawStandings(now); drawHexOverlay(now); }
@@ -3870,7 +3916,7 @@ function clearHexes() {
 }
 
 function leaderRival(): string | null {
-  return MP.standings().find(b => b.st === 'fly' && b.id !== MP.myId())?.id ?? null;
+  return MP.standings().find(b => b.st === 'fly' && b.id !== MP.myId() && !MP.isImmune(b.id))?.id ?? null;
 }
 
 // Racing: spend a banked 🔮 on the racer just ahead. Finished: heckle on a cooldown.
@@ -3914,6 +3960,14 @@ function drawHexWorld(now) {
     canvas.style.transform = flip;
   }
   if (mpPhase !== 'fly') return;
+  if (gs.hover) {
+    ctx.save();
+    ctx.font = `18px ${activeStyle().fontDisplay}`;
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(now / 120);
+    strokedText('FLAP TO GO!', C.PLAYER_X + 20, gs.player.y + 56, 5);
+    ctx.restore();
+  }
   if (now < hexBlackoutUntil) {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.92)';
@@ -3956,7 +4010,7 @@ function drawHexOverlay(now) {
     ctx.font = `30px ${activeStyle().fontDisplay}`;
     strokedText(`${hexToast.icon} ${hexToast.title}`, 0, 0, 7);
     ctx.font = `12px ${activeStyle().fontDisplay}`;
-    strokedText(`courtesy of ${hexToast.from}`, 0, 32, 4);
+    strokedText(`${hexToast.what} · courtesy of ${hexToast.from}`, 0, 32, 4);
   }
   ctx.restore();
 }
@@ -3966,39 +4020,24 @@ function drawHexOverlay(now) {
 // answer: respawn in the next gap with a short invincibility window. Wrong: read
 // the explanation through a lockout, then get a different question. Everyone else
 // keeps flying, so each crash costs you real race time.
-const QUIZ_LOCK_MS = 2000;
-const QUIZ_TIME_MS = 10000;      // answer within this or it counts as wrong
-// Single-answer only: multi-select "pick all that apply" cards are too slow mid-race.
-const QUIZ_POOL = Clave.QUESTIONS.filter(q => q.type === 'single');
+const QUIZ_LOCK_MS = 1500;
+const QUIZ_TIME_MS = 8000;       // answer within this or it counts as wrong
 const quizTimer = document.getElementById('mp-quiz-timer');
 let quizDeadline = 0;
 const quizPrompt = document.getElementById('mp-quiz-prompt');
 const quizKind   = document.getElementById('mp-quiz-kind');
 const quizOpts   = document.getElementById('mp-quiz-opts');
 const quizMsg    = document.getElementById('mp-quiz-msg');
-const btnQuizSubmit = document.getElementById('btn-mp-quiz-submit') as HTMLButtonElement;
-let quizBag: number[] = [];
 let quizQ: any = null;
 let quizLocked = false;
 
-function shuffle<T>(a: T[]): T[] {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 function nextQuestion() {
-  if (!quizBag.length) quizBag = shuffle(QUIZ_POOL.map((_, i) => i));
-  const q = QUIZ_POOL[quizBag.pop()];
-  quizQ = { ...q, options: shuffle([...q.options]) };
+  quizQ = nextCrashQuestion();
   quizLocked = false;
-  quizPrompt.innerHTML = quizQ.prompt;   // trusted: question bank ships in the bundle
-  quizKind.textContent = 'Pick one (keys 1–5) · 10s';
+  quizPrompt.textContent = quizQ.prompt;
+  quizKind.textContent = 'keys 1 · 2 · 3';
   quizOpts.innerHTML = quizQ.options
-    .map((o, i) => `<button class="mp-quiz-opt" data-i="${i}">${i + 1}. ${o.text}</button>`).join('');
-  btnQuizSubmit.classList.toggle('hidden', quizQ.type !== 'multi');
+    .map((o, i) => `<button class="mp-quiz-opt" data-i="${i}"><small>${i + 1}</small>${escapeHtml(o.text)}</button>`).join('');
   quizMsg.textContent = '';
   quizMsg.className = 'mp-quiz-msg';
   // Timer bar: restart the CSS transition from full to empty.
@@ -4017,8 +4056,7 @@ setInterval(() => {
 
 function pickOption(i: number) {
   if (quizLocked || !quizQ?.options[i]) return;
-  if (quizQ.type !== 'multi') { checkAnswer([i]); return; }
-  quizOpts.children[i].classList.toggle('selected');
+  checkAnswer([i]);
 }
 
 function checkAnswer(selected: number[]) {
@@ -4028,39 +4066,28 @@ function checkAnswer(selected: number[]) {
   quizLocked = true;
   quizTimer.style.transition = 'none';
   if (ok) {
-    quizMsg.textContent = '✅ Access granted. Respawning…';
+    quizMsg.textContent = '✅ GO!';
     quizMsg.className = 'mp-quiz-msg ok';
     setTimeout(mpRespawn, 450);
     return;
   }
   AudioFX.denied();
-  const right = correct.map(i => quizQ.options[i]);
-  let left = QUIZ_LOCK_MS / 1000;
-  const say = () => {
-    quizMsg.innerHTML = `❌ ${selected.length ? 'Denied' : 'Timed out'}. Answer: <strong>${right.map(o => o.text).join(' + ')}</strong> — ${right[0].explain}`
-      + `<br>New question in ${left}s…`;
-  };
+  // Flash the right answer, then straight on to another card.
+  quizOpts.children[correct[0]]?.classList.add('right');
+  if (selected.length) quizOpts.children[selected[0]]?.classList.add('wrong');
+  quizMsg.textContent = selected.length ? '❌ Nope' : '⏰ Too slow';
   quizMsg.className = 'mp-quiz-msg bad';
-  say();
-  const t = setInterval(() => {
-    left--;
-    if (mpPhase !== 'quiz') { clearInterval(t); return; }
-    if (left <= 0) { clearInterval(t); nextQuestion(); } else say();
-  }, 1000);
+  setTimeout(() => { if (mpPhase === 'quiz') nextQuestion(); }, QUIZ_LOCK_MS);
 }
 
 function quizKey(e: KeyboardEvent) {
   const n = /^Digit([1-9])$/.exec(e.code)?.[1];
   if (n) pickOption(+n - 1);
-  if (e.code === 'Enter' && quizQ?.type === 'multi') btnQuizSubmit.click();
 }
 
 quizOpts.addEventListener('click', e => {
   const btn = (e.target as HTMLElement).closest('.mp-quiz-opt') as HTMLElement;
   if (btn) pickOption(+btn.dataset.i);
-});
-btnQuizSubmit.addEventListener('click', () => {
-  checkAnswer([...quizOpts.querySelectorAll('.mp-quiz-opt.selected')].map(b => +(b as HTMLElement).dataset.i));
 });
 
 function mpCrash() {
@@ -4069,8 +4096,8 @@ function mpCrash() {
   puScreenShake = 0;
   AudioFX.gameOver();
   MP.updateOwned(MP.myId(), gs, 'quiz', true);
+  showScreen('mpquiz');   // before nextQuestion: the timer-bar transition needs a visible element
   nextQuestion();
-  showScreen('mpquiz');
 }
 
 function mpRespawn() {
@@ -4081,6 +4108,7 @@ function mpRespawn() {
   lastFrameTime = null;
   acc = 0;
   showScreen(null);
+  showPickup('respawn', '#86efac');
   MP.updateOwned(MP.myId(), gs, 'fly', true);
 }
 
@@ -4170,7 +4198,7 @@ function renderRaceView() {
     : '';
   document.getElementById('mp-race-hint').textContent =
     cd > 0 ? `Hex recharging… ${cd}s` : 'SPACE: hex the leader · or pick a victim · hex-caused crashes count for 🐒 Chaos Monkey';
-  const canHex = (b: MP.Bird) => b.st === 'fly' && b.id !== MP.myId();
+  const canHex = (b: MP.Bird) => b.st === 'fly' && b.id !== MP.myId() && !MP.isImmune(b.id);
   const key = rows.map(b => `${b.id}:${canHex(b)}`).join('|') + `|${cd > 0}`;
   if (key !== raceRowsKey) {
     raceRowsKey = key;
@@ -4259,7 +4287,7 @@ const mpHandlers: MP.Handlers = {
     if (hexFeed.length > 4) hexFeed.shift();
     if (from.id === MP.myId()) {
       AudioFX.takedown();
-      if (gameActive) pickupPop = { text: '💥 TAKEDOWN', color: '#f87171', at: now };
+      if (gameActive) pickupPop = { name: '💥 TAKEDOWN', what: `Your hex wrecked ${to.name}`, color: '#f87171', at: now };
     }
   },
   onRoundEnd: () => {

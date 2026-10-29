@@ -110,6 +110,7 @@ function tick(r: BotRun, now: number) {
 
 function decide(r: BotRun, now: number): boolean {
   const s = r.s;
+  if (s.hover) return Math.random() < 0.08;   // just respawned: kick off within a few ticks
   if (s.tick < r.zoneOutUntil) return false;
   if (Math.random() < (1 - r.skill) * 0.0025) { r.zoneOutUntil = s.tick + 25; return false; }
 
@@ -131,8 +132,8 @@ function decide(r: BotRun, now: number): boolean {
   return true;
 }
 
-// Time spent "reading" the question: good bots skim, bad ones agonise.
-function readingTime(r: BotRun) { return 1500 + Math.random() * 2000 + (1 - r.skill) * 2500; }
+// Time spent "reading" the (short, easy) crash card: good bots snap, bad ones dither.
+function readingTime(r: BotRun) { return 800 + Math.random() * 1200 + (1 - r.skill) * 1500; }
 
 function answerQuiz(r: BotRun, now: number) {
   if (Math.random() < 0.4 + r.skill * 0.55) {
@@ -141,7 +142,7 @@ function answerQuiz(r: BotRun, now: number) {
     r.lastFlapTick = r.s.tick - 99;
     MP.updateOwned(r.id, r.s, 'fly', true);
   } else {
-    r.quizUntil = now + 2000 + readingTime(r); // lockout + the next question
+    r.quizUntil = now + 1500 + readingTime(r); // lockout + the next card
   }
 }
 
@@ -156,7 +157,7 @@ function maybeHex(r: BotRun, now: number) {
     r.throwAt = now + 1500 + Math.random() * 2000;
     MP.sendHex(r.id, target, kind());
   } else if (r.phase === 'fin' && now >= r.nextHeckleAt) {
-    const leader = MP.standings(now).find(b => b.st === 'fly');
+    const leader = MP.standings(now).find(b => b.st === 'fly' && !MP.isImmune(b.id));
     if (!leader) return;
     r.nextHeckleAt = now + HECKLE_CD_MS + Math.random() * 3000;
     MP.sendHex(r.id, leader.id, kind());

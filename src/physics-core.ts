@@ -119,6 +119,13 @@ export interface GameState {
   pipesSpawned: number;
   maxSpeedLevel: number | null;    // speed ramp cap (races); null = ramp forever
   gapMul: number;                  // race-wide gap multiplier (1 in single-player)
+  minIntervalMs: number;           // pipe-interval floor (C.PIPE_INTERVAL_MIN in single-player)
+  powerUpsOn: boolean;             // classic power-ups spawn (true in single-player)
+  gravity: number;                 // base physics (race tuning; C.GRAVITY / C.FLAP in single-player)
+  flap: number;
+  maxFall: number | null;
+  softBounds: boolean;
+  hover: boolean;                  // held in place until the next flap (race respawn); false in single-player
   lastSpeedUpTick: number | null;  // null until the first active tick
   lastPipeTick: number | null;
   rng: () => number;
@@ -139,6 +146,12 @@ export interface StateOpts {
   maxSpeedLevel?: number;
   firstPipeX?: number;
   gapMul?: number;     // widen every gap (fast but forgiving)
+  minIntervalMs?: number; // floor on time between pipes (default C.PIPE_INTERVAL_MIN)
+  powerUps?: boolean;  // spawn the classic power-ups (default true; races use coins/orbs instead)
+  gravity?: number;    // base gravity / flap impulse (default C.GRAVITY / C.FLAP)
+  flap?: number;
+  maxFall?: number;    // terminal velocity (px/tick); unset = unbounded
+  softBounds?: boolean; // while invincible, floor/ceiling hold you instead of letting you fall out of the world
 }
 
 export function createState(seed: number, opts: StateOpts = {}): GameState {
@@ -153,6 +166,13 @@ export function createState(seed: number, opts: StateOpts = {}): GameState {
     pipesSpawned: 0,
     maxSpeedLevel: opts.maxSpeedLevel ?? null,
     gapMul: opts.gapMul ?? 1,
+    minIntervalMs: opts.minIntervalMs ?? C.PIPE_INTERVAL_MIN,
+    powerUpsOn: opts.powerUps ?? true,
+    gravity: opts.gravity ?? C.GRAVITY,
+    flap: opts.flap ?? C.FLAP,
+    maxFall: opts.maxFall ?? null,
+    softBounds: opts.softBounds ?? false,
+    hover: false,
     lastSpeedUpTick: null,
     lastPipeTick: null,
     rng,
@@ -193,7 +213,7 @@ export function currentGap(s: GameState): number {
   return baseGap * gapMul;
 }
 function currentInterval(s: GameState): number {
-  return Math.max(C.PIPE_INTERVAL_MIN, C.PIPE_INTERVAL_MAX - speedLevel(s) * C.PIPE_INTERVAL_STEP);
+  return Math.max(s.minIntervalMs, C.PIPE_INTERVAL_MAX - speedLevel(s) * C.PIPE_INTERVAL_STEP);
 }
 
 function spawnPipe(s: GameState, x: number = C.W): void {
@@ -245,7 +265,7 @@ export function getEffective(s: GameState): {
   gravity: number; flap: number; speed: number; size: number;
   invincible: boolean; destroysPipes: boolean;
 } {
-  let gravity = C.GRAVITY, flap = C.FLAP, speed = 1, size = 1;
+  let gravity = s.gravity, flap = s.flap, speed = 1, size = 1;
   let invincible = false, destroysPipes = false;
   for (const e of s.activeEffects) {
     const d = defOf(e.defId);
@@ -323,6 +343,7 @@ export function step(s: GameState, flapped: boolean): StepResult {
 
   // INPUT — before physics, matching original ordering (flap sets vy, then gravity adds)
   if (flapped) s.player.vy = eff.flap;
+  if (flapped) s.hover = false;
 
   // Start the speed-ramp clock on the first active tick. The pipe field is already
   // pre-filled at construction (see prefillField), so nothing to spawn here.
@@ -340,7 +361,7 @@ export function step(s: GameState, flapped: boolean): StepResult {
     spawnPipe(s);
     // Power-up spawn check — only after enough pipes scored, and only if no
     // uncollected power-up is already on the field.
-    if (s.score >= C.POWERUP_FIRST_PIPE
+    if (s.powerUpsOn && s.score >= C.POWERUP_FIRST_PIPE
         && s.powerUps.every(p => p.collected)
     ) {
       const chance = Math.min(
@@ -399,8 +420,18 @@ export function step(s: GameState, flapped: boolean): StepResult {
   }
 
   // Update player physics with effective values.
-  s.player.vy += eff.gravity;
-  s.player.y += s.player.vy;
+  if (s.hover) {
+    s.player.vy = 0;   // race respawn: hang in place until the player flaps
+  } else {
+    s.player.vy += eff.gravity;
+    if (s.maxFall !== null && s.player.vy > s.maxFall) s.player.vy = s.maxFall;
+    s.player.y += s.player.vy;
+  }
+  if (s.softBounds && eff.invincible) {
+    const r = (C.PLAYER_SIZE * eff.size) / 2 - 4;
+    if (s.player.y < r) { s.player.y = r; s.player.vy = 0; }
+    if (s.player.y > C.GROUND - r) { s.player.y = C.GROUND - r; s.player.vy = 0; }
+  }
 
   s.tick++;
 

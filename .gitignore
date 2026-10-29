@@ -9,3 +9,6 @@ ideas.txt
 # Build output (produced by esbuild; CI rebuilds for Pages)
 dist/
 node_modules/
+
+# Wrangler local dev state (relay/)
+.wrangler/
