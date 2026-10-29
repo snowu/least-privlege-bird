@@ -428,11 +428,100 @@
     }
     body.is-mobile .score-badge { font-size: 0.4rem; padding: 3px 4px; }
     body.is-mobile .score-avatar { width: 22px; height: 22px; }
+    /* Arcade shell: pixel geometry, calm surfaces, and readable everyday text. */
+    body { background: #101b30; color: #f4f7ff; font-family: var(--font-body); }
+    #dev-disclaimer { background: #101b30; border-bottom: 1px solid #425675; color: #c1cee2; font-family: var(--font-body); font-size: 12px; padding: 6px 18px; }
+    #overlay { padding: 40px 16px 16px; overflow-y: auto; }
+    #menu-screen, #mp-panel, #gameover-panel, #scores-panel, #clave-screen, .captcha-panel, #mp-quiz-panel {
+      background: #14243b; border: 3px solid #57708d; border-radius: 2px;
+      box-shadow: 0 5px 0 #091322, 0 0 0 3px #091322; color: #f4f7ff;
+      max-height: calc(100dvh - 62px); overflow-y: auto; flex-shrink: 0;
+    }
+    #menu-screen { padding: 22px 30px; gap: 12px; }
+    #overlay h1 { font-size: 1.15rem; color: #fff3b5; line-height: 1.65; }
+    #title-logo { width: 64px; height: 64px; image-rendering: pixelated; }
+    .menu-subtitle { font-family: var(--font-body); font-size: 12px; color: #c2d4eb; letter-spacing: 0; margin-top: 0; }
+    #overlay button { font-family: var(--font-body); font-size: 12px; font-weight: 400; line-height: 1.8; min-height: 42px; border: 2px solid #a0efd5; border-radius: 2px; background: #16735e; box-shadow: 0 3px 0 #081525; text-shadow: none; padding: 9px 16px; }
+    #overlay button:hover { background: #21856e; }
+    #overlay button.secondary { background: #294a75; border-color: #799bc6; }
+    #overlay button.secondary:hover { background: #365d8e; }
+    #overlay button:disabled { background: #304056; color: #aab8ca; border-color: #53637b; box-shadow: none; }
+    #overlay button:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, .avatar-opt:focus-visible { outline: 3px solid #ffe39a; outline-offset: 3px; }
+    #overlay input, #overlay select { font-family: var(--font-body); font-size: 14px; color: #f4f7ff; background: #0b172a; border: 2px solid #7593b5; border-radius: 2px; min-height: 44px; }
+    #overlay input::placeholder { color: #b0c1d8; opacity: 1; }
+    #overlay #btn-mp { background: #f2ce70; color: #152238; border-color: #fff1bb; }
+    #overlay #btn-mp:hover { background: #ffe29b; }
+    #btn-recover-home { font-family: var(--font-body) !important; font-size: 11px !important; color: #b7d9ff !important; }
+    #avatar-picker { flex-wrap: wrap; justify-content: center; max-width: 660px; gap: 7px; }
+    .avatar-opt { background: #0c192c; border: 2px solid #49617e; border-radius: 2px; padding: 7px; min-width: 60px; }
+    .avatar-opt img { width: 40px; height: 40px; }
+    .avatar-opt span, #avatar-picker-go .avatar-opt span, #avatar-picker-mp .avatar-opt span { font-family: var(--font-body); font-size: 12px; color: #e0eafa; font-weight: 400; }
+    .avatar-opt.selected { border-color: #ffe193; background: #384030; box-shadow: inset 0 -3px #ffe193; }
+    #avatar-picker-go, #avatar-picker-mp { max-width: 480px; }
+    #avatar-picker-go .avatar-opt, #avatar-picker-mp .avatar-opt { border-radius: 2px; min-width: 52px; padding: 5px; }
+    #avatar-picker-go .avatar-opt img, #avatar-picker-mp .avatar-opt img { width: 32px; height: 32px; }
+    .mp-hint, .mp-error, .go-swap-label, .go-policy, .go-msg, #clave-screen p.sub, #clave-screen p.info, #clave-screen .error-msg, #clave-screen .success-msg, .captcha-panel p.sub, .captcha-error { font-family: var(--font-body); font-size: 12px; line-height: 1.9; color: #c9d9ec; }
+    .mp-error, #clave-screen .error-msg, .captcha-error { color: #ffb1a7; }
+    #mp-panel { width: 540px; padding: 22px 26px; }
+    .mp-row { font-family: var(--font-body); font-size: 12px; padding: 7px 10px; background: #20334f; border-radius: 0; }
+    .mp-row.me { background: #3b4034; border-left: 3px solid #ffe193; }
+    .mp-you, .mp-wins { color: #c9d9ec; }
+    #overlay #btn-mp-copy, #overlay .mp-host button, #overlay .mp-hex-btn { font-size: 11px; padding: 7px 10px; min-height: 36px; }
+    .mp-room { font-family: var(--font-body); font-size: 12px; }
+    #mp-code { font-family: var(--font-display); font-size: 20px; }
+    #mp-map { background: #14243b; border: 2px solid #7892af; border-radius: 0; }
+    .mp-pin span { font-family: var(--font-body); font-size: 12px; padding: 1px 4px; background: #101b30; }
+    #gameover-panel { border-color: #d38b77; padding: 22px 28px; }
+    #gameover-panel .scanlines { display: none; }
+    .go-title { animation: none; color: #ffb1a7; text-shadow: 2px 2px #081525; }
+    .go-score-label { font-family: var(--font-body); font-size: 11px; color: #c9d9ec; letter-spacing: 1px; }
+    #gameover-panel button { font-size: 12px; }
+    #go-errcode { font-size: 11px; color: #ffcd91; }
+    .score-row { font-family: var(--font-body); font-size: 12px; }
+    .score-name { color: #f4f7ff; }
+    .score-badge { font-family: var(--font-body); font-size: 12px; }
+    .captcha-tile .tile-label { font-family: var(--font-body); font-size: 11px; }
+    #disclaimer-modal p, #disclaimer-modal button { font-family: var(--font-body) !important; font-size: 12px !important; }
+    body.is-mobile #overlay { padding: 12px; justify-content: safe center; }
+    body.is-mobile #menu-screen, body.is-mobile #mp-panel, body.is-mobile #gameover-panel, body.is-mobile #scores-panel, body.is-mobile #clave-screen, body.is-mobile .captcha-panel, body.is-mobile #mp-quiz-panel { max-height: calc(100dvh - 24px); }
+    body.is-mobile #menu-screen { gap: 7px; }
+    body.is-mobile #avatar-picker { max-width: 600px; }
+    body.is-mobile .avatar-opt { min-width: 45px; }
+    body.is-mobile .avatar-opt span, body.is-mobile #avatar-picker-go .avatar-opt span { font-size: 11px; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+    /* Pixel glyphs need room, regular weight, and no blurred text shadows. */
+    #overlay { line-height: 1.8; }
+    #overlay input, #overlay select { line-height: 1.8; }
+    .avatar-opt span, #avatar-picker-go .avatar-opt span, #avatar-picker-mp .avatar-opt span { font-size: 10px; line-height: 1.8; }
+    #avatar-picker { max-width: 760px; gap: 10px; }
+    .avatar-opt { min-width: 82px; padding: 10px 8px; }
+    #avatar-picker-go .avatar-opt, #avatar-picker-mp .avatar-opt { min-width: 76px; }
+    .mp-row { gap: 12px; line-height: 1.8; }
+    .mp-hint, .go-policy, .go-msg { overflow-wrap: anywhere; }
+    #dev-disclaimer { font-size: 10px; line-height: 1.8; }
+    /* Press Start 2P uses an 8px design grid. Use native-grid sizes rather
+       than enlarged fractional glyphs, and keep decorative shadows off text. */
+    #overlay, #overlay button, #overlay input, #overlay select,
+    .menu-subtitle, .mp-hint, .mp-error, .mp-row, .mp-room,
+    .go-swap-label, .go-policy, .go-msg, .go-score-label,
+    .score-row, .score-badge, .captcha-tile .tile-label,
+    #clave-screen p.sub, #clave-screen p.info,
+    .captcha-panel p.sub, .captcha-error, .mp-pin span {
+      font-size: 8px; line-height: 2; font-weight: 400; text-shadow: none;
+    }
+    #overlay h1 { font-size: 16px; text-shadow: none; }
+    #overlay #btn-mp-copy, #overlay .mp-host button, #overlay .mp-hex-btn,
+    .avatar-opt span, #avatar-picker-go .avatar-opt span,
+    #avatar-picker-mp .avatar-opt span, body.is-mobile .avatar-opt span,
+    body.is-mobile #avatar-picker-go .avatar-opt span { font-size: 8px; }
+    #btn-recover-home, #disclaimer-modal p, #disclaimer-modal button { font-size: 8px !important; }
+    #mp-code { font-size: 16px; }
   </style>
 </head>
 <body>
   <div id="dev-disclaimer">
-    Game is under active development, things may change between reloads. If you encounter a bug, please go to the top of a mountain and scream very loudly. I won't hear it but it will be a nice and cathartic experience for you.
+    RETRO ARCADE · A tiny work in progress. Pick a character, invite your team, and take flight.
   </div>
 
   <!-- ══ MOBILE DISCLAIMER MODAL — replaces the fixed banner on small screens ══ -->
@@ -480,12 +569,12 @@
     <!-- ══ MENU ══ -->
     <div id="menu-screen">
       <h1><img id="title-logo" src="assets/pixel/penguin.svg" alt="" /> Least Privilege Bird</h1>
-      <p class="menu-subtitle">Authenticated · Verified · Compliant · Audited</p>
+      <p class="menu-subtitle">Tiny wings. Big team energy.</p>
       <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.15);" />
       <select id="user-select" class="hidden" style="width:220px;">
         <option value="">— pick user —</option>
       </select>
-      <input id="name-input" type="text" placeholder="or enter a new name" maxlength="20" autocomplete="off" style="width:220px;" />
+      <input id="name-input" type="text" placeholder="Your display name" aria-label="Your display name" maxlength="20" autocomplete="off" style="width:220px;" />
       <hr style="width:100%;border:none;border-top:1px solid rgba(255,255,255,0.1);" />
       <div id="avatar-picker"></div>
       <button id="btn-play" style="width:220px;">Login &amp; Play</button>
@@ -501,10 +590,10 @@
     <!-- ══ MULTIPLAYER ══ -->
     <div id="mp-screen" class="hidden">
       <div id="mp-panel">
-        <h2>👥 sts:AssumeRole — party</h2>
+        <h2>TEAM RACE</h2>
         <div id="mp-join">
-          <p class="mp-hint">Race on the same pipes. Thread ⚡ coins to afterburn through pipes, grab 🔮 orbs to hex the racer ahead (E). Crash → answer an AWS question to respawn.</p>
-          <input id="mp-code-input" type="text" maxlength="4" placeholder="ROOM CODE" autocomplete="off" />
+          <p class="mp-hint">Race on the same pipes. Thread ⚡ coins for an autopilot dash, grab 🔮 orbs to hex the racer ahead (E). Crash → answer a quick question to respawn.</p>
+          <input id="mp-code-input" type="text" maxlength="4" placeholder="ROOM CODE" aria-label="Four-letter room code" autocomplete="off" />
           <div class="go-btns">
             <button id="btn-mp-join">Join</button>
             <button id="btn-mp-create" class="secondary">Create room</button>

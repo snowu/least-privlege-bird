@@ -4,6 +4,9 @@
      (clearly different silhouette from frame 2, which sweeps them down). Head front-
      right, body + arrow tail trailing left. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M6 0.5h2v.5H6zM9 0.5h2v.5H9zM5.5 1h6v.5H5.5zM4 1.5h9v.5H4zM3.5 2h10v.5H3.5zM3.5 2.5h10.5v.5H3.5zM3.5 3h11v.5H3.5zM2 3.5h12.5v.5H2zM1.5 4h13v.5H1.5zM1.5 4.5h13v.5H1.5zM1.5 5h7v.5H1.5zM9 5h5v.5H9zM1.5 5.5h7v.5H1.5zM9.5 5.5h4.5v.5H9.5zM2 6h6.5v.5H2zM9.5 6h5v.5H9.5zM6.5 6.5h8v.5H6.5zM6.5 7h8v.5H6.5zM4 7.5h10.5v.5H4zM3.5 8h11v.5H3.5zM3.5 8.5h11v.5H3.5zM3.5 9h11v.5H3.5zM2 9.5h1v.5H2zM3.5 9.5h8v.5H3.5zM12.5 9.5h2v.5H12.5zM1.5 10h9.5v.5H1.5zM13 10h1v.5H13zM1 10.5h9.5v.5H1zM0.5 11h7.5v.5H0.5zM8.5 11h2v.5H8.5zM0.5 11.5h7v.5H0.5zM8.5 11.5h2v.5H8.5zM1 12h4v.5H1zM5.5 12h2v.5H5.5zM9 12h1v.5H9zM1.5 12.5h2v.5H1.5zM5.5 12.5h2v.5H5.5zM2 13h1v.5H2zM6 13h1v.5H6z"/>
+
   <!-- LEFT wing: tall triangular membrane raised high, notched outer edge -->
   <g fill="#b71c1c">
     <rect x="6" y="1" width="2" height="5"/>
@@ -29,7 +32,7 @@
     <rect x="9" y="1" width="2" height="1"/>
   </g>
   <!-- horns -->
-  <g fill="#ffd54f">
+  <g fill="#ffe27a">
     <rect x="11" y="6" width="1" height="1"/>
     <rect x="13" y="6" width="1" height="1"/>
   </g>
@@ -38,9 +41,9 @@
     <rect x="2" y="11" width="3" height="1"/>
     <rect x="4" y="10" width="2" height="1"/>
   </g>
-  <rect x="1" y="11" width="1" height="1" fill="#ffd54f"/>
-  <rect x="2" y="10" width="1" height="1" fill="#ffd54f"/>
-  <rect x="2" y="12" width="1" height="1" fill="#ffd54f"/>
+  <rect x="1" y="11" width="1" height="1" fill="#ffe27a"/>
+  <rect x="2" y="10" width="1" height="1" fill="#ffe27a"/>
+  <rect x="2" y="12" width="1" height="1" fill="#ffe27a"/>
   <!-- chunky body, left→right rising to the head -->
   <g fill="#d32f2f">
     <rect x="4" y="8" width="4" height="3"/>
@@ -48,7 +51,7 @@
     <rect x="10" y="6" width="4" height="3"/>
   </g>
   <!-- belly highlight -->
-  <g fill="#ff7043">
+  <g fill="#ffad78">
     <rect x="5" y="10" width="3" height="1"/>
     <rect x="8" y="9" width="3" height="1"/>
   </g>
@@ -59,7 +62,7 @@
   <rect x="11" y="7" width="1" height="1" fill="#fff"/>
   <rect x="12" y="7" width="1" height="1" fill="#ffc400"/>
   <!-- dorsal spikes -->
-  <g fill="#ffd54f">
+  <g fill="#ffe27a">
     <rect x="7" y="6" width="1" height="1"/>
     <rect x="10" y="5" width="1" height="1"/>
   </g>

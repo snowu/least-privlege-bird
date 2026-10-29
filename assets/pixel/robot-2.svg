@@ -1,15 +1,18 @@
 <!-- Robot frame 2 (arm LOWERED). Same Bender-inspired side-profile body as robot.svg;
      only the bendy arm + pincer swing DOWN (the flap down-beat). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M7 0.5h1v.5H7zM6.5 1h2v.5H6.5zM6.5 1.5h2v.5H6.5zM6.5 2h2v.5H6.5zM4 2.5h7v.5H4zM3.5 3h8v.5H3.5zM3.5 3.5h8v.5H3.5zM3.5 4h8v.5H3.5zM3.5 4.5h8v.5H3.5zM3.5 5h8v.5H3.5zM3.5 5.5h8v.5H3.5zM3.5 6h8v.5H3.5zM3.5 6.5h8v.5H3.5zM3.5 7h8v.5H3.5zM3.5 7.5h8v.5H3.5zM3.5 8h8v.5H3.5zM3.5 8.5h8v.5H3.5zM4 9h7v.5H4zM5 9.5h8v.5H5zM4.5 10h9v.5H4.5zM4.5 10.5h9v.5H4.5zM4.5 11h9v.5H4.5zM4.5 11.5h10.5v.5H4.5zM4.5 12h11v.5H4.5zM4.5 12.5h11v.5H4.5zM5 13h6v.5H5zM12 13h3.5v.5H12zM5 13.5h2.5v.5H5zM8.5 13.5h2.5v.5H8.5zM12.5 13.5h3v.5H12.5zM4.5 14h3v.5H4.5zM8.5 14h3v.5H8.5zM12.5 14h3v.5H12.5zM4.5 14.5h3v.5H4.5zM8.5 14.5h3v.5H8.5zM12.5 14.5h3v.5H12.5zM5 15h2v.5H5zM9 15h2v.5H9zM13 15h2v.5H13z"/>
+
   <!-- segmented antenna -->
   <rect x="7" y="1" width="1" height="2" fill="#9aa7b0"/>
-  <rect x="7" y="2" width="1" height="1" fill="#6d7b85"/>
-  <rect x="7" y="1" width="1" height="1" fill="#cfd8dc"/>
+  <rect x="7" y="2" width="1" height="1" fill="#58738e"/>
+  <rect x="7" y="1" width="1" height="1" fill="#edf6ff"/>
   <!-- head can -->
-  <g fill="#90a4ae"><rect x="4" y="3" width="7" height="6"/></g>
-  <rect x="4" y="3" width="7" height="1" fill="#cfd8dc"/>
-  <rect x="4" y="3" width="1" height="6" fill="#b0bec5"/>
-  <rect x="10" y="3" width="1" height="6" fill="#6d7b85"/>
+  <g fill="#b4ccd7"><rect x="4" y="3" width="7" height="6"/></g>
+  <rect x="4" y="3" width="7" height="1" fill="#edf6ff"/>
+  <rect x="4" y="3" width="1" height="6" fill="#c9e1ea"/>
+  <rect x="10" y="3" width="1" height="6" fill="#58738e"/>
   <!-- glass eye dome with two round eyes -->
   <g fill="#263238"><rect x="5" y="4" width="6" height="2"/></g>
   <rect x="7" y="4" width="1" height="1" fill="#fff"/>
@@ -20,30 +23,30 @@
   <g fill="#37474f"><rect x="5" y="7" width="6" height="1"/></g>
   <rect x="5" y="7" width="1" height="1" fill="#263238"/>
   <rect x="10" y="7" width="1" height="1" fill="#263238"/>
-  <rect x="6" y="7" width="1" height="1" fill="#b0bec5"/>
-  <rect x="8" y="7" width="1" height="1" fill="#b0bec5"/>
+  <rect x="6" y="7" width="1" height="1" fill="#c9e1ea"/>
+  <rect x="8" y="7" width="1" height="1" fill="#c9e1ea"/>
   <!-- neck segment -->
-  <rect x="6" y="9" width="3" height="1" fill="#607d8b"/>
+  <rect x="6" y="9" width="3" height="1" fill="#7e9fb4"/>
   <!-- cylindrical chrome torso -->
-  <g fill="#546e7a"><rect x="5" y="10" width="6" height="3"/></g>
-  <rect x="5" y="10" width="1" height="3" fill="#6d7b85"/>
-  <rect x="10" y="10" width="1" height="3" fill="#455a64"/>
-  <rect x="7" y="10" width="1" height="3" fill="#455a64"/>
+  <g fill="#6e91a8"><rect x="5" y="10" width="6" height="3"/></g>
+  <rect x="5" y="10" width="1" height="3" fill="#58738e"/>
+  <rect x="10" y="10" width="1" height="3" fill="#3b5b78"/>
+  <rect x="7" y="10" width="1" height="3" fill="#3b5b78"/>
   <rect x="6" y="11" width="1" height="1" fill="#ff9800"/>
   <rect x="8" y="11" width="1" height="1" fill="#76ff03"/>
   <!-- leg poles + feet -->
-  <g fill="#607d8b"><rect x="6" y="13" width="1" height="1"/><rect x="9" y="13" width="1" height="1"/></g>
+  <g fill="#7e9fb4"><rect x="6" y="13" width="1" height="1"/><rect x="9" y="13" width="1" height="1"/></g>
   <g fill="#37474f"><rect x="5" y="14" width="2" height="1"/><rect x="9" y="14" width="2" height="1"/></g>
   <!-- bendy arm LOWERED: shoulder down-forward to the pincer -->
-  <g fill="#607d8b">
+  <g fill="#7e9fb4">
     <rect x="11" y="10" width="2" height="1"/>
     <rect x="12" y="11" width="1" height="2"/>
     <rect x="12" y="12" width="2" height="1"/>
   </g>
   <!-- 2-prong PINCER claw, open, at the arm tip -->
-  <g fill="#90a4ae">
+  <g fill="#b4ccd7">
     <rect x="14" y="12" width="1" height="2"/>
     <rect x="14" y="13" width="1" height="2"/>
   </g>
-  <rect x="13" y="13" width="1" height="2" fill="#455a64"/>
+  <rect x="13" y="13" width="1" height="2" fill="#3b5b78"/>
 </svg>

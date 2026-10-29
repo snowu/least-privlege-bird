@@ -2,6 +2,9 @@
      stroke alongside the head, mouth open in a holler. Same body/face/tie as
      monkey.svg, side-profile facing RIGHT. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 0 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M10 1.5h3v.5H10zM9.5 2h4v.5H9.5zM9.5 2.5h4v.5H9.5zM9.5 3h4v.5H9.5zM7 3.5h7v.5H7zM6.5 4h8v.5H6.5zM6.5 4.5h8.5v.5H6.5zM6.5 5h9v.5H6.5zM6.5 5.5h9v.5H6.5zM6.5 6h9v.5H6.5zM5 6.5h10.5v.5H5zM4.5 7h10.5v.5H4.5zM4 7.5h7.5v.5H4zM3.5 8h8v.5H3.5zM3.5 8.5h8v.5H3.5zM3.5 9h8v.5H3.5zM3.5 9.5h8v.5H3.5zM4 10h7v.5H4zM5.5 10.5h3v.5H5.5zM5.5 11h2.5v.5H5.5zM5.5 11.5h2v.5H5.5zM6 12h1v.5H6z"/>
+
   <!-- cranium + ear -->
   <rect x="10" y="2" width="3" height="2" fill="#4a2e1a"/>
   <rect x="10" y="2" width="1" height="1" fill="#2b1a0e"/>

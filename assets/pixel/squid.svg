@@ -3,6 +3,9 @@
 <!-- "Panic squid" frame 1: mantle up, tentacles relaxed and dangling. A creature
      with no business being airborne. Frame 2 (squid-2) tightens the tentacles. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="1 0 14 14" width="40" height="40" shape-rendering="crispEdges">
+  <!-- Shared stepped navy silhouette: readable against bright sky and busy scenery. -->
+  <path fill="#152338" d="M6 -0.5h4v.5H6zM5.5 0h5v.5H5.5zM5 0.5h6v.5H5zM4.5 1h7v.5H4.5zM4 1.5h8v.5H4zM3.5 2h9v.5H3.5zM3.5 2.5h9v.5H3.5zM3.5 3h9v.5H3.5zM3.5 3.5h9v.5H3.5zM3.5 4h9v.5H3.5zM3.5 4.5h9v.5H3.5zM3.5 5h9v.5H3.5zM3.5 5.5h9v.5H3.5zM4 6h8v.5H4zM4 6.5h7.5v.5H4zM3.5 7h8v.5H3.5zM3.5 7.5h8v.5H3.5zM3.5 8h8v.5H3.5zM3 8.5h9v.5H3zM2.5 9h10v.5H2.5zM2.5 9.5h10v.5H2.5zM2.5 10h2.5v.5H2.5zM5.5 10h4v.5H5.5zM10 10h2.5v.5H10zM2.5 10.5h2v.5H2.5zM5.5 10.5h4v.5H5.5zM10.5 10.5h2v.5H10.5zM2.5 11h2v.5H2.5zM5.5 11h4v.5H5.5zM10.5 11h2v.5H10.5zM2.5 11.5h2v.5H2.5zM5.5 11.5h4v.5H5.5zM10.5 11.5h2v.5H10.5zM3 12h1v.5H3zM5.5 12h4v.5H5.5zM11 12h1v.5H11zM5.5 12.5h4v.5H5.5zM5.5 13h4v.5H5.5zM5.5 13.5h4v.5H5.5zM6 14h1v.5H6zM8 14h1v.5H8z"/>
+
   <!-- mantle (head/body, pointing up) -->
   <g fill="#c2476e">
     <rect x="6" y="0" width="4" height="1"/>
@@ -20,8 +23,8 @@
   <!-- big panic eyes -->
   <rect x="5" y="3" width="2" height="2" fill="#fff"/>
   <rect x="9" y="3" width="2" height="2" fill="#fff"/>
-  <rect x="6" y="4" width="1" height="1" fill="#1a1a1a"/>
-  <rect x="9" y="4" width="1" height="1" fill="#1a1a1a"/>
+  <rect x="6" y="4" width="1" height="1" fill="#152338"/>
+  <rect x="9" y="4" width="1" height="1" fill="#152338"/>
   <!-- tentacles relaxed, dangling + splayed -->
   <g fill="#c2476e">
     <rect x="4" y="7" width="1" height="3"/>

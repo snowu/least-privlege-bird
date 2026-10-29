@@ -1,5 +1,5 @@
 import {
-  createState, C, POWERUP_DEFS, getEffective,
+  createState, C, POWERUP_DEFS, getEffective, defOf,
   step, simulate,
   type PowerUpDef, type ActiveEffect,
 } from "../src/physics-core.ts";
@@ -147,6 +147,21 @@ const solo = createState(5);
 solo.activeEffects.push({ defId: 'wildcard', expiryTick: 120 });
 for (let t = 0; t < 110; t++) step(solo, false);
 assert(solo.player.y > C.GROUND, `solo: no soft bounds — invincible bird still falls through (unchanged)`);
+
+// ── Afterburner never strands you ──
+// Hands-off dash: the autopilot steers through every gap (zero input, no crash) and
+// hands control back at rest, lined up with the next gap — no forced flap.
+const RACE = { splitPowerUpRng: true, powerUps: false, startLevel: 3, maxSpeedLevel: 5, minIntervalMs: 1350, gapMul: 1.4, maxGapShift: 150, gravity: 0.55, flap: -9.4, maxFall: 10, softBounds: true };
+let stranded = 0, misaligned = 0;
+for (let seed = 1; seed <= 50; seed++) {
+  const ab = createState(seed, RACE);
+  ab.activeEffects.push({ defId: 'boost', expiryTick: ab.tick + defOf('boost')!.durationTicks });
+  for (let t = 0; t < 74; t++) if (step(ab, false).dead) { stranded++; break; }
+  const next = ab.pipes.find(p => p.x + C.PIPE_W > C.PLAYER_X - 20);
+  if (next && Math.abs(ab.player.y - (next.topH + next.gap / 2)) > next.gap / 4) misaligned++;
+}
+assert(stranded === 0, `afterburner: hands-off dash never crashes (${stranded}/50 crashed)`);
+assert(misaligned === 0, `afterburner: ends lined up with the next gap (${misaligned}/50 off-centre)`);
 
 // ── Stacking test ──
 const s5 = createState(1);
